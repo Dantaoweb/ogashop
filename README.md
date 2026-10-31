@@ -61,6 +61,6 @@ All paths are relative, so the same files also work later on a custom address su
 ## Before the Stage 1 test
 
 - Check all prices in `js/data.js` with traders (see CONTENT.md section 8).
-- `CREDITVOICE_URL` in `js/data.js` is a guess (`https://creditvoiceai.com`). Set it to the real sign-up link.
-- Add the "Learn business by playing" link on the CreditVoice homepage and app menu (PRD section 11).
+- `CREDITVOICE_URL` in `js/data.js` points to the CreditVoice homepage (`https://creditvoiceai.com`). Check that it is the right address.
+- Oga Shop is a separate project. Nothing here changes the CreditVoice app or website: CreditVoice adds its own link to the game from its side, if and when it chooses.
 - The PRD's success measures (finish rate, return rate, click-through) need some analytics. Stage 1 sends nothing anywhere; decide on a privacy-friendly counter that fits the Nigeria Data Protection Act before the test.
