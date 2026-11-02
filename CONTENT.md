@@ -121,8 +121,8 @@ Shown after the evening results, one per day, tied to the day's lesson.
 
 | Level | Goal to move up | Typical days |
 |---|---|---|
-| 1. The Table | ₦27,000 profit this level and a business score of 66 | about 12 days |
-| 2. The Shop | ₦32,000 profit this level, a score of 70, and no debt more than 7 days late | about 15 days |
+| 1. The Table | ₦13,000 profit this level and a business score of 68 | about 6 days |
+| 2. The Shop | ₦28,000 profit this level, a score of 70, and no debt more than 7 days late | about 15 days |
 
 The PRD's example goal (₦100,000 profit and a score of 60) would take more than 30 in-game days from a ₦20,000 table, so the goals above are lower. Check them in playtesting against the 60% target for players finishing Level 1. Day counts come from `node tests/sim.mjs`, which plays 40 games with a bot that records every sale, restocks and reminds. A bot that records only half its sales takes about 19 days for Level 1; one that never records can't finish.
 
@@ -166,7 +166,7 @@ The score moves slowly: at most ±6 points a day, so one bad day never wipes out
 ## 7e. Big bills *(tune)*
 
 - Bills are announced 3 days ahead in the morning, and paid from the business cash (a business cost) on the evening they are due.
-- Level 1: market stall fee ₦3,000 every 7 days (Day 7, 14, …).
+- Level 1: market stall fee ₦3,000 every 7 days (Day 5, 12, …), so the short first level still meets one bill.
 - Level 2: shop rent ₦8,000 every 7 days, plus one-off bills: NEPA bill ₦2,500 (day 4 of the level) and padlock and door repair ₦2,000 (day 10).
 - When buying stock would leave less cash than the bills due in the next 3 days, the buy box warns: "After buying you'll have ₦2,000, but the market stall fee (₦3,000) is due on Day 7." Buying is still allowed.
 - An unpaid bill gets a ₦500 late fee every day until paid, and each late day counts against Money habits. Bills paid count for it.

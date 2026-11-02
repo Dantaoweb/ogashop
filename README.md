@@ -48,7 +48,7 @@ npm test             # unit tests: tiTi parser, engine rules, every event choice
 node tests/sim.mjs   # plays 40 games per habit profile and prints days to finish each level
 ```
 
-Run the simulation after changing numbers in `js/data.js` to check that pacing stays on target (about 12 days for Level 1 and 13 for Level 2 with good habits) and that a player who never records cannot finish Level 1.
+Run the simulation after changing numbers in `js/data.js` to check that pacing stays on target (about 6 days for Level 1 and 15 for Level 2 with good habits) and that a player who never records cannot finish Level 1.
 
 ## Publish on GitHub Pages
 

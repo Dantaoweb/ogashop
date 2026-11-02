@@ -221,17 +221,17 @@ test('refusing credit: trusted customers count against you, non-payers are a goo
 
 test('bills: announced 3 days ahead, paid on the day, late fees if not', () => {
   const s = E.newGame('business', mulberry32(20));
-  while (s.day < 4) { s.phase = 'evening'; E.startDay(s, mulberry32(s.day)); }
+  while (s.day < 2) { s.phase = 'evening'; E.startDay(s, mulberry32(s.day)); }
   assert.equal(s.bills.length, 1);
-  assert.equal(s.bills[0].due, 7);
-  assert.ok(s.today.notices.some((n) => /stall fee of ₦3,000, due on Day 7/.test(n)));
+  assert.equal(s.bills[0].due, 5);
+  assert.ok(s.today.notices.some((n) => /stall fee of ₦3,000, due on Day 5/.test(n)));
   assert.equal(E.cashNeededSoon(s), 3000);
-  while (s.day < 7) E.startDay(s, mulberry32(s.day));
+  while (s.day < 5) E.startDay(s, mulberry32(s.day));
   s.cash = 1000;
   s.today.queue = []; E.openShop(s);
   assert.equal(s.phase, 'evening');
   assert.equal(s.bills.length, 1, 'not enough cash: still owed');
-  E.startDay(s, mulberry32(8));
+  E.startDay(s, mulberry32(6));
   assert.equal(E.billOwed(s.bills[0]), 3500);
   assert.equal(s.stats.billsLateDays, 1);
   s.cash = 5000;

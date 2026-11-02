@@ -91,7 +91,7 @@ export const GOALS = [
 
 // Big bills (tune). first/day count from the level's first day; announced RULES.billNoticeDays ahead.
 export const BILLS = {
-  1: { recurring: [{ id: 'stall', label: 'Market stall fee', amount: 3000, every: 7, first: 7 }], oneOff: [] },
+  1: { recurring: [{ id: 'stall', label: 'Market stall fee', amount: 3000, every: 7, first: 5 }], oneOff: [] },
   2: {
     recurring: [{ id: 'rent', label: 'Shop rent', amount: 8000, every: 7, first: 7 }],
     oneOff: [{ id: 'nepa', label: 'NEPA bill', amount: 2500, day: 4 }, { id: 'repair', label: 'Padlock and door repair', amount: 2000, day: 10 }],
@@ -109,9 +109,9 @@ export const FAMILY_NEEDS = [
 ];
 
 export const LEVELS = {
-  1: { name: 'The Table', goalProfit: 27000, goalScore: 66,
+  1: { name: 'The Table', goalProfit: 13000, goalScore: 68,
        blurb: 'A small market table. Learn cash vs profit, and record every sale.' },
-  2: { name: 'The Shop', goalProfit: 32000, goalScore: 70, maxLateDays: 7,
+  2: { name: 'The Shop', goalProfit: 28000, goalScore: 70, maxLateDays: 7,
        blurb: 'A small shop. Restock on time, give credit carefully and get your debts back.' },
 };
 
