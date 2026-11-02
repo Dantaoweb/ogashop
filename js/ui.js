@@ -2,6 +2,7 @@
 import { GOODS, LEVELS, BADGES, NOTES, EXPLAIN, TYPE_LABEL, CREDITVOICE_URL } from './data.js';
 import { CUST, fmt, goodsForLevel, buyPrice, supplierOwed, owedToYou, openDebts, supplierCreditError } from './core.js';
 import { currentCustomer, eventView, scoreParts, suggestMessage } from './engine.js';
+import { face, good, scene } from './art.js';
 
 export const esc = (v) => String(v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -38,7 +39,7 @@ export const icon = (name, size = 24, sw = 1.8) => `<svg width="${size}" height=
 
 const BADGE_ICON = { first_sale: 'coin', record_keeper: 'doc', fully_stocked: 'box', never_lost_debt: 'check', debt_free_week: 'calendar' };
 
-const initials = (name) => name.split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase();
+const stockChip = (s, id, lowAt) => `<span class="chip${s.stock[id] <= lowAt ? ' low' : ''}">${good(id, 18)}${esc(GOODS[id].short)} ${s.stock[id]}</span>`;
 const items = (list) => list.map((it) => `${it.qty} ${GOODS[it.item].short.toLowerCase()}`).join(' and ');
 const btn = (action, label, cls = 'primary', arg = '', extra = '') =>
   `<button type="button" class="btn ${cls}" data-action="${action}"${arg !== '' ? ` data-arg="${esc(arg)}"` : ''} ${extra}>${label}</button>`;
@@ -83,7 +84,7 @@ export function startScreen(ui, hasSave, saveInfo) {
   return `<main class="screen">
     <div class="body" style="gap:24px;padding-top:40px">
       <div class="center" style="display:flex;flex-direction:column;gap:12px">
-        <div class="logo">${icon('stall', 48, 1.6)}</div>
+        <div class="scene-card">${scene(1, { cid: 'mamabola', stock: { rice: 1, garri: 1, water: 1, recharge: 1 } })}</div>
         <h1 class="display" style="font-size:42px">Oga Shop</h1>
         <p class="muted" style="margin:0;font-size:17px">Grow from a small market table to a big company.</p>
       </div>
@@ -120,7 +121,7 @@ export function morningScreen(s, ui) {
     const exp = expiring(id);
     const margin = s.prices[id] - buyPrice(s, id);
     return `<div class="stock-row${low ? ' low' : ''}">
-      <div class="between"><div class="grow"><b>${esc(g.name)}</b> <span class="muted small">(${esc(g.unit)})</span>
+      <div class="between"><span class="good-ico">${good(id, 36)}</span><div class="grow"><b>${esc(g.name)}</b> <span class="muted small">(${esc(g.unit)})</span>
         <div class="small ${low ? '' : 'muted'}" style="${low ? 'color:var(--amber-ink);font-weight:600' : ''}">${s.stock[id]} in stock · buy ${fmt(buyPrice(s, id))}${exp ? ` · <span style="color:var(--red);font-weight:700">${exp} go bad tonight</span>` : ''}</div></div>
         ${low ? '<span class="tag solid">Low</span>' : `<span class="small" style="font-weight:700;color:${margin > 0 ? 'var(--green)' : 'var(--red)'}">${margin >= 0 ? '+' : ''}${fmt(margin)} each</span>`}
       </div>
@@ -168,7 +169,7 @@ export function customerScreen(s) {
   const v = currentCustomer(s);
   const t = s.today;
   const c = v.customer;
-  const tone = c.type === 'neverpays' ? 'red' : c.type === 'regular' ? 'green' : '';
+  const mood = t.outcome ? (t.outcome.tone === 'bad' ? 'sad' : 'neutral') : 'happy';
   const loyal = s.customers[c.id].loyalty === 2;
   const wanted = items(v.items.length ? v.items : t.queue[t.idx].items);
   let speech;
@@ -209,7 +210,7 @@ export function customerScreen(s) {
   }
 
   const order = v.items.length ? `<div class="between small" style="padding-top:10px;border-top:1px dashed var(--line)">
-      <span class="muted">${v.items.map((it) => `${it.qty} × ${esc(GOODS[it.item].short)} @ ${fmt(it.price)}`).join('<br>')}</span><b>${fmt(v.total)}</b></div>
+      <span class="muted" style="display:flex;flex-direction:column;gap:4px">${v.items.map((it) => `<span class="row" style="gap:6px">${good(it.item, 22)}${it.qty} × ${esc(GOODS[it.item].short)} @ ${fmt(it.price)}</span>`).join('')}</span><b>${fmt(v.total)}</b></div>
       ${v.missing.length ? `<span class="small" style="color:var(--amber-ink);font-weight:600">Not enough ${esc(v.missing.map((i) => GOODS[i].short.toLowerCase()).join(', '))}: you can only sell what you have.</span>` : ''}` : '';
 
   return `<main class="screen">
@@ -223,7 +224,7 @@ export function customerScreen(s) {
     <div class="body">
       ${v.kind === 'credit' ? explain(s, 'credit') : v.kind === 'discount' || c.type === 'bargainer' ? explain(s, 'discount') : ''}
       <div class="center" style="display:flex;flex-direction:column;align-items:center;gap:8px">
-        <div class="face ${tone}" aria-hidden="true">${initials(c.name)}</div>
+        <div class="scene-card">${scene(s.level, { cid: c.id, mood, stock: s.stock })}</div>
         <b style="font-size:21px">${esc(c.name)}</b>
         <div class="wrap" style="justify-content:center"><span class="tag ${c.type === 'regular' ? 'green' : 'amber'}">${TYPE_LABEL[c.type]}</span>${loyal ? '<span class="tag green">Loyal</span>' : ''}</div>
       </div>
@@ -231,7 +232,7 @@ export function customerScreen(s) {
       ${actions}
     </div>
     <div class="foot" style="background:none;position:static"><span class="small muted" style="font-weight:600">Stock now</span>
-      <div class="wrap">${goodsForLevel(s.level).map((id) => `<span class="chip${s.stock[id] <= 2 ? ' low' : ''}">${esc(GOODS[id].short)} ${s.stock[id]}</span>`).join('')}</div></div>
+      <div class="wrap">${goodsForLevel(s.level).map((id) => stockChip(s, id, 2)).join('')}</div></div>
   </main>`;
 }
 
@@ -327,7 +328,7 @@ export function eveningScreen(s) {
       ${t.salesValue > 0 ? `<p class="small" style="margin:0;color:var(--ink-2)">You sold goods worth ${fmt(t.salesValue)}, but they cost you ${fmt(t.cogs)}. Busy is not the same as profitable.${t.creditGiven ? ` ${fmt(t.creditGiven)} of today's sales were on credit: profit, but not cash yet.` : ''}</p>` : ''}
       ${happened.length ? `<div class="card"><h3>Today</h3>${happened.map((h) => `<span class="small">${esc(h)}</span>`).join('')}</div>` : ''}
       <div class="card"><h3>Who owes you</h3>${debtRows || '<span class="small muted">Nobody owes you money.</span>'}</div>
-      <div class="card"><h3>Stock left</h3><div class="wrap">${goodsForLevel(s.level).map((id) => `<span class="chip${s.stock[id] === 0 ? ' low' : ''}">${esc(GOODS[id].short)} ${s.stock[id]}</span>`).join('')}</div></div>
+      <div class="card"><h3>Stock left</h3><div class="wrap">${goodsForLevel(s.level).map((id) => stockChip(s, id, 0)).join('')}</div></div>
       ${titi(`<b>Tip:</b> ${esc(t.tip)}`)}
       ${t.noteKey ? `<div class="card warn"><b>Did you know?</b><span style="font-size:15px">${esc(NOTES[t.noteKey])}</span></div>` : ''}
     </div>
@@ -387,7 +388,7 @@ export function debtsScreen(s) {
       ? `<span class="tag" style="background:#E8EDE9;color:var(--muted)">${icon('lock', 12)} Level 2</span>`
       : reminded ? '<span class="tag green">Reminded</span>'
       : btn('remind', 'Remind', late >= 0 ? 'primary small' : 'secondary small', d.id);
-    return `<div class="debt-row"><span class="initials">${initials(c.name)}</span>
+    return `<div class="debt-row"><span class="mini-face">${face(c.id, { size: 44, mood: late > 0 ? 'neutral' : 'happy' })}</span>
       <div class="grow"><b>${esc(c.name)} · ${fmt(d.amount)}</b><div class="small muted">${status} · ${esc(d.what)}, Day ${d.created}</div></div>${action}</div>`;
   }).join('');
   const sup = supplierOwed(s);
@@ -413,7 +414,7 @@ export function level2Screen() {
   const item = (ico, title, desc) => `<div class="row" style="align-items:flex-start"><span class="avatar" style="background:var(--green-dark)">${icon(ico, 16)}</span><div><b>${title}</b><div class="small" style="color:var(--green-text-on)">${desc}</div></div></div>`;
   return `<main class="screen hero"><div class="body center">
       <span class="tag solid" style="align-self:center;text-transform:uppercase;letter-spacing:.08em">Level 1 complete</span>
-      <div class="hero-icon">${icon('store', 64, 1.4)}</div>
+      <div class="scene-card">${scene(2, { stock: { noodles: 1, bread: 1, drinks: 1, palmoil: 1, rice: 1 } })}</div>
       <h1 class="display" style="font-size:32px">Welcome to The Shop!</h1>
       <p class="lead">Your table did well. Now you have a small shop with more goods and more customers.</p>
       <div style="display:flex;flex-direction:column;gap:14px;text-align:left;background:var(--green-dark);border-radius:18px;padding:16px">
@@ -429,7 +430,7 @@ export function doneScreen(s) {
   const st = s.stats;
   return `<main class="screen hero"><div class="body center">
       <span class="tag solid" style="align-self:center;text-transform:uppercase;letter-spacing:.08em">Level 2 complete</span>
-      <div class="hero-icon">${icon('stall', 64, 1.4)}</div>
+      <div class="scene-card">${scene(2, { cid: 'mamabola', stock: { rice: 1, bread: 1, drinks: 1, palmoil: 1, water: 1 } })}</div>
       <h1 class="display" style="font-size:32px">You built The Shop!</h1>
       <p class="lead">From a ₦20,000 table to a shop that restocks on time and gets its debts back.</p>
       <div class="grid3">

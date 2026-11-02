@@ -56,7 +56,10 @@ function render() {
   app.innerHTML = view();
   // Scroll to top when the screen changes, and keep the chat in view on the tiTi screen.
   const key = `${ui.screen}|${s?.phase}|${s?.day}|${s?.today?.idx}`;
-  if (key !== lastKey) window.scrollTo(0, 0);
+  if (key !== lastKey) {
+    window.scrollTo(0, 0);
+    app.querySelector('[data-animate]')?.classList.add('enter');
+  }
   lastKey = key;
   if (s?.phase === 'record' && !ui.screen) {
     const chat = app.querySelector('.chat');
