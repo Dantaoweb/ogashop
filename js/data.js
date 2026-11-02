@@ -67,6 +67,7 @@ export const RULES = {
   // Sending for stock in the middle of the day: normal price plus transport, at least this many units.
   // Count the change: chance a cash sale is paid with ₦1,000 notes that need change (once a day at most).
   runSeconds: 20,
+  quickQuestionChance: 0.35, // some evenings ask one question about your shop
   changeChance: 0.35,
   changeSeconds: 15,
   changeNotes: [500, 200, 100, 50],
@@ -80,6 +81,20 @@ export const RULES = {
   wordSpreadFewerCustomers: 2,
   wordSpreadRegularsAway: 2,
 };
+
+// Lesson questions for the end-of-level quiz. The first option is the right one (options are shuffled).
+export const LESSON_QUESTIONS = [
+  { text: 'You sold goods worth ₦10,000. They cost you ₦8,000. What is your profit?', options: ['₦2,000', '₦10,000', '₦8,000', '₦18,000'],
+    explain: 'Profit is what you sold for minus what the goods cost: ₦10,000 − ₦8,000 = ₦2,000.' },
+  { text: 'Why should you record every credit sale?', options: ['So nobody forgets what is owed', 'To make customers happy', 'Only big sales need recording', 'It is not needed'],
+    explain: 'Unrecorded credit is easy to forget, for you and the customer. A record is what gets you paid.' },
+  { text: 'Is the cash in your hand the same as your profit?', options: ['No: part of it paid for your stock', 'Yes, always', 'Only on busy days', 'Only in the evening'],
+    explain: 'Cash includes money that only paid back what your goods cost. Profit is what is left after that.' },
+  { text: 'Your family needs money. Where should it come from?', options: ['Your own pay (your pocket)', 'The business money', 'Your stock money', 'Money saved for rent'],
+    explain: 'Pay yourself a fixed amount and spend from that. The business money is for stock and bills.' },
+  { text: 'A bill is due in 3 days. What should you do when you buy stock?', options: ['Keep enough cash aside for the bill', 'Spend it all on stock', 'Wait until the bill is late', 'Give credit to everyone'],
+    explain: 'Plan your cash, not just your stock. Late bills cost more every day.' },
+];
 
 // Things to save for, at real Nigerian prices (estimates to check). Small ones are reachable in Stage 1.
 export const GOALS = [
@@ -127,6 +142,7 @@ export const BADGES = {
   never_lost_debt: { name: 'Never lost a debt', desc: 'Got 3 debts back and lost none.' },
   debt_free_week:  { name: 'Debt-free week',    desc: '7 days in a row with no late debts.' },
   goal_reached:    { name: 'Goal reached',      desc: 'Saved up and bought your goal.' },
+  know_business:   { name: 'Know your business', desc: '4 out of 5 or better in an end-of-level quiz.' },
 };
 
 // What customers say after a sale. {due} becomes the day credit is due.

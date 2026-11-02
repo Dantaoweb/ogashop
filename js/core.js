@@ -154,6 +154,8 @@ export function applySale(s, cid, items, paid, { recorded = false, dueDays = RUL
   s.today.salesValue += total;
   s.today.cogs += cogs;
   const sale = { cid, items, listTotal, discount, total, paid, recorded, debtId: null };
+  // Every sale goes in the sales log; "My records" and the quiz read it.
+  if (s.sales) sale.logId = s.sales.push({ day: s.day, level: s.level, cid, items, total, paid, recorded }) - 1;
   if (total > paid) {
     const debt = {
       id: s.nextDebtId++, cid, amount: total - paid, due: s.day + dueDays, created: s.day,

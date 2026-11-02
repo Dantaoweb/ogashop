@@ -6,6 +6,7 @@ import { CUST, fmt } from './core.js';
 import * as Voice from './voice.js';
 import { setGoal, clearGoal } from './goals.js';
 import { startRun } from './run.js';
+import * as Quiz from './quiz.js';
 import { GOALS, RULES } from './data.js';
 
 const SAVE_KEY = 'ogashop.save.v1';
@@ -13,7 +14,7 @@ const app = document.getElementById('app');
 
 let s = load();
 // Screens on top of the day loop: start | settings | debts | score | level2 | done
-const ui = { screen: s ? null : 'start', startPath: null, buy: {}, msg: '', error: null, confirmNew: false, confirmReset: false, canInstall: false };
+const ui = { screen: s ? (s.quiz ? 'quiz' : null) : 'start', startPath: null, buy: {}, msg: '', error: null, confirmNew: false, confirmReset: false, canInstall: false };
 let installPrompt = null;
 
 function load() {
@@ -44,6 +45,8 @@ function view() {
   if (ui.screen === 'debts') return UI.debtsScreen(s);
   if (ui.screen === 'prices') return UI.pricesScreen(s);
   if (ui.screen === 'goals') return UI.goalsScreen(s, ui);
+  if (ui.screen === 'records') return UI.recordsScreen(s);
+  if (ui.screen === 'quiz' && s.quiz) return UI.quizScreen(s, ui);
   if (ui.screen === 'score') return UI.scoreScreen(s);
   if (ui.screen === 'level2') return UI.level2Screen(s);
   if (ui.screen === 'done') return UI.doneScreen(s);
@@ -54,7 +57,7 @@ function view() {
     case 'event': return UI.eventScreen(s);
     case 'change': return UI.changeScreen(s, ui);
     case 'run': return UI.runScreen(s);
-    case 'evening': return UI.eveningScreen(s);
+    case 'evening': return UI.eveningScreen(s, ui);
     default: return UI.morningScreen(s, ui);
   }
 }
@@ -179,7 +182,12 @@ const actions = {
 
   'evening-next': () => { ui.screen = 'score'; },
   'score-next': () => {
-    if (s.today.levelUp) { ui.screen = E.levelUp(s); return; }
+    if (s.today.levelUp) {
+      // End-of-level quiz first. It never blocks moving up.
+      s.quiz = Quiz.makeQuiz(s, 'level');
+      ui.screen = s.quiz ? 'quiz' : E.levelUp(s);
+      return;
+    }
     E.startDay(s);
     ui.screen = null;
   },
@@ -190,6 +198,12 @@ const actions = {
   remind: (arg) => { E.remind(s, Number(arg)); },
   'set-path': (arg) => { s.path = arg; },
   'set-voice': (arg) => { Voice.setEnabled(arg); },
+  'quiz-answer': (arg) => { Quiz.answer(s.quiz, Number(arg)); ui.quizRecords = false; },
+  'quiz-check': () => { ui.quizRecords = true; },
+  'quiz-next': () => { Quiz.next(s.quiz); ui.quizRecords = false; if (s.quiz.done) Quiz.finish(s, s.quiz); },
+  'quiz-finish': () => { s.quiz = null; ui.screen = E.levelUp(s); },
+  'quick-answer': (arg) => { const q = s.today.quick; if (q && q.questions[0].picked == null) { Quiz.answer(q, Number(arg)); Quiz.finish(s, q); } ui.quickRecords = false; },
+  'quick-check': () => { ui.quickRecords = true; },
   'run-start': () => { E.startRun(s); },
   'run-done': (got) => { E.runDone(s, got); },
   'run-boy': () => { stopRun(); E.runSendBoy(s); },

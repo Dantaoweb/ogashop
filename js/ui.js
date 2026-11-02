@@ -6,6 +6,7 @@ import { face, good, scene } from './art.js';
 import { goalStatus, daysToGoal, howLong } from './goals.js';
 import * as Voice from './voice.js';
 import { runnerSvg } from './run.js';
+import { result as quizResult } from './quiz.js';
 
 export const esc = (v) => String(v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -42,7 +43,7 @@ const PATHS = {
 };
 export const icon = (name, size = 24, sw = 1.8) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" ${P} stroke-width="${sw}" aria-hidden="true">${PATHS[name] || ''}</svg>`;
 
-const BADGE_ICON = { first_sale: 'coin', record_keeper: 'doc', fully_stocked: 'box', never_lost_debt: 'check', debt_free_week: 'calendar', goal_reached: 'star' };
+const BADGE_ICON = { first_sale: 'coin', record_keeper: 'doc', fully_stocked: 'box', never_lost_debt: 'check', debt_free_week: 'calendar', goal_reached: 'star', know_business: 'search' };
 
 const stockChip = (s, id, lowAt) => `<span class="chip${s.stock[id] <= lowAt ? ' low' : ''}">${good(id, 18)}${esc(GOODS[id].short)} ${s.stock[id]}</span>`;
 const items = (list) => list.map((it) => `${it.qty} ${GOODS[it.item].short.toLowerCase()}`).join(' and ');
@@ -73,6 +74,7 @@ function topBar(s, { title, kicker, tiles = true, dark = false } = {}) {
       <div class="grow"><div class="kicker">${esc(kicker || `Level ${s.level} · ${LEVELS[s.level].name}`)}</div>
         <h1 class="title display">${esc(title)}</h1></div>
       <span class="pill" aria-label="Business score ${s.score}">Score ${s.score}</span>
+      <button type="button" class="icon-btn" data-action="open" data-arg="records" aria-label="My records">${icon('doc')}</button>
       <button type="button" class="icon-btn" data-action="open" data-arg="debts" aria-label="Who owes you">${icon('people')}${owed ? `<span class="badge-dot">${owed}</span>` : ''}</button>
       <button type="button" class="icon-btn" data-action="open" data-arg="settings" aria-label="Settings">${icon('gear')}</button>
     </div>
@@ -368,6 +370,7 @@ export function recordScreen(s, ui) {
       <div class="wrap">
         <button type="button" class="chip" data-action="titi-ask" data-arg="who owes me?" style="color:var(--green);font-weight:600;min-height:40px">Who owes me?</button>
         <button type="button" class="chip" data-action="titi-ask" data-arg="what's my profit today?" style="color:var(--green);font-weight:600;min-height:40px">My profit today?</button>
+        <button type="button" class="chip" data-action="open" data-arg="records" style="color:var(--green);font-weight:600;min-height:40px">My records</button>
       </div>
     </div>
     <div class="composer">
@@ -472,7 +475,7 @@ function moneyOut(s) {
     ${t.personal.length ? explain(s, 'personal') : ''}`;
 }
 
-export function eveningScreen(s) {
+export function eveningScreen(s, ui = {}) {
   const t = s.today;
   const debts = openDebts(s);
   const debtRows = debts.map((d) => `<div class="between" style="${d.recorded ? '' : 'background:var(--red-soft);margin:0 -8px;padding:8px;border-radius:10px'}">
@@ -498,6 +501,7 @@ export function eveningScreen(s) {
         <div class="card soft"><span class="small" style="font-weight:600;color:var(--green)">Profit</span><b class="display" style="font-size:26px;color:${t.profit >= 0 ? 'var(--green)' : 'var(--red)'}">${fmt(t.profit)}</b></div>
       </div>
       ${t.salesValue > 0 ? `<p class="small" style="margin:0;color:var(--ink-2)">You sold goods worth ${fmt(t.salesValue)}, but they cost you ${fmt(t.cogs)}. Busy is not the same as profitable.${t.creditGiven ? ` ${fmt(t.creditGiven)} of today's sales were on credit: profit, but not cash yet.` : ''}</p>` : ''}
+      ${t.quick ? quickCard(t.quick, ui) : ''}
       ${moneyOut(s)}
       ${happened.length ? `<div class="card"><h3>Today</h3>${happened.map((h) => `<span class="small">${esc(h)}</span>`).join('')}</div>` : ''}
       <div class="card"><h3>Who owes you</h3>${debtRows || '<span class="small muted">Nobody owes you money.</span>'}</div>
@@ -548,6 +552,85 @@ export function scoreScreen(s) {
         }).join('')}</div></div>
     </div>
     <div class="foot">${btn('score-next', t.levelUp ? `Finish Level ${s.level}!` : `Start Day ${s.day + 1}`, t.levelUp ? 'amber block' : 'primary block')}</div>
+  </main>`;
+}
+
+// ---------- Quiz and records ----------
+
+// One question with its options; after answering, right/wrong and the explanation.
+function questionBlock(q, { answerAction, checkAction, showRecords }) {
+  const answered = q.picked != null;
+  const opts = q.options.map((o, i) => {
+    let cls = '';
+    if (answered && i === q.answer) cls = ' right';
+    else if (answered && i === q.picked) cls = ' wrong';
+    return `<button type="button" class="choice quiz-opt${cls}" data-action="${answerAction}" data-arg="${i}" ${answered ? 'disabled' : ''}><b>${esc(o)}</b></button>`;
+  }).join('');
+  return `<b style="font-size:18px">${esc(q.text)}</b>
+    <div style="display:flex;flex-direction:column;gap:8px">${opts}</div>
+    ${q.records && !answered ? (showRecords ? titi(`<b>Your records:</b> ${esc(q.records.replace(/^Your records: |^Your prices: |^Your days: /, ''))}`) : `<button type="button" class="link" data-action="${checkAction}" style="align-self:flex-start;color:var(--green)">${icon('doc', 16)} Check my records</button>`) : ''}
+    ${answered ? titi(`${q.picked === q.answer ? '<b>Correct!</b>' : '<b>Not quite.</b>'} ${esc(q.explain)}`) : ''}`;
+}
+
+function quickCard(quiz, ui) {
+  const q = quiz.questions[0];
+  return `<div class="card strong"><span class="tag solid" style="align-self:flex-start">Quick question</span>
+    ${questionBlock(q, { answerAction: 'quick-answer', checkAction: 'quick-check', showRecords: ui.quickRecords })}</div>`;
+}
+
+export function quizScreen(s, ui) {
+  const quiz = s.quiz;
+  const header = `<header class="top"><div class="kicker">Level ${quiz.level} · ${esc(LEVELS[quiz.level].name)}</div><h1 class="title display">Know your business</h1></header>`;
+  if (quiz.done) {
+    const r = quizResult(quiz);
+    const good = r.correct / r.total >= 0.8;
+    return `<main class="screen">${header}<div class="body">
+      <div class="card ${good ? 'soft' : ''} pop" style="align-items:center;text-align:center">
+        <b class="display" style="font-size:40px">${r.correct} of ${r.total}</b>
+        <b>${good ? 'You know your business!' : 'Good try. Your records can answer these questions.'}</b>
+        ${good && s.badges.includes('know_business') ? `<span class="tag solid">${icon('search', 14)} Know your business badge</span>` : ''}
+        <span class="small muted">This doesn't change your score. Moving up is never blocked.</span></div>
+      ${titi('In real life, your records answer these questions for you: who buys most, what sells most, who owes you. Record every sale.')}
+    </div><div class="foot">${btn('quiz-finish', 'Continue', 'primary block')}</div></main>`;
+  }
+  const q = quiz.questions[quiz.index];
+  return `<main class="screen">${header}
+    <div style="padding:10px 16px 0" class="row"><span class="small muted" style="font-weight:600">Question ${quiz.index + 1} of ${quiz.questions.length}</span>
+      <div class="progress grow"><div style="width:${Math.round((quiz.index / quiz.questions.length) * 100)}%"></div></div></div>
+    <div class="body">${questionBlock(q, { answerAction: 'quiz-answer', checkAction: 'quiz-check', showRecords: ui.quizRecords })}</div>
+    <div class="foot">${q.picked != null ? btn('quiz-next', quiz.index < quiz.questions.length - 1 ? 'Next question' : 'See my result', 'primary block') : ''}</div>
+  </main>`;
+}
+
+export function recordsScreen(s) {
+  const mine = s.sales.filter((x) => x.level === s.level && x.cid);
+  const rec = mine.filter((x) => x.recorded);
+  const missing = mine.length - rec.length;
+  const byItem = {};
+  const byCust = {};
+  for (const x of rec) {
+    for (const it of x.items) {
+      byItem[it.item] = byItem[it.item] || { qty: 0, money: 0 };
+      byItem[it.item].qty += it.qty;
+      byItem[it.item].money += it.qty * it.price;
+    }
+    byCust[x.cid] = byCust[x.cid] || { times: 0, money: 0 };
+    byCust[x.cid].times++;
+    byCust[x.cid].money += x.total;
+  }
+  const items = Object.entries(byItem).sort((a, b) => b[1].qty - a[1].qty);
+  const custs = Object.entries(byCust).sort((a, b) => b[1].times - a[1].times);
+  const days = s.history.filter((h) => h.level === s.level);
+  const best = [...days].sort((a, b) => b.profit - a.profit)[0];
+  return `<main class="screen">
+    <header class="top"><div class="row"><button type="button" class="icon-btn" data-action="close" aria-label="Back" style="margin-left:-10px">${icon('back', 22, 2)}</button>
+      <div><div class="kicker">Level ${s.level} · ${esc(LEVELS[s.level].name)}</div><h1 class="title display">My records</h1></div></div></header>
+    <div class="body">
+      ${titi(`${rec.length} recorded sale${rec.length === 1 ? '' : 's'} this level.${missing ? ` ${missing} sale${missing > 1 ? 's were' : ' was'} not recorded, so ${missing > 1 ? 'they are' : 'it is'} missing here.` : ' Nothing missing.'}`)}
+      <div class="card"><h3>What sells most</h3>${items.length ? items.map(([id, v]) => `<div class="between small"><span class="row" style="gap:6px">${good(id, 22)}${esc(GOODS[id].name)}</span><b>${v.qty} sold · ${fmt(v.money)}</b></div>`).join('') : '<span class="small muted">No recorded sales yet.</span>'}</div>
+      <div class="card"><h3>Your customers</h3>${custs.length ? custs.map(([c, v]) => `<div class="between small"><span class="row" style="gap:8px"><span class="mini-face" style="width:32px;height:32px">${face(c, { size: 32 })}</span>${esc(CUST[c].name)}</span><b>${v.times}× · ${fmt(v.money)}</b></div>`).join('') : '<span class="small muted">No recorded sales yet.</span>'}</div>
+      ${days.length ? `<div class="card"><h3>Your days</h3>${days.slice(-7).map((h) => `<div class="between small"><span>Day ${h.day}${best && h === best ? ' <span class="tag green">Best</span>' : ''}</span><b style="color:${h.profit >= 0 ? 'var(--green)' : 'var(--red)'}">${fmt(h.profit)} profit</b></div>`).join('')}</div>` : ''}
+    </div>
   </main>`;
 }
 

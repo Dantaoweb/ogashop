@@ -316,6 +316,38 @@ test('market run: catch everything = no transport fee; not enough = customer lea
   assert.equal(boy.today.profit, -300);
 });
 
+test('quiz: questions from the real sales; records leave out unrecorded sales', async () => {
+  const Q = await import('../js/quiz.js');
+  const s = E.newGame('business', mulberry32(60));
+  const sell = (cid, item, qty, recorded) => s.sales.push({ day: 1, level: 1, cid, items: [{ item, qty, price: 500 }], total: qty * 500, paid: qty * 500, recorded });
+  sell('mamabola', 'rice', 3, true); sell('mamabola', 'garri', 1, true); sell('musa', 'rice', 2, false); sell('ngozi', 'water', 1, true);
+  s.history = [{ day: 1, level: 1, profit: 500 }, { day: 2, level: 1, profit: 2000 }, { day: 3, level: 1, profit: 900 }];
+  const quiz = Q.makeQuiz(s, 'level', mulberry32(1));
+  assert.equal(quiz.questions.length, 6);
+  const top = quiz.questions[0];
+  assert.equal(top.options[top.answer], 'Rice');
+  assert.match(top.records, /rice 3/);
+  assert.match(top.records, /1 sale was not recorded/);
+  const loyal = quiz.questions[1];
+  assert.equal(loyal.options[loyal.answer], 'Mama Bola');
+  for (const q of quiz.questions) { Q.answer(quiz, q.answer); Q.next(quiz); }
+  assert.ok(quiz.done);
+  assert.deepEqual(Q.finish(s, quiz), { correct: 6, total: 6 });
+  assert.ok(s.badges.includes('know_business'));
+  assert.equal(s.quizLog.length, 1);
+});
+
+test('recording a sale marks it in the sales log', () => {
+  const s = E.newGame('business', mulberry32(61));
+  s.today.queue = [{ cid: 'musa', items: [{ item: 'garri', qty: 2 }], kind: 'cash', frac: 1, disc: 0.1, walkRoll: 0.99, acceptRoll: 0, moodRoll: 0.99, changeRoll: 1 }];
+  E.openShop(s);
+  E.serve(s, 'sell');
+  assert.equal(s.sales.length, 1);
+  assert.equal(s.sales[0].recorded, false);
+  E.titiMessage(s, 'sold 2 garri 1100 cash');
+  assert.equal(s.sales[0].recorded, true);
+});
+
 test('count the change: right, short, too much, skip', () => {
   const play = (taps, result = 'give') => {
     const s = E.newGame('business', mulberry32(40));

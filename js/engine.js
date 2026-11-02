@@ -10,6 +10,7 @@ import {
 } from './core.js';
 import { EVENT_BY_ID, drawEvent, morningEffects } from './events.js';
 import { checkGoal } from './goals.js';
+import { makeQuiz } from './quiz.js';
 import { scheduleBills, payDueBills, chargeLateFees, dropFutureBills, payBill, cashNeededSoon, billsDueSoon, billOwed } from './bills.js';
 import { parseSale, checkSale, detectQuery, suggestMessage } from './parser.js';
 
@@ -22,7 +23,7 @@ export function newGame(path, rng = Math.random) {
     customers: {}, debts: [], nextDebtId: 1, supplier: [], bills: [], nextBillId: 1, billNext: {},
     levelProfit: 0, totalProfit: 0, score: 50,
     stats: { recW: 0, totW: 0, dueAmt: 0, paidOnTime: 0, days: 0, cleanDays: 0, repaid: 0, lost: 0, noLateStreak: 0, pocketPays: 0, capitalTakes: 0, overpayStreak: 0, served: 0, unhappy: 0, billsPaid: 0, billsLateDays: 0, changeRight: 0 },
-    badges: [], seen: {}, eventLog: {}, mods: {}, history: [], goal: null, goalsReached: [],
+    badges: [], seen: {}, eventLog: {}, mods: {}, history: [], goal: null, goalsReached: [], sales: [], quizLog: [], quiz: null,
     phase: 'morning', today: null,
   };
   for (const id of Object.keys(GOODS)) {
@@ -95,6 +96,9 @@ export function migrate(s) {
   Object.assign(s.stats, { pocketPays: 0, capitalTakes: 0, overpayStreak: 0, served: 0, unhappy: 0, billsPaid: 0, billsLateDays: 0, changeRight: 0, ...s.stats });
   s.bills ??= [];
   s.goal ??= null;
+  s.sales ??= [];
+  s.quizLog ??= [];
+  s.quiz ??= null;
   s.goalsReached ??= [];
   s.nextBillId ??= 1;
   s.billNext ??= {};
@@ -557,6 +561,7 @@ export function titiMessage(s, text) {
     return;
   }
   sale.recorded = true;
+  if (sale.logId != null && s.sales[sale.logId]) s.sales[sale.logId].recorded = true;
   const w = sale.total > sale.paid ? 2 : 1;
   s.stats.recW += w;
   s.stats.totW += w;
@@ -687,6 +692,9 @@ export function endDay(s, rng = Math.random) {
   award('never_lost_debt', st.repaid >= 3 && st.lost === 0);
   award('debt_free_week', st.noLateStreak >= 7);
   t.goalReached = checkGoal(s);
+  // Some evenings: one quick question about your shop.
+  const levelDays = s.history.filter((h) => h.level === s.level).length;
+  t.quick = !t.levelUp && levelDays >= 2 && rng() < RULES.quickQuestionChance ? makeQuiz(s, 'quick', rng) : null;
 
   t.tip = pickTip(s);
   t.noteKey = s.path === 'learning' ? (t.event?.note && !s.seen['note_' + t.event.note] ? t.event.note : NOTE_ORDER.find((k) => !s.seen['note_' + k])) : null;

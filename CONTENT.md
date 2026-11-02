@@ -196,6 +196,14 @@ The score moves slowly: at most ±6 points a day, so one bad day never wipes out
 - Time runs out first: you keep (and pay for) what you caught, but the customer has left unhappy.
 - "Send the boy instead" is always there, at the normal transport fee. Skill only, no luck prizes.
 
+## 7i. Know your business: quiz and records
+
+- Every sale goes in a sales log. **My records** (tiTi's screen and the top bar) shows, for this level: what sells most, each customer's visits and spending, and profit by day. Unrecorded sales are missing, and it says how many.
+- **End-of-level quiz** before moving up: 4 questions about the player's own shop (most-sold goods, most loyal customer, who owes most, best profit per item, best day) and 2 lesson questions (profit vs cash, why record credit, family money, bills).
+- Each shop question has **Check my records**: tiTi shows the answer from the records. The right answer uses what really happened, so unrecorded sales can make the records wrong.
+- **Quick question** on about 1 evening in 3 (from the level's 3rd day): one shop question.
+- Results are kept on the phone (for the Stage 1 test). 80% or better earns the **Know your business** badge. The quiz never blocks moving up and doesn't change the score.
+
 ## 8. Open points for review
 
 1. **Prices:** check every buy and sell price with traders in at least two markets.
