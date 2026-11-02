@@ -73,6 +73,18 @@ export const BADGES = {
   debt_free_week:  { name: 'Debt-free week',    desc: '7 days in a row with no late debts.' },
 };
 
+// What customers say after a sale. {due} becomes the day credit is due.
+export const REACTIONS = {
+  sell: ['Thank you!', 'Thank you, see you tomorrow.', 'Nice doing business with you.'],
+  big: ['The party will be sweet. Thank you!', 'Good! Everything is ready now. Thank you.'],
+  discount: ['Ah, thank you o! I\'ll come back tomorrow.', 'You\'re a good person. I\'ll tell my neighbours.', 'Thank you! Your shop is the best.'],
+  bargainDiscount: ['Ehen! Thank you, my friend.', 'Thank you! You see, we can do business.', 'Good! Next time reduce it more, eh?'],
+  fullprice: ['Hmm… OK, take it.', 'You\'re a hard seller! Here.', 'OK o. Next time, reduce it for me.'],
+  cashonly: ['OK, here\'s your money.', 'Fine, I\'ll pay it all now.'],
+  credit: ['God bless you! I\'ll bring the rest on Day {due}.', 'Thank you! I\'ll pay on Day {due}, I promise.'],
+  creditNeverpays: ['Thank you, my friend! I\'ll pay… soon.', 'You\'re too kind. Don\'t worry, I\'ll pay.'],
+};
+
 // "Did you know?" notes — learning path only. CONTENT.md section 5.
 export const NOTES = {
   cashprofit: 'Cash is all the money in your hand. Profit is what is left after you take away what your goods cost.',

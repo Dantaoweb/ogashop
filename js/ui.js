@@ -238,6 +238,16 @@ export function customerScreen(s) {
 
 // ---------- Record with tiTi ----------
 
+// The customer's face and what they say after a sale.
+function reaction(r) {
+  if (!r) return '';
+  return `<div class="reaction" data-animate>
+    <span class="mini-face lg">${face(r.cid, { size: 56, mood: r.mood })}</span>
+    <div class="grow"><b class="small">${esc(CUST[r.cid].name)}</b><div class="say">“${esc(r.text)}”</div>
+      ${r.note ? `<div class="small" style="color:var(--green);font-weight:700">${icon('check', 14, 3)} ${esc(r.note)}</div>` : ''}</div>
+  </div>`;
+}
+
 export function recordScreen(s, ui) {
   const t = s.today;
   const sale = t.pending;
@@ -247,6 +257,7 @@ export function recordScreen(s, ui) {
       const c = m.card;
       return `<div class="bubble titi card-msg"><div class="row"><span class="avatar" style="width:24px;height:24px">${icon('check', 14, 3)}</span><b>Sale recorded</b></div>
         <dl class="kv">${c.name ? `<dt>Customer</dt><dd>${esc(c.name)}</dd>` : ''}<dt>Items</dt><dd>${esc(items(c.what))}</dd>
+        ${c.discount ? `<dt>Price</dt><dd>${fmt(c.listTotal)}</dd><dt>Discount</dt><dd style="color:var(--red)">−${fmt(c.discount)}</dd>` : ''}
         <dt>Total</dt><dd>${fmt(c.total)}</dd><dt>Paid</dt><dd>${fmt(c.paid)}</dd>
         ${c.owes ? `<dt>Owes</dt><dd style="color:var(--amber-ink);font-weight:700">${fmt(c.owes)}</dd><dt>Due</dt><dd>Day ${c.due}</dd>` : ''}</dl>
         ${c.owes ? `<p class="small" style="margin:0;padding-top:8px;border-top:1px dashed var(--line)">${s.level >= 2 ? 'You can remind them from "Who owes you" on the due day.' : 'Recorded debts get paid back far more often.'}</p>` : ''}</div>`;
@@ -262,6 +273,7 @@ export function recordScreen(s, ui) {
       <span class="small muted" style="font-weight:600">Day ${s.day}</span>
     </header>
     <div class="body">
+      ${reaction(t.reaction)}
       ${explain(s, 'record')}
       <div class="chat" aria-live="polite">${msgs}</div>
       <div class="wrap">
@@ -315,6 +327,7 @@ export function eveningScreen(s) {
     ...t.lostDebts.map((r) => `${CUST[r.cid].name}'s ${fmt(r.amount)} is lost${r.recorded ? '' : ' (it was never recorded)'}.`),
     ...t.wasted.map((w) => `${w.qty} ${GOODS[w.item].short.toLowerCase()} ${w.label}.`),
     ...t.expenses.map((e) => `${e.label}: ${fmt(e.amount)}.`),
+    ...(t.discounts ? [`Discounts given today: ${fmt(t.discounts)}. That came straight off your profit.`] : []),
   ];
   return `<main class="screen">
     <header class="top dark" style="flex-direction:row;align-items:center;justify-content:space-between">

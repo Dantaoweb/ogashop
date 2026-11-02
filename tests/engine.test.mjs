@@ -47,6 +47,36 @@ test('wrong message is not recorded', () => {
   assert.match(s.today.chat.at(-1).text, /Almost/);
 });
 
+test('discount: shown on the record, customer reacts, evening counts it', () => {
+  const s = E.newGame('business', mulberry32(6));
+  s.today.queue = [{ cid: 'mamabola', items: [{ item: 'rice', qty: 2 }], kind: 'cash', frac: 1, disc: 0.1, walkRoll: 0.99, acceptRoll: 0 }];
+  E.openShop(s);
+  E.serve(s, 'discount');
+  const sale = s.today.pending;
+  assert.equal(sale.listTotal, 5000);
+  assert.equal(sale.discount, 500);
+  assert.equal(sale.total, 4500);
+  assert.equal(s.today.discounts, 500);
+  assert.equal(s.today.reaction.cid, 'mamabola');
+  assert.equal(s.today.reaction.mood, 'happy');
+  assert.match(s.today.reaction.note, /Mama Bola/);
+  E.titiMessage(s, 'sold 2 rice to Mama Bola 5000, discount 500, paid 4500');
+  const card = s.today.chat.at(-1).card;
+  assert.equal(card.discount, 500);
+  assert.equal(card.listTotal, 5000);
+});
+
+test('every sale gets a customer reaction', () => {
+  for (const [kind, action, cid] of [['cash', 'sell', 'musa'], ['credit', 'credit', 'iyatunde'], ['credit', 'credit', 'chidi'], ['discount', 'sell', 'aisha'], ['discount', 'fullprice', 'aisha'], ['credit', 'cashonly', 'mrokon']]) {
+    const s = E.newGame('business', mulberry32(8));
+    s.today.queue = [{ cid, items: [{ item: 'garri', qty: 2 }], kind, frac: 0.5, disc: 0.1, walkRoll: 0.99, acceptRoll: 0 }];
+    E.openShop(s);
+    E.serve(s, action);
+    assert.equal(s.phase, 'record', `${kind}/${action}`);
+    assert.ok(s.today.reaction.text.length > 3 && !s.today.reaction.text.includes('{due}'), s.today.reaction.text);
+  }
+});
+
 test('out of stock loses the sale', () => {
   const s = E.newGame('business', mulberry32(5));
   s.stock.rice = 0;

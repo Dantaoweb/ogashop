@@ -2,19 +2,20 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseSale, checkSale, suggestMessage, detectQuery, nameMatches } from '../js/parser.js';
 
-const sale = (items, total, paid) => ({ items, total, paid });
+const sale = (items, total, paid, discount = 0) => ({ items, listTotal: total + discount, discount, total, paid });
+const core = ({ items, name, total, paid }) => ({ items, name, total, paid });
 
 test('reads the PRD example', () => {
   const p = parseSale('sold 2 rice to Mama Bola 5000, paid 3000');
-  assert.deepEqual(p, { items: { rice: 2 }, name: 'mama bola', total: 5000, paid: 3000 });
+  assert.deepEqual(core(p), { items: { rice: 2 }, name: 'mama bola', total: 5000, paid: 3000 });
 });
 
 test('cash sale without a name', () => {
-  assert.deepEqual(parseSale('sold 3 garri 1650 cash'), { items: { garri: 3 }, name: null, total: 1650, paid: 1650 });
+  assert.deepEqual(core(parseSale('sold 3 garri 1650 cash')), { items: { garri: 3 }, name: null, total: 1650, paid: 1650 });
 });
 
 test('naira signs, commas and k', () => {
-  assert.deepEqual(parseSale('Sold 2 rice to Mama Bola ₦5,000 paid ₦3k'), { items: { rice: 2 }, name: 'mama bola', total: 5000, paid: 3000 });
+  assert.deepEqual(core(parseSale('Sold 2 rice to Mama Bola ₦5,000 paid ₦3k')), { items: { rice: 2 }, name: 'mama bola', total: 5000, paid: 3000 });
 });
 
 test('several items and unit words', () => {
@@ -63,6 +64,23 @@ test('suggested message always passes its own check', () => {
     const msg = suggestMessage(s, name);
     assert.deepEqual(checkSale(parseSale(msg), s, name), [], msg);
   }
+});
+
+test('discounts: written out, or just the price after discount', () => {
+  const real = sale([{ item: 'rice', qty: 2, price: 2500 }], 4500, 4500, 500);
+  for (const msg of [
+    'sold 2 rice to Aisha 5000, discount 500, paid 4500',
+    'sold 2 rice to Aisha 5000 discount 500',
+    'sold 2 rice to Aisha 5000 less 500',
+    'sold 2 rice to Aisha 5000, 500 off',
+    'sold 2 rice to Aisha 4500 cash',
+    'sold 2 rice to Aisha 4500, discount 500',
+  ]) assert.deepEqual(checkSale(parseSale(msg), real, 'Aisha'), [], msg);
+  assert.match(checkSale(parseSale('sold 2 rice to Aisha 5000 discount 300'), real, 'Aisha')[0], /discount was 500/);
+  assert.match(checkSale(parseSale('sold 2 rice to Aisha 5000 cash'), real, 'Aisha')[0], /after discount was 4500/);
+  const noDisc = sale([{ item: 'rice', qty: 2, price: 2500 }], 5000, 5000);
+  assert.match(checkSale(parseSale('sold 2 rice 5000 discount 500'), noDisc, 'Musa')[0], /no discount/);
+  assert.equal(suggestMessage(real, 'Aisha'), 'sold 2 rice to Aisha 5000, discount 500, paid 4500');
 });
 
 test('questions to tiTi', () => {

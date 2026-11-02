@@ -46,6 +46,9 @@ export function parseSale(text) {
 
   let paid = null;
   let owes = null;
+  let discount = null;
+  t = t.replace(/\b(?:discount(?:ed)?|less|minus|reduced?(?: by)?)\s+(\d+)/, (_, n) => { discount = parseInt(n, 10); return ' '; });
+  if (discount == null) t = t.replace(/\b(\d+)\s+off\b/, (_, n) => { discount = parseInt(n, 10); return ' '; });
   t = t.replace(/\b(?:paid|pay|gave|deposit(?:ed)?)\s+(\d+)/, (_, n) => { paid = parseInt(n, 10); return ' '; });
   t = t.replace(/\b(?:owes?|owing|balance|remaining)\s+(\d+)/, (_, n) => { owes = parseInt(n, 10); return ' '; });
 
@@ -61,12 +64,16 @@ export function parseSale(text) {
   if (total == null && paid != null && owes != null) total = paid + owes;
   if (total == null) return { error: 'nototal', items, name };
 
-  if (paid == null) {
-    if (owes != null) paid = total - owes;
-    else if (/\b(credit|later|owing)\b/.test(t)) paid = 0;
-    else paid = total;
-  }
-  return { items, name, total, paid };
+  const onCredit = /\b(credit|later|owing)\b/.test(t);
+  const paidGiven = paid != null;
+  paid = resolvePaid(paid, owes, onCredit, total - (discount || 0));
+  return { items, name, total, discount, paid, paidGiven, owes, onCredit };
+}
+
+function resolvePaid(paid, owes, onCredit, net) {
+  if (paid != null) return paid;
+  if (owes != null) return net - owes;
+  return onCredit ? 0 : net;
 }
 
 export function nameMatches(said, fullName) {
@@ -82,6 +89,7 @@ export function nameMatches(said, fullName) {
 export function suggestMessage(sale, customerName) {
   const items = sale.items.map((it) => `${it.qty} ${GOODS[it.item].aliases[0]}`).join(' and ');
   const who = customerName ? ` to ${customerName}` : '';
+  if (sale.discount) return `sold ${items}${who} ${sale.listTotal}, discount ${sale.discount}, paid ${sale.paid}`;
   if (sale.paid >= sale.total) return `sold ${items}${who} ${sale.total} cash`;
   return `sold ${items}${who} ${sale.total}, paid ${sale.paid}`;
 }
@@ -99,8 +107,17 @@ export function checkSale(parsed, sale, customerName) {
       problems.push(w === 0 ? `${nm} wasn't part of this sale` : `the customer took ${w} ${nm}, not ${p}`);
     }
   }
-  if (parsed.total !== sale.total) problems.push(`the total was ${sale.total}, not ${parsed.total}`);
-  if (parsed.paid !== sale.paid) problems.push(`they paid ${sale.paid}, not ${parsed.paid}`);
+  // A discount can be written as "5000, discount 500" or as the price after it, "4500".
+  const disc = sale.discount || 0;
+  let net = parsed.total;
+  let paid = parsed.paid;
+  if (parsed.discount) {
+    if (parsed.discount !== disc) problems.push(disc ? `the discount was ${disc}, not ${parsed.discount}` : 'there was no discount on this sale');
+    else if (parsed.total !== sale.total) net = parsed.total - parsed.discount;
+    paid = resolvePaid(parsed.paidGiven ? parsed.paid : null, parsed.owes, parsed.onCredit, net);
+  }
+  if (net !== sale.total) problems.push(disc && !parsed.discount ? `the price after discount was ${sale.total}, not ${net}` : `the total was ${disc ? sale.listTotal : sale.total}, not ${parsed.total}`);
+  if (paid !== sale.paid) problems.push(`they paid ${sale.paid}, not ${paid}`);
   const credit = sale.paid < sale.total;
   if (credit && !parsed.name) problems.push('I need the customer\'s name for credit, e.g. "to ' + customerName + '"');
   else if (parsed.name && customerName && !nameMatches(parsed.name, customerName)) problems.push(`this was ${customerName}, not "${parsed.name}"`);

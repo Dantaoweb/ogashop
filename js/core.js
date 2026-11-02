@@ -121,22 +121,26 @@ export function supplierCreditError(s, amount) {
 }
 
 // A sale: items [{item, qty, price}], paid now. Unpaid part becomes a debt (unrecorded until tiTi records it).
-export function applySale(s, cid, items, paid, { recorded = false, dueDays = RULES.creditDueDays } = {}) {
-  let total = 0;
+// discount: naira taken off the list price of the whole sale.
+export function applySale(s, cid, items, paid, { recorded = false, dueDays = RULES.creditDueDays, discount = 0 } = {}) {
+  const listTotal = items.reduce((a, it) => a + it.qty * it.price, 0);
+  discount = clamp(discount, 0, listTotal);
+  const total = listTotal - discount;
   let cogs = 0;
   for (const it of items) {
     removeStock(s, it.item, it.qty);
-    total += it.qty * it.price;
     cogs += it.qty * s.cost[it.item];
-    if (it.price < s.cost[it.item] && !s.today.belowCost) s.today.belowCost = { item: it.item, cost: s.cost[it.item] };
+    const netPrice = listTotal ? (it.price * total) / listTotal : it.price;
+    if (netPrice < s.cost[it.item] && !s.today.belowCost) s.today.belowCost = { item: it.item, cost: s.cost[it.item] };
   }
+  s.today.discounts += discount;
   paid = Math.min(paid, total);
   cashIn(s, paid);
   addProfit(s, total - cogs);
   s.today.sales++;
   s.today.salesValue += total;
   s.today.cogs += cogs;
-  const sale = { cid, items, total, paid, recorded, debtId: null };
+  const sale = { cid, items, listTotal, discount, total, paid, recorded, debtId: null };
   if (total > paid) {
     const debt = {
       id: s.nextDebtId++, cid, amount: total - paid, due: s.day + dueDays, created: s.day,

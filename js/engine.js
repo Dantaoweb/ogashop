@@ -1,7 +1,7 @@
 // The game rules: one day = morning → customers (+ one event) → evening → score.
 // Pure state changes, no DOM, so it can be tested in Node.
 import {
-  GOODS, START_CASH, START_STOCK, RULES, LEVELS, BADGES, NOTE_ORDER, CUSTOMERS,
+  GOODS, START_CASH, START_STOCK, RULES, LEVELS, BADGES, NOTE_ORDER, CUSTOMERS, REACTIONS,
 } from './data.js';
 import {
   CUST, fmt, clamp, randInt, round50, pick, pickWeighted, goodsForLevel, buyPrice, refPrice,
@@ -49,9 +49,9 @@ export function startDay(s, rng = Math.random) {
   }
   s.today = {
     queue: [], idx: 0, eventAt: 0, eventDone: false, event: null,
-    moneyIn: 0, profit: 0, sales: 0, salesValue: 0, cogs: 0, recordedSales: 0, creditGiven: 0,
+    moneyIn: 0, profit: 0, sales: 0, salesValue: 0, cogs: 0, discounts: 0, recordedSales: 0, creditGiven: 0,
     unrecordedCredit: [], stockouts: [], wasted: [], expenses: [], repaid: [], lostDebts: [],
-    belowCost: null, personal: false, notices: [], pending: null, chat: [], outcome: null, served: null,
+    belowCost: null, personal: false, notices: [], pending: null, chat: [], outcome: null, reaction: null,
   };
   const t = s.today;
   for (const d of s.supplier) {
@@ -218,8 +218,11 @@ export function serve(s, action) {
   if (v.missing.length) t.stockouts.push(...v.missing);
 
   let paid = v.total;
-  let items = v.items;
-  if (action === 'credit') paid = v.paysNow;
+  let discount = 0;
+  let said = 'sell';
+  if (action === 'credit') { paid = v.paysNow; said = 'credit'; }
+  if (action === 'cashonly') said = 'cashonly';
+  if (action === 'fullprice') said = 'fullprice';
   if (action === 'cashonly' && v.acceptRoll >= (RULES.acceptCashOnly[v.customer.type] ?? 0.5)) {
     t.outcome = { text: `${name} doesn't have the cash today and leaves.`, tone: 'neutral' };
     return;
@@ -228,17 +231,21 @@ export function serve(s, action) {
     t.outcome = { text: `${name} says "Too much" and goes to the next stall.`, tone: 'neutral' };
     return;
   }
+  let note = null;
   if (action === 'discount' || (v.kind === 'discount' && action === 'sell')) {
-    const target = v.discTotal;
-    items = scalePrices(items, target);
-    paid = target;
-    if (v.kind !== 'discount') changeLoyalty(s, v.cid, 1);
-  } else {
-    changeLoyalty(s, v.cid, 1);
+    discount = v.total - v.discTotal;
+    paid = v.discTotal;
+    said = v.kind === 'discount' ? 'bargainDiscount' : 'discount';
   }
-  const sale = applySale(s, v.cid, items, paid);
+  if (v.kind !== 'discount') {
+    const before = s.customers[v.cid].loyalty;
+    changeLoyalty(s, v.cid, 1);
+    if (said === 'discount') note = s.customers[v.cid].loyalty === 2 && before < 2 ? `${name} is now a loyal customer.` : `${name} likes your shop more.`;
+  }
+  const sale = applySale(s, v.cid, v.items, paid, { discount });
   if (!s.badges.includes('first_sale')) s.badges.push('first_sale');
   t.pending = sale;
+  t.reaction = reactionFor(v, said, sale, s.day + RULES.creditDueDays, note);
   t.chat = [];
   if (v.missing.length) t.chat.push({ from: 'titi', text: `You didn't have enough ${v.missing.map((i) => GOODS[i].short.toLowerCase()).join(' or ')}, so you sold less.` });
   t.chat.push({ from: 'titi', text: sale.total > sale.paid
@@ -247,16 +254,15 @@ export function serve(s, action) {
   s.phase = 'record';
 }
 
-// Spread a discounted total across items, so each item's price is recorded.
-function scalePrices(items, target) {
-  const total = items.reduce((a, it) => a + it.qty * it.price, 0);
-  let left = target;
-  return items.map((it, i) => {
-    if (i === items.length - 1) return { ...it, price: left / it.qty };
-    const p = round50((it.price * target) / total);
-    left -= p * it.qty;
-    return { ...it, price: p };
-  });
+// What the customer says after a sale. The line rotates so the same words don't repeat every time.
+function reactionFor(v, said, sale, due, note) {
+  const type = v.customer.type;
+  const key = said === 'credit' && type === 'neverpays' ? 'creditNeverpays' : said === 'sell' && type === 'big' ? 'big' : said;
+  const lines = REACTIONS[key] || REACTIONS.sell;
+  const line = lines[(v.number + Math.floor(sale.total / 50)) % lines.length].replace('{due}', due);
+  const text = v.missing.length ? `You don't have enough? OK, I'll take what you have. ${line}` : line;
+  const mood = said === 'fullprice' || said === 'cashonly' ? 'neutral' : 'happy';
+  return { cid: v.cid, text, mood, note };
 }
 
 // ---------- Recording with tiTi ----------
@@ -290,7 +296,7 @@ export function titiMessage(s, text) {
   t.recordedSales++;
   const debt = sale.debtId ? debtById(s, sale.debtId) : null;
   if (debt) debt.recorded = true;
-  t.chat.push({ from: 'titi', card: { name, what: sale.items, total: sale.total, paid: sale.paid, owes: sale.total - sale.paid, due: debt?.due } });
+  t.chat.push({ from: 'titi', card: { name, what: sale.items, listTotal: sale.listTotal, discount: sale.discount, total: sale.total, paid: sale.paid, owes: sale.total - sale.paid, due: debt?.due } });
 }
 
 function owesReply(s) {
@@ -317,6 +323,7 @@ function advance(s) {
   t.pending = null;
   t.chat = [];
   t.outcome = null;
+  t.reaction = null;
   nextStep(s);
 }
 

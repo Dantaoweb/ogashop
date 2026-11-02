@@ -203,3 +203,8 @@ h1, h2, h3 { margin: 0; line-height: 1.15; }
 .pop { animation: pop .35s ease-out; }
 @keyframes pop { 0% { transform: scale(.6); opacity: 0; } 70% { transform: scale(1.12); } 100% { transform: none; opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .scene-customer.enter, .pop { animation: none; } }
+.reaction { display: flex; gap: 12px; align-items: center; background: var(--amber-row); border: 1px solid #F1D98A; border-radius: 16px; padding: 10px 12px; }
+.reaction .say { font-size: 16px; line-height: 1.4; }
+.mini-face.lg { width: 56px; height: 56px; }
+.reaction.enter { animation: pop .35s ease-out; }
+@media (prefers-reduced-motion: reduce) { .reaction.enter { animation: none; } }
