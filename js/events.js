@@ -56,7 +56,7 @@ export const EVENTS = [
       const raised = s.prices.rice + 300;
       return [
         { label: `Raise my price to ${fmt(raised)}`, sub: `Profit per bucket stays ${fmt(raised - newBuy)}. Some bargainers may walk away.`,
-          run: (st) => { setMarket(st, 'rice', { buy: 300, sell: 150 }); st.prices.rice = raised; return `Rice now sells at ${fmt(raised)}.`; } },
+          run: (st) => { setMarket(st, 'rice', { buy: 300, sell: 150 }); st.prices.rice = raised; st.today.eventRaised.rice = true; return `Rice now sells at ${fmt(raised)}.`; } },
         { label: `Keep ${fmt(s.prices.rice)} for now`, sub: `Profit per bucket falls to ${fmt(s.prices.rice - newBuy)} after restock.`,
           run: (st) => { setMarket(st, 'rice', { buy: 300, sell: 150 }); return 'Price kept. Remember: new stock costs more, so each sale earns less.'; } },
       ];

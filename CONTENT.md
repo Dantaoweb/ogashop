@@ -130,11 +130,12 @@ The PRD's example goal (₦100,000 profit and a score of 60) would take more tha
 
 | Habit | Weight | How it is measured |
 |---|---|---|
-| Recording sales | 30% | Share of sales recorded with tiTi (credit sales count double) |
-| Debt recovery | 22% | Share of money owed that was paid back on time |
-| Stock management | 18% | Days with no stockouts and no thrown-away goods |
-| Profit | 20% | Profit compared with the level's target |
-| Money habits | 10% | Family needs paid from your pocket count for you; taking from the business money counts against |
+| Recording sales | 32% | Share of sales recorded with tiTi (credit sales count double) |
+| Debt recovery | 20% | Share of money owed that was paid back on time |
+| Stock management | 15% | Days with no stockouts and no thrown-away goods |
+| Profit | 17% | Profit compared with the level's target |
+| Money habits | 7% | Family needs paid from your pocket count for you; taking from the business money counts against |
+| Happy customers | 9% | Complaints about prices raised during the day, trusted customers who leave when refused credit, and refused customers count against; good sales count for |
 
 The score moves slowly: at most ±6 points a day, so one bad day never wipes out good habits.
 
@@ -154,6 +155,13 @@ The score moves slowly: at most ±6 points a day, so one bad day never wipes out
 - The 2nd customer asking for the same missing item today: tiTi warns you.
 - The 3rd: word spreads. Two regulars buy elsewhere for 2 days, and tomorrow 2 fewer customers come.
 - Next morning, the stock list flags each item customers asked for and didn't get.
+
+## 7d. Happy customers *(tune)*
+
+- Prices can be changed during the day from the selling screen. Lowering is fine.
+- After a raise, later buyers of that item may complain ("Ah! Rice was ₦2,500 this morning!"): regulars always, others 60% of the time. Bargainers who complain leave. When the raise follows a supplier price rise (event #1), it's milder: 50% and 30%.
+- Each complaint lowers that customer's loyalty and counts against Happy customers.
+- Refusing credit (cash only, and they leave, or Refuse) counts against you only for **trusted** customers: not the never-pays type, and nothing late or lost. Refusing an untrusted customer is shown as a good call and has no penalty.
 
 ## 8. Open points for review
 

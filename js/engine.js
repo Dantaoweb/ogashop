@@ -19,7 +19,7 @@ export function newGame(path, rng = Math.random) {
     cash: START_CASH, pay: START_PAY, pocket: 0, stock: {}, cost: {}, prices: {}, batches: [], market: {},
     customers: {}, debts: [], nextDebtId: 1, supplier: [],
     levelProfit: 0, totalProfit: 0, score: 50,
-    stats: { recW: 0, totW: 0, dueAmt: 0, paidOnTime: 0, days: 0, cleanDays: 0, repaid: 0, lost: 0, noLateStreak: 0, pocketPays: 0, capitalTakes: 0, overpayStreak: 0 },
+    stats: { recW: 0, totW: 0, dueAmt: 0, paidOnTime: 0, days: 0, cleanDays: 0, repaid: 0, lost: 0, noLateStreak: 0, pocketPays: 0, capitalTakes: 0, overpayStreak: 0, served: 0, unhappy: 0 },
     badges: [], seen: {}, eventLog: {}, mods: {}, history: [],
     phase: 'morning', today: null,
   };
@@ -51,7 +51,7 @@ export function startDay(s, rng = Math.random) {
     queue: [], idx: 0, eventAt: 0, eventDone: false, event: null,
     moneyIn: 0, profit: 0, sales: 0, salesValue: 0, cogs: 0, discounts: 0, recordedSales: 0, creditGiven: 0,
     unrecordedCredit: [], stockouts: [], wasted: [], expenses: [], repaid: [], lostDebts: [],
-    belowCost: null, personal: [], paidSelf: 0, asks: {}, wordSpread: [], flash: null, notices: [], pending: null, chat: [], outcome: null, reaction: null,
+    belowCost: null, personal: [], paidSelf: 0, asks: {}, wordSpread: [], flash: null, morningPrices: null, eventRaised: {}, complaints: [], creditWalkouts: [], goodCalls: [], notices: [], pending: null, chat: [], outcome: null, reaction: null,
   };
   const t = s.today;
   for (const d of s.supplier) {
@@ -84,10 +84,13 @@ export function buy(s, item, qty, credit = false) {
 export function migrate(s) {
   s.pay ??= START_PAY;
   s.pocket ??= 0;
-  Object.assign(s.stats, { pocketPays: 0, capitalTakes: 0, overpayStreak: 0, ...s.stats });
+  Object.assign(s.stats, { pocketPays: 0, capitalTakes: 0, overpayStreak: 0, served: 0, unhappy: 0, ...s.stats });
   if (s.today && !Array.isArray(s.today.personal)) s.today.personal = [];
   s.today && (s.today.paidSelf ??= 0);
-  if (s.today) { s.today.asks ??= {}; s.today.wordSpread ??= []; }
+  if (s.today) {
+    Object.assign(s.today, { asks: {}, wordSpread: [], eventRaised: {}, complaints: [], creditWalkouts: [], goodCalls: [], ...s.today });
+    if (s.phase !== 'morning') s.today.morningPrices ??= { ...s.prices };
+  }
   return s;
 }
 
@@ -115,6 +118,7 @@ export function remind(s, debtId) {
 }
 
 export function openShop(s) {
+  s.today.morningPrices = { ...s.prices }; // raising a price after this, customers notice
   s.phase = 'selling';
   nextStep(s);
 }
@@ -178,7 +182,7 @@ function makeRequest(s, cid, rng) {
   if (type === 'neverpays') { kind = 'credit'; frac = rng() * 0.3; }
   if (type === 'big' && s.level >= 2 && rng() < 0.5) { kind = 'credit'; frac = 0.5; }
   if (type === 'bargainer') kind = 'discount';
-  return { cid, items, kind, frac, disc: 0.1 + rng() * 0.05, walkRoll: rng(), acceptRoll: rng() };
+  return { cid, items, kind, frac, disc: 0.1 + rng() * 0.05, walkRoll: rng(), acceptRoll: rng(), moodRoll: rng() };
 }
 
 // What the current customer wants, given today's stock and prices.
@@ -246,14 +250,30 @@ export function serve(s, action) {
     return;
   }
   if (action === 'refuse') {
+    if (v.kind === 'credit' && !trusted(s, v.cid)) {
+      t.goodCalls.push(v.cid);
+      t.outcome = { text: `You said no. ${name} walks away. ${goodCall(s, v.cid)}`, tone: 'neutral' };
+      return;
+    }
     changeLoyalty(s, v.cid, -1);
-    t.outcome = { text: `You said no. ${name} walks away.`, tone: 'neutral' };
+    unhappy(s);
+    t.outcome = { text: `You said no. ${name} walks away unhappy.`, tone: 'neutral' };
     return;
   }
   if (v.walks) {
     t.outcome = { text: `"${fmt(v.total)}? Too much!" ${name} buys somewhere cheaper. Your prices may be too high.`, tone: 'bad' };
     return;
   }
+  // Price raised since the shop opened? Later buyers notice and complain.
+  const complaint = priceComplaint(s, v);
+  if (complaint && v.customer.type === 'bargainer') {
+    changeLoyalty(s, v.cid, -1);
+    unhappy(s);
+    t.complaints.push({ cid: v.cid, item: complaint.item });
+    t.outcome = { text: `"${complaint.text}" ${name} goes to another stall.`, tone: 'bad' };
+    return;
+  }
+
   let shortNote = '';
   if (v.missing.length) {
     t.stockouts.push(...v.missing);
@@ -267,7 +287,16 @@ export function serve(s, action) {
   if (action === 'cashonly') said = 'cashonly';
   if (action === 'fullprice') said = 'fullprice';
   if (action === 'cashonly' && v.acceptRoll >= (RULES.acceptCashOnly[v.customer.type] ?? 0.5)) {
-    t.outcome = { text: `${name} doesn't have the cash today and leaves.`, tone: 'neutral' };
+    if (!trusted(s, v.cid)) {
+      t.goodCalls.push(v.cid);
+      t.outcome = { text: `${name} doesn't have the cash today and leaves. ${goodCall(s, v.cid)}`, tone: 'neutral' };
+      return;
+    }
+    changeLoyalty(s, v.cid, -1);
+    unhappy(s);
+    t.creditWalkouts.push(v.cid);
+    const paidBefore = s.debts.some((d) => d.cid === v.cid && d.status === 'paid');
+    t.outcome = { text: `"You don't trust me?" ${name} leaves without buying. ${CUST[v.cid].she ? 'She' : 'He'} ${paidBefore ? 'has always paid you back' : 'has a good name in the market'}.`, tone: 'bad' };
     return;
   }
   if (action === 'fullprice' && v.acceptRoll >= RULES.acceptFullPrice) {
@@ -289,12 +318,53 @@ export function serve(s, action) {
   if (!s.badges.includes('first_sale')) s.badges.push('first_sale');
   t.pending = sale;
   t.reaction = reactionFor(v, said, sale, s.day + RULES.creditDueDays, note);
+  s.stats.served++;
+  if (complaint) {
+    changeLoyalty(s, v.cid, -1);
+    unhappy(s);
+    t.complaints.push({ cid: v.cid, item: complaint.item });
+    t.reaction = { cid: v.cid, text: `${complaint.text} OK, I'll take it this time.`, mood: 'sad', note: `${name} is unhappy about the price.` };
+  }
   t.chat = [];
   if (v.missing.length) t.chat.push({ from: 'titi', text: `You didn't have enough ${v.missing.map((i) => GOODS[i].short.toLowerCase()).join(' or ')}, so you sold less.${shortNote}` });
   t.chat.push({ from: 'titi', text: sale.total > sale.paid
     ? `You gave ${name} credit. Tell me what happened, the way you'd say it.`
     : `${name} paid ${fmt(sale.paid)}. Record the sale.` });
   s.phase = 'record';
+}
+
+function unhappy(s) {
+  s.stats.unhappy++;
+}
+
+// Customers with a good record: not the kind who never pays, nothing late, nothing lost.
+export function trusted(s, cid) {
+  if (CUST[cid].type === 'neverpays') return false;
+  return !s.debts.some((d) => d.cid === cid && (d.status === 'lost' || (d.status === 'open' && d.due < s.day)));
+}
+
+function goodCall(s, cid) {
+  const late = s.debts.find((d) => d.cid === cid && d.status === 'open' && d.due < s.day);
+  if (late) return `Good call: ${CUST[cid].name} still owes you ${fmt(late.amount)} from Day ${late.created}.`;
+  return `Good call: ${CUST[cid].name} rarely pays back.`;
+}
+
+// A later buyer of an item whose price went up since the shop opened may complain.
+function priceComplaint(s, v) {
+  const t = s.today;
+  if (!t.morningPrices) return null;
+  const raised = v.items.find((it) => s.prices[it.item] > t.morningPrices[it.item]);
+  if (!raised) return null;
+  const fromEvent = t.eventRaised[raised.item];
+  const chances = fromEvent ? RULES.complainChanceEvent : RULES.complainChance;
+  const chance = v.customer.type === 'regular' ? chances.regular : chances.other;
+  if ((v.moodRoll ?? 0.5) >= chance) return null;
+  const nm = GOODS[raised.item].short.toLowerCase();
+  const was = fmt(t.morningPrices[raised.item]);
+  return {
+    item: raised.item,
+    text: fromEvent ? `Hmm, ${nm} is ${fmt(s.prices[raised.item])} now? It was ${was} this morning.` : `Ah! ${GOODS[raised.item].short} was ${was} this morning!`,
+  };
 }
 
 // Count customers asking for goods you don't have. Warn at 2; at 3 word spreads and regulars stay away.
@@ -497,6 +567,8 @@ export function scoreParts(s) {
     profit: clamp(s.levelProfit / LEVELS[s.level].goalProfit, 0, 1),
     // Family needs paid from your own pay count for you; taking from the business counts against.
     money: (st.pocketPays + 1.2) / (st.pocketPays + st.capitalTakes + 2),
+    // Complaints, refused trusted customers and refusals count against; good sales for.
+    customers: clamp((st.served - 2 * st.unhappy + 4) / (st.served + 5), 0, 1),
   };
 }
 
@@ -519,6 +591,8 @@ function pickTip(s) {
   if (t.unrecordedCredit.length) return `You didn't record ${name(t.unrecordedCredit[0].cid)}'s credit. Some customers "forget". Record every credit sale.`;
   if (t.lostDebts.some((d) => !d.recorded)) return 'An unrecorded debt was forgotten today. A record is what gets you paid.';
   if (t.belowCost) return `A discount on ${GOODS[t.belowCost.item].short.toLowerCase()} went below your buy price of ${fmt(t.belowCost.cost)}. That sale lost money.`;
+  if (t.complaints.length) return `${t.complaints.length} customer${t.complaints.length > 1 ? 's' : ''} complained that you raised the price of ${GOODS[t.complaints[0].item].short.toLowerCase()} during the day. Set prices in the morning, and raise them only when your costs go up.`;
+  if (t.creditWalkouts.length) return `${CUST[t.creditWalkouts[0]].name} left when you refused credit, but has a good record with you. Trusted customers are worth credit, as long as you record it.`;
   const fromBusiness = t.personal.find((p) => p.from === 'business');
   if (fromBusiness) return `You took ${fmt(fromBusiness.amount)} from the business money for family needs. Pay from your pocket instead: that is what your daily pay is for.`;
   if (s.stats.overpayStreak >= RULES.overpayWarnDays) return `You're paying yourself more than the business earns. Lower your daily pay, or your cash for stock will run down.`;

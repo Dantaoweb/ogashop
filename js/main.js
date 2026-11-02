@@ -39,6 +39,7 @@ function view() {
   }
   if (ui.screen === 'settings') return UI.settingsScreen(s, ui);
   if (ui.screen === 'debts') return UI.debtsScreen(s);
+  if (ui.screen === 'prices') return UI.pricesScreen(s);
   if (ui.screen === 'score') return UI.scoreScreen(s);
   if (ui.screen === 'level2') return UI.level2Screen(s);
   if (ui.screen === 'done') return UI.doneScreen(s);

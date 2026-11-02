@@ -59,7 +59,10 @@ export const RULES = {
   acceptFullPrice: 0.5,
   scoreMaxStep: 6,
   // Business score weights (sum to 1). CONTENT.md section 7.
-  weights: { recording: 0.30, debts: 0.22, stock: 0.18, profit: 0.20, money: 0.10 },
+  weights: { recording: 0.32, debts: 0.20, stock: 0.15, profit: 0.17, money: 0.07, customers: 0.09 },
+  // Raising a price during the day: chance a later buyer of that item complains.
+  complainChance: { regular: 1, other: 0.6 },
+  complainChanceEvent: { regular: 0.5, other: 0.3 }, // milder when your supplier's price went up
   overpayWarnDays: 3,
   // Sending for stock in the middle of the day: normal price plus transport, at least this many units.
   rushFee: 300,

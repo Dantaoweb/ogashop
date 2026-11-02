@@ -167,6 +167,58 @@ test('refusing the same item 3 times: warning, then word spreads', () => {
   assert.ok(s.today.notices.some((n) => /Word spread/.test(n)));
 });
 
+const ask = (cid, item, qty, kind = 'cash', moodRoll = 0) => ({ cid, items: [{ item, qty }], kind, frac: 0.5, disc: 0.1, walkRoll: 0.99, acceptRoll: 0.99, moodRoll });
+
+test('raising a price during the day: buyers complain, bargainers leave', () => {
+  const s = E.newGame('business', mulberry32(14));
+  s.today.queue = [ask('musa', 'rice', 1), ask('aisha', 'rice', 1, 'discount'), ask('mrade', 'garri', 1)];
+  s.today.eventAt = 99;
+  E.openShop(s);
+  E.setPrice(s, 'rice', 2600);
+  E.serve(s, 'sell');
+  assert.equal(s.phase, 'record');
+  assert.match(s.today.reaction.text, /Rice was ₦2,500 this morning/);
+  assert.equal(s.today.reaction.mood, 'sad');
+  E.skipRecord(s);
+  E.serve(s, 'sell');
+  assert.match(s.today.outcome.text, /goes to another stall/);
+  E.serve(s, 'next');
+  E.serve(s, 'sell'); // garri price unchanged: no complaint
+  assert.doesNotMatch(s.today.reaction.text, /this morning/);
+  assert.equal(s.today.complaints.length, 2);
+  assert.equal(s.stats.unhappy, 2);
+  assert.ok(E.scoreParts(s).customers < 0.5);
+});
+
+test('lowering a price during the day is fine', () => {
+  const s = E.newGame('business', mulberry32(15));
+  s.today.queue = [ask('musa', 'rice', 1)];
+  E.openShop(s);
+  E.setPrice(s, 'rice', 2400);
+  E.serve(s, 'sell');
+  assert.equal(s.today.complaints.length, 0);
+});
+
+test('refusing credit: trusted customers count against you, non-payers are a good call', () => {
+  const s = E.newGame('business', mulberry32(16));
+  s.today.queue = [ask('mrade', 'rice', 1, 'credit'), ask('chidi', 'rice', 1, 'credit'), ask('iyatunde', 'rice', 1, 'credit')];
+  s.today.eventAt = 99;
+  E.openShop(s);
+  E.serve(s, 'cashonly');
+  assert.match(s.today.outcome.text, /You don't trust me/);
+  assert.equal(s.stats.unhappy, 1);
+  E.serve(s, 'next');
+  E.serve(s, 'cashonly');
+  assert.match(s.today.outcome.text, /Good call/);
+  assert.equal(s.stats.unhappy, 1);
+  E.serve(s, 'next');
+  s.debts.push({ id: 50, cid: 'iyatunde', amount: 1000, due: 0, created: 0, recorded: true, remindedDay: 0, status: 'open', what: '1 rice' });
+  E.serve(s, 'refuse');
+  assert.match(s.today.outcome.text, /still owes you ₦1,000/);
+  assert.equal(s.stats.unhappy, 1);
+  assert.deepEqual(s.today.creditWalkouts, ['mrade']);
+});
+
 test('out of stock loses the sale', () => {
   const s = E.newGame('business', mulberry32(5));
   s.stock.rice = 0;

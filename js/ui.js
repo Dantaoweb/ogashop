@@ -36,6 +36,7 @@ const PATHS = {
   coin: '<circle cx="12" cy="12" r="9"/><path d="M12 7v10M9 10h4.5a1.5 1.5 0 0 1 0 3H10a1.5 1.5 0 0 0 0 3h5"/>',
   calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
   sound: '<path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16 9a3 3 0 0 1 0 6M18.5 6.5a7 7 0 0 1 0 11"/>',
+  tag: '<path d="M3 12V4h8l10 10-8 8z"/><circle cx="7.5" cy="8.5" r="1.5"/>',
 };
 export const icon = (name, size = 24, sw = 1.8) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" ${P} stroke-width="${sw}" aria-hidden="true">${PATHS[name] || ''}</svg>`;
 
@@ -247,6 +248,7 @@ export function customerScreen(s) {
     <header class="top" style="flex-direction:row;align-items:center;justify-content:space-between">
       <div><div class="kicker">Day ${s.day} · Selling</div><div class="title display">${v.clock}</div></div>
       <div class="row"><div style="text-align:right"><div class="kicker">Cash</div><b>${fmt(s.cash)}</b></div>
+        <button type="button" class="icon-btn" data-action="open" data-arg="prices" aria-label="Change prices">${icon('tag')}</button>
         <button type="button" class="icon-btn" data-action="open" data-arg="debts" aria-label="Who owes you">${icon('people')}</button></div>
     </header>
     <div style="padding:10px 16px 0" class="row"><span class="small muted" style="font-weight:600">Customer ${v.number} of ${v.of}</span>
@@ -373,6 +375,9 @@ export function eveningScreen(s) {
     ...t.repaid.map((r) => `${CUST[r.cid].name} paid back ${fmt(r.amount)}.`),
     ...t.lostDebts.map((r) => `${CUST[r.cid].name}'s ${fmt(r.amount)} is lost${r.recorded ? '' : ' (it was never recorded)'}.`),
     ...t.wasted.map((w) => `${w.qty} ${GOODS[w.item].short.toLowerCase()} ${w.label}.`),
+    ...(t.complaints.length ? [`${t.complaints.length} customer${t.complaints.length > 1 ? 's' : ''} complained about prices you raised during the day.`] : []),
+    ...(t.creditWalkouts.length ? [`${t.creditWalkouts.length} trusted customer${t.creditWalkouts.length > 1 ? 's' : ''} left because you refused credit.`] : []),
+    ...(t.goodCalls.length ? [`Good call: you refused credit to ${[...new Set(t.goodCalls)].map((c) => CUST[c].name).join(' and ')}.`] : []),
     ...(t.discounts ? [`Discounts given today: ${fmt(t.discounts)}. That came straight off your profit.`] : []),
   ];
   return `<main class="screen">
@@ -419,7 +424,7 @@ export function scoreScreen(s) {
         <div style="display:flex;flex-direction:column;gap:6px"><b style="color:${delta >= 0 ? 'var(--green)' : 'var(--red)'}">${delta >= 0 ? '+' : ''}${delta} today</b>
           <span class="small" style="color:var(--ink-2)">Your score comes from good habits, not just cash.</span></div>
       </div>
-      <div class="card">${bar('Recording sales', p.recording)}${bar('Debt recovery', p.debts)}${bar('Stock management', p.stock)}${bar('Profit', p.profit)}${bar('Money habits', p.money)}</div>
+      <div class="card">${bar('Recording sales', p.recording)}${bar('Debt recovery', p.debts)}${bar('Stock management', p.stock)}${bar('Profit', p.profit)}${bar('Money habits', p.money)}${bar('Happy customers', p.customers)}</div>
       <div class="card strong"><h3>${s.completed ? 'Free play' : `Goal to finish Level ${s.level}`}</h3>
         ${goal('Profit this level', Math.max(0, s.levelProfit), L.goalProfit, `${fmt(s.levelProfit)} / ${fmt(L.goalProfit)}`)}
         ${goal('Business score', s.score, L.goalScore, `${s.score} / ${L.goalScore}`)}
@@ -431,6 +436,31 @@ export function scoreScreen(s) {
         }).join('')}</div></div>
     </div>
     <div class="foot">${btn('score-next', t.levelUp ? `Finish Level ${s.level}!` : `Start Day ${s.day + 1}`, t.levelUp ? 'amber block' : 'primary block')}</div>
+  </main>`;
+}
+
+// ---------- Change prices during the day ----------
+
+export function pricesScreen(s) {
+  const t = s.today;
+  const rows = goodsForLevel(s.level).map((id) => {
+    const g = GOODS[id];
+    const was = t.morningPrices?.[id] ?? s.prices[id];
+    const up = s.prices[id] > was;
+    return `<div class="stock-row"><div class="between"><span class="good-ico">${good(id, 32)}</span>
+      <div class="grow"><b>${esc(g.name)}</b><div class="small muted">This morning ${fmt(was)} · buy ${fmt(buyPrice(s, id))}</div>
+        ${up ? '<div class="small" style="color:var(--red);font-weight:700">Raised: customers will notice</div>' : ''}</div>
+      <div class="stepper"><button type="button" class="step" data-action="price" data-arg="${id}:-50" aria-label="Lower ${esc(g.name)} price">−</button>
+        <output>${fmt(s.prices[id])}</output>
+        <button type="button" class="step" data-action="price" data-arg="${id}:50" aria-label="Raise ${esc(g.name)} price">+</button></div></div></div>`;
+  }).join('');
+  return `<main class="screen">
+    <header class="top"><div class="row"><button type="button" class="icon-btn" data-action="close" aria-label="Back" style="margin-left:-10px">${icon('back', 22, 2)}</button><h1 class="title display">Prices</h1></div></header>
+    <div class="body">
+      ${titi('Customers notice when a price goes up during the day. Some will complain, and that lowers your score. Lowering a price is fine.')}
+      <div class="list">${rows}</div>
+    </div>
+    <div class="foot">${btn('close', 'Back to customers', 'primary block')}</div>
   </main>`;
 }
 
