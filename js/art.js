@@ -115,6 +115,35 @@ export function good(id, size = 32) {
   return `<svg width="${size}" height="${size}" viewBox="0 0 48 48" aria-hidden="true">${GOOD_ART[id] || ''}</svg>`;
 }
 
+// Pictures for the levels page. 1 and 2 reuse the selling scenes; 3–7 are simple previews.
+export function levelPicture(n) {
+  if (n === 1) return scene(1, { cid: 'mamabola', stock: { rice: 1, garri: 1, water: 1, recharge: 1 } });
+  if (n === 2) return scene(2, { cid: 'musa', stock: { rice: 1, bread: 1, drinks: 1, palmoil: 1 } });
+  const sky = '<rect width="360" height="170" fill="#EAF2EC"/><rect y="140" width="360" height="30" fill="#CFC6B4"/>';
+  const shop = (x, w, h, color, label) => `<rect x="${x}" y="${140 - h}" width="${w}" height="${h}" fill="#FFFFFF" stroke="#C3CEC6"/>
+    <rect x="${x}" y="${140 - h}" width="${w}" height="16" fill="${color}"/>
+    <text x="${x + w / 2}" y="${140 - h + 12}" text-anchor="middle" font-size="10" font-weight="800" font-family="system-ui,sans-serif" fill="#FFFFFF">${label}</text>
+    <rect x="${x + w / 2 - 12}" y="${112}" width="24" height="28" fill="#0A5434"/>`;
+  const person = (cid, x, y, size = 64) => `<svg x="${x}" y="${y}" width="${size}" height="${size}" viewBox="0 0 100 100">${face(cid, { size: 100 }).replace(/^<svg[^>]*>|<\/svg>$/g, '')}</svg>`;
+  const pics = {
+    3: `${sky}${shop(70, 220, 110, '#0E6B43', 'OGA SHOP')}${person('mrade', 100, 62)}${person('ngozi', 196, 62)}
+      <rect x="80" y="118" width="200" height="22" fill="#A86B32"/><text x="180" y="160" text-anchor="middle" font-size="11" font-weight="700" font-family="system-ui,sans-serif" fill="#3C4A41">Your staff</text>`,
+    4: `${sky}${shop(14, 100, 80, '#0E6B43', 'BRANCH 1')}${shop(130, 100, 96, '#0E6B43', 'MAIN')}${shop(246, 100, 80, '#0E6B43', 'BRANCH 2')}`,
+    5: `${sky}${shop(40, 150, 100, '#0E6B43', 'OGA SHOP')}
+      <g transform="translate(220 70)"><rect width="70" height="60" rx="6" fill="#E9EEF0" stroke="#8A939C" stroke-width="3"/><rect x="8" y="10" width="54" height="10" rx="2" fill="#8A939C"/>
+      <text x="35" y="46" text-anchor="middle" font-size="11" font-weight="800" font-family="system-ui,sans-serif" fill="#3C4A41">FREEZER</text></g>
+      <g fill="#F5B70A" stroke="#C98F00" stroke-width="2"><ellipse cx="310" cy="134" rx="14" ry="5"/><ellipse cx="310" cy="127" rx="14" ry="5"/><ellipse cx="310" cy="120" rx="14" ry="5"/></g>`,
+    6: `${sky}<rect x="40" y="40" width="280" height="100" fill="#FFFFFF" stroke="#C3CEC6"/><rect x="40" y="40" width="280" height="22" fill="#0E6B43"/>
+      <text x="180" y="56" text-anchor="middle" font-size="13" font-weight="800" font-family="system-ui,sans-serif" fill="#FFFFFF" letter-spacing="2">OGA SUPERMARKET</text>
+      <rect x="60" y="76" width="70" height="40" fill="#CFE7F7"/><rect x="230" y="76" width="70" height="40" fill="#CFE7F7"/><rect x="155" y="90" width="50" height="50" fill="#0A5434"/>
+      <path d="M262 128 h22 l-4 10 h-16 z" fill="none" stroke="#3C4A41" stroke-width="2"/>`,
+    7: `${sky}<rect x="120" y="14" width="120" height="126" fill="#FFFFFF" stroke="#C3CEC6"/><rect x="40" y="62" width="80" height="78" fill="#F4F7F5" stroke="#C3CEC6"/><rect x="240" y="62" width="80" height="78" fill="#F4F7F5" stroke="#C3CEC6"/>
+      <rect x="120" y="14" width="120" height="20" fill="#0E6B43"/><text x="180" y="28" text-anchor="middle" font-size="11" font-weight="800" font-family="system-ui,sans-serif" fill="#FFFFFF" letter-spacing="2">OGA MALL</text>
+      ${[0, 1, 2, 3].map((r) => [0, 1, 2].map((c) => `<rect x="${134 + c * 34}" y="${42 + r * 22}" width="22" height="14" fill="#CFE7F7"/>`).join('')).join('')}`,
+  };
+  return `<svg class="scene" viewBox="0 0 360 170" width="100%" style="display:block" aria-hidden="true">${pics[n] || sky}</svg>`;
+}
+
 // The selling place: a market table (Level 1) or a shop (Level 2), the goods in stock, and maybe a customer.
 export function scene(level, { cid = null, mood = 'happy', stock = {}, height = 170 } = {}) {
   const shown = Object.keys(GOODS).filter((id) => GOODS[id].level <= level && stock[id] > 0).slice(0, 6);

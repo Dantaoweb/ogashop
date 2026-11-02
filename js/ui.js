@@ -1,8 +1,8 @@
 // Screens. Each returns an HTML string; buttons carry data-action (and data-arg) handled in main.js.
-import { GOODS, LEVELS, BADGES, NOTES, EXPLAIN, TYPE_LABEL, CREDITVOICE_URL, RULES, GOALS } from './data.js';
+import { GOODS, LEVELS, BADGES, NOTES, EXPLAIN, TYPE_LABEL, CREDITVOICE_URL, RULES, GOALS, ALL_LEVELS } from './data.js';
 import { CUST, fmt, goodsForLevel, buyPrice, supplierOwed, owedToYou, openDebts, supplierCreditError } from './core.js';
 import { currentCustomer, eventView, scoreParts, suggestMessage, billsDueSoon, billOwed, cashNeededSoon, isStuck } from './engine.js';
-import { face, good, scene } from './art.js';
+import { face, good, scene, levelPicture } from './art.js';
 import { goalStatus, daysToGoal, howLong } from './goals.js';
 import * as Voice from './voice.js';
 import { runnerSvg } from './run.js';
@@ -109,6 +109,7 @@ export function startScreen(ui, hasSave, saveInfo) {
         ${choice('business', 'case', 'var(--green-soft)', 'var(--green)', 'I run a business', 'Real market situations. Fewer explanations, faster days.')}
         ${choice('learning', 'cap', 'var(--amber-soft)', 'var(--amber-ink)', 'I\'m learning business', 'A gentle start. tiTi explains each new idea as you go.')}
         <p class="small muted center" style="margin:0">Same levels and score either way. Switch any time in Settings.</p>
+        <button type="button" class="link" data-action="open" data-arg="levels" style="align-self:center;color:var(--green)">See all ${ALL_LEVELS.length} levels</button>
       </div>
     </div>
     <div class="foot">
@@ -634,6 +635,36 @@ export function recordsScreen(s) {
   </main>`;
 }
 
+// ---------- All levels ----------
+
+export function levelsScreen(s) {
+  const cards = ALL_LEVELS.map((L) => {
+    const done = s && (s.level > L.n || (s.level === L.n && s.completed));
+    const here = s && s.level === L.n && !done;
+    const days = s ? s.history.filter((h) => h.level === L.n).length : 0;
+    const quiz = s?.quizLog.filter((q) => q.kind === 'level' && q.level === L.n).at(-1);
+    let status;
+    if (done) status = `<span class="tag green">${icon('check', 12, 3)} Done${days ? ` in ${days} day${days > 1 ? 's' : ''}` : ''}${quiz ? ` · quiz ${quiz.correct}/${quiz.total}` : ''}</span>`;
+    else if (here) status = `<span class="tag solid">You are here${days ? ` · day ${days}` : ''}</span>`;
+    else if (L.playable) status = `<span class="tag amber">${icon('lock', 12)} Finish Level ${L.n - 1} first</span>`;
+    else status = `<span class="tag" style="background:#E8EDE9;color:var(--muted)">${icon('lock', 12)} Coming soon</span>`;
+    return `<div class="card" style="gap:8px;${L.playable ? '' : 'opacity:.85'}">
+      <div class="scene-card" style="${L.playable ? '' : 'filter:grayscale(.6)'}">${levelPicture(L.n)}</div>
+      <div class="between"><b style="font-size:17px">Level ${L.n} · ${esc(L.name)}</b></div>
+      <div>${status}</div>
+      <span class="small"><b>${esc(L.size)}.</b> ${esc(L.learn)}</span>
+      <span class="small muted">In CreditVoice: ${esc(L.feature)}</span></div>`;
+  }).join('');
+  return `<main class="screen">
+    <header class="top"><div class="row"><button type="button" class="icon-btn" data-action="close" aria-label="Back" style="margin-left:-10px">${icon('back', 22, 2)}</button>
+      <div><div class="kicker">From a market table to a big company</div><h1 class="title display">All levels</h1></div></div></header>
+    <div class="body">
+      ${titi('Levels 1 and 2 are ready to play now. Levels 3 to 7 are coming. Each level takes about a week of game days.')}
+      ${cards}
+    </div>
+  </main>`;
+}
+
 // ---------- Savings goals ----------
 
 export function goalsScreen(s, ui) {
@@ -775,6 +806,7 @@ export function settingsScreen(s, ui) {
       ${Voice.supported ? `<div class="card"><h3>Sound</h3>
         <label class="settings-opt"><input type="checkbox" data-action="set-voice" ${Voice.enabled() ? 'checked' : ''}><span><b>Customers speak</b><div class="small muted">Customers say what they want out loud, using your phone's voice. Their words also stay on screen.</div></span></label></div>` : ''}
       ${ui.canInstall ? `<div class="card"><h3>Add to home screen</h3><span class="small muted">Play like an app, even without data.</span>${btn('install', 'Install Oga Shop', 'secondary small')}</div>` : ''}
+      <div class="card"><h3>Levels</h3><span class="small muted">See all ${ALL_LEVELS.length} levels, what each one teaches, and how far you are.</span>${btn('open', 'See all levels', 'secondary small', 'levels')}</div>
       <div class="card"><h3>About</h3>
         <span class="small">Oga Shop is a free learning game by CreditVoice. There is no real money in the game. Your progress is saved only on this phone; nothing is sent anywhere.</span>
         <span class="small">CreditVoice does not lend money. Anything about loans or finance in the game is fiction.</span>

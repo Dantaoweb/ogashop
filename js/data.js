@@ -113,8 +113,8 @@ export const GOALS = [
 export const BILLS = {
   1: { recurring: [{ id: 'stall', label: 'Market stall fee', amount: 3000, every: 7, first: 5 }], oneOff: [] },
   2: {
-    recurring: [{ id: 'rent', label: 'Shop rent', amount: 8000, every: 7, first: 7 }],
-    oneOff: [{ id: 'nepa', label: 'NEPA bill', amount: 2500, day: 4 }, { id: 'repair', label: 'Padlock and door repair', amount: 2000, day: 10 }],
+    recurring: [{ id: 'rent', label: 'Shop rent', amount: 8000, every: 7, first: 5 }],
+    oneOff: [{ id: 'nepa', label: 'NEPA bill', amount: 2500, day: 3 }, { id: 'repair', label: 'Padlock and door repair', amount: 2000, day: 6 }],
   },
 };
 
@@ -131,9 +131,20 @@ export const FAMILY_NEEDS = [
 export const LEVELS = {
   1: { name: 'The Table', goalProfit: 13000, goalScore: 68,
        blurb: 'A small market table. Learn cash vs profit, and record every sale.' },
-  2: { name: 'The Shop', goalProfit: 28000, goalScore: 70, maxLateDays: 7,
+  2: { name: 'The Shop', goalProfit: 9000, goalScore: 70, maxLateDays: 7,
        blurb: 'A small shop. Restock on time, give credit carefully and get your debts back.' },
 };
+
+// All 7 levels from the PRD. Stage 1 plays levels 1 and 2; the rest are shown as coming soon.
+export const ALL_LEVELS = [
+  { n: 1, name: 'The Table', size: 'A small market table, ₦20,000 to start', learn: 'Cash vs profit, and record every sale.', feature: 'Recording sales with tiTi', playable: true },
+  { n: 2, name: 'The Shop', size: 'A small shop', learn: 'Restocking, credit and chasing debts, rent and bills.', feature: 'Stock, debts and reminders', playable: true },
+  { n: 3, name: 'Bigger Shop', size: 'A shop with staff', learn: 'Hiring, honest staff, expenses, pricing and margins.', feature: 'Staff accounts, expenses, profit reports', playable: false },
+  { n: 4, name: 'Branches', size: 'A second and third branch', learn: 'Trusting others to run a branch, comparing branches.', feature: 'Branches and permissions', playable: false },
+  { n: 5, name: 'Money to Grow', size: 'Loans and partners', learn: 'Loans for a freezer or generator, your business score, investors.', feature: 'Business scorecard, financing, partners', playable: false },
+  { n: 6, name: 'Big Business', size: 'Wholesale or supermarket', learn: 'Invoices, quotations, suppliers and purchase orders, VAT.', feature: 'Invoices, quotations, purchase orders, VAT', playable: false },
+  { n: 7, name: 'Enterprise', size: 'A mall or a chain', learn: 'Systems, data and growing big.', feature: 'Enterprise plan', playable: false },
+];
 
 export const BADGES = {
   first_sale:      { name: 'First sale',        desc: 'Made your first sale.' },

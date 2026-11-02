@@ -37,6 +37,7 @@ function clearSave() {
 }
 
 function view() {
+  if (ui.screen === 'levels') return UI.levelsScreen(s);
   if (ui.screen === 'start' || !s) {
     const info = s ? `Level ${s.level} · ${LEVELS[s.level].name} · Day ${s.day} · Score ${s.score}` : '';
     return UI.startScreen(ui, !!s, info);
@@ -46,6 +47,7 @@ function view() {
   if (ui.screen === 'prices') return UI.pricesScreen(s);
   if (ui.screen === 'goals') return UI.goalsScreen(s, ui);
   if (ui.screen === 'records') return UI.recordsScreen(s);
+  if (ui.screen === 'levels') return UI.levelsScreen(s);
   if (ui.screen === 'quiz' && s.quiz) return UI.quizScreen(s, ui);
   if (ui.screen === 'score') return UI.scoreScreen(s);
   if (ui.screen === 'level2') return UI.level2Screen(s);
@@ -135,8 +137,8 @@ const actions = {
     ui.confirmNew = false;
     ui.buy = {};
   },
-  open: (arg) => { ui.screen = arg; ui.confirmReset = false; },
-  close: () => { ui.screen = null; },
+  open: (arg) => { if (arg === 'levels') ui.levelsFrom = ui.screen; ui.screen = arg; ui.confirmReset = false; },
+  close: () => { ui.screen = ui.screen === 'levels' && !s ? 'start' : ui.screen === 'levels' && ui.levelsFrom ? ui.levelsFrom : null; ui.levelsFrom = null; },
   seen: (arg) => { s.seen[arg] = true; },
 
   pay: (arg) => { E.setPay(s, s.pay + Number(arg)); },
