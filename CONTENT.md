@@ -147,6 +147,14 @@ The score moves slowly: at most ±6 points a day, so one bad day never wipes out
 - If the daily pay is more than the day's profit for 3 days running, tiTi warns that the business is paying out more than it earns.
 - The evening **Money out** list shows business costs (lower profit) apart from personal money and pay (lower cash only).
 
+## 7c. Running out during the day *(tune)*
+
+- When a customer wants something you don't have (or not enough of), you can **send for more now**: normal buy price, at least 3 units, plus ₦300 transport (a business cost). The customer waits.
+- Or say **sorry**: the sale is lost and that customer likes you less.
+- The 2nd customer asking for the same missing item today: tiTi warns you.
+- The 3rd: word spreads. Two regulars buy elsewhere for 2 days, and tomorrow 2 fewer customers come.
+- Next morning, the stock list flags each item customers asked for and didn't get.
+
 ## 8. Open points for review
 
 1. **Prices:** check every buy and sell price with traders in at least two markets.

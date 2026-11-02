@@ -61,6 +61,14 @@ export const RULES = {
   // Business score weights (sum to 1). CONTENT.md section 7.
   weights: { recording: 0.30, debts: 0.22, stock: 0.18, profit: 0.20, money: 0.10 },
   overpayWarnDays: 3,
+  // Sending for stock in the middle of the day: normal price plus transport, at least this many units.
+  rushFee: 300,
+  rushMinQty: 3,
+  // Customers asking for something you don't have: warn at 2, word spreads at 3.
+  asksWarn: 2,
+  asksWordSpreads: 3,
+  wordSpreadFewerCustomers: 2,
+  wordSpreadRegularsAway: 2,
 };
 
 // Family needs that come up during the day. Paid from your pocket (good) or the business money (capital).

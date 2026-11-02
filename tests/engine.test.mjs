@@ -123,6 +123,50 @@ test('old saves get daily pay fields', () => {
   assert.deepEqual(s.today.personal, []);
 });
 
+test('send for more: buys at normal price plus transport, customer stays', () => {
+  const s = E.newGame('business', mulberry32(12));
+  s.stock.rice = 0;
+  s.today.queue = [{ cid: 'musa', items: [{ item: 'rice', qty: 2 }], kind: 'cash', frac: 1, disc: 0.1, walkRoll: 0.99, acceptRoll: 0 }];
+  E.openShop(s);
+  const v = E.currentCustomer(s);
+  assert.deepEqual(v.rush.items, [{ item: 'rice', qty: 3 }]);
+  assert.equal(v.rush.cost, 3 * 2000 + 300);
+  const cash = s.cash;
+  E.serve(s, 'restock');
+  assert.equal(s.phase, 'selling');
+  assert.equal(s.stock.rice, 3);
+  assert.equal(s.cash, cash - 6300);
+  assert.equal(s.today.profit, -300);
+  assert.match(s.today.flash, /Musa waited/);
+  E.serve(s, 'sell');
+  assert.equal(s.phase, 'record');
+  assert.equal(s.stock.rice, 1);
+});
+
+test('refusing the same item 3 times: warning, then word spreads', () => {
+  const s = E.newGame('business', mulberry32(13));
+  s.stock.water = 0;
+  const ask = (cid) => ({ cid, items: [{ item: 'water', qty: 1 }], kind: 'cash', frac: 1, disc: 0.1, walkRoll: 0.99, acceptRoll: 0 });
+  s.today.queue = [ask('iyatunde'), ask('mrokon'), ask('aisha'), ask('chidi')];
+  s.today.eventAt = 99;
+  E.openShop(s);
+  E.serve(s, 'sell'); E.serve(s, 'next');
+  E.serve(s, 'sell');
+  assert.match(s.today.outcome.text, /2 customers asking for water/);
+  E.serve(s, 'next');
+  E.serve(s, 'sell');
+  assert.match(s.today.outcome.text, /Word is spreading/);
+  const away = Object.values(s.customers).filter((c) => c.skipUntil > s.day).length;
+  assert.ok(away >= 2);
+  E.serve(s, 'next');
+  E.serve(s, 'sell'); E.serve(s, 'next');
+  assert.equal(s.phase, 'evening');
+  E.startDay(s, mulberry32(1));
+  assert.ok(s.today.queue.length <= 6);
+  assert.ok(s.today.notices.some((n) => /asked for water/.test(n)));
+  assert.ok(s.today.notices.some((n) => /Word spread/.test(n)));
+});
+
 test('out of stock loses the sale', () => {
   const s = E.newGame('business', mulberry32(5));
   s.stock.rice = 0;

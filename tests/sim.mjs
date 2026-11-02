@@ -38,6 +38,7 @@ export function play(seed, habits, maxDays = 60) {
         if (s.phase === 'selling') {
           const v = E.currentCustomer(s);
           if (s.today.outcome) { E.serve(s, 'next'); continue; }
+          if (v.rush && habits.restock && s.cash >= v.rush.cost + 2000) { E.serve(s, 'restock'); continue; }
           if (!v.items.length || v.walks) { E.serve(s, 'sell'); continue; }
           const type = v.customer.type;
           if (v.kind === 'credit') E.serve(s, habits.credit && type !== 'neverpays' ? 'credit' : 'cashonly');

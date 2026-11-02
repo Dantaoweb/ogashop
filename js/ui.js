@@ -118,11 +118,12 @@ export function morningScreen(s, ui) {
   const rows = goods.map((id) => {
     const g = GOODS[id];
     const low = s.stock[id] <= 2;
+    const asked = (s.lastAsks || {})[id] || 0;
     const exp = expiring(id);
     const margin = s.prices[id] - buyPrice(s, id);
     return `<div class="stock-row${low ? ' low' : ''}">
       <div class="between"><span class="good-ico">${good(id, 36)}</span><div class="grow"><b>${esc(g.name)}</b> <span class="muted small">(${esc(g.unit)})</span>
-        <div class="small ${low ? '' : 'muted'}" style="${low ? 'color:var(--amber-ink);font-weight:600' : ''}">${s.stock[id]} in stock · buy ${fmt(buyPrice(s, id))}${exp ? ` · <span style="color:var(--red);font-weight:700">${exp} go bad tonight</span>` : ''}</div></div>
+        <div class="small ${low ? '' : 'muted'}" style="${low ? 'color:var(--amber-ink);font-weight:600' : ''}">${s.stock[id]} in stock · buy ${fmt(buyPrice(s, id))}${exp ? ` · <span style="color:var(--red);font-weight:700">${exp} go bad tonight</span>` : ''}${asked ? `<div class="small" style="color:var(--red);font-weight:700">Customers asked for this ${asked}× yesterday</div>` : ''}</div></div>
         ${low ? '<span class="tag solid">Low</span>' : `<span class="small" style="font-weight:700;color:${margin > 0 ? 'var(--green)' : 'var(--red)'}">${margin >= 0 ? '+' : ''}${fmt(margin)} each</span>`}
       </div>
       <div class="controls">
@@ -170,6 +171,20 @@ export function morningScreen(s, ui) {
 
 // ---------- Selling ----------
 
+// "Send for more now": normal price plus transport. The customer waits.
+function rushButton(s, v, cls) {
+  const r = v.rush;
+  const short = s.cash < r.cost;
+  return `<button type="button" class="choice ${cls}" data-action="serve" data-arg="restock" ${short ? 'disabled' : ''}>
+    <b>${icon('truck', 16)} Send for more now (${fmt(r.cost)})</b>
+    <span>${short ? `You have only ${fmt(s.cash)}.` : `${esc(r.items.map((it) => `${it.qty} ${GOODS[it.item].short.toLowerCase()}`).join(' and '))} at normal price + ${fmt(r.fee)} transport. ${v.customer.name} waits.`}</span></button>`;
+}
+
+function askedNote(t, missing) {
+  const n = Math.max(...missing.map((i) => t.asks[i] || 0));
+  return n ? ` ${n} customer${n > 1 ? 's' : ''} already asked today.` : '';
+}
+
 export function customerScreen(s) {
   const v = currentCustomer(s);
   const t = s.today;
@@ -195,8 +210,9 @@ export function customerScreen(s) {
     actions = `<div class="card ${t.outcome.tone === 'bad' ? 'bad' : ''}"><p style="margin:0">${esc(t.outcome.text)}</p></div>
       ${btn('serve', 'Next customer', 'primary block', 'next')}`;
   } else if (!v.items.length) {
-    actions = `<div class="card warn"><b>You have no ${esc(v.missing.map((i) => GOODS[i].short.toLowerCase()).join(' or '))}.</b><span class="small muted">Running out means lost sales.</span></div>
-      ${btn('serve', 'Sorry, I don\'t have it', 'primary block', 'sell')}`;
+    actions = `<div class="card warn"><b>You have no ${esc(v.missing.map((i) => GOODS[i].short.toLowerCase()).join(' or '))}.</b><span class="small muted">Running out means lost sales.${askedNote(t, v.missing)}</span></div>
+      ${rushButton(s, v, 'primary')}
+      ${btn('serve', 'Sorry, I don\'t have it', 'secondary block', 'sell')}`;
   } else {
     const ch = (action, cls, title, sub) => `<button type="button" class="choice ${cls}" data-action="serve" data-arg="${action}"><b>${title}</b><span>${sub}</span></button>`;
     const parts = [];
@@ -211,7 +227,7 @@ export function customerScreen(s) {
       parts.push(ch('discount', '', 'Give discount', `${fmt(v.discTotal)}: less profit, happier customer`));
     }
     parts.push(ch('refuse', '', 'Refuse', `${c.she ? 'She' : 'He'} may not come back`));
-    actions = `<div class="grid2">${parts.join('')}</div>`;
+    actions = `${v.rush ? rushButton(s, v, '') : ''}<div class="grid2">${parts.join('')}</div>`;
   }
 
   const order = v.items.length ? `<div class="between small" style="padding-top:10px;border-top:1px dashed var(--line)">
@@ -234,6 +250,7 @@ export function customerScreen(s) {
         <div class="wrap" style="justify-content:center"><span class="tag ${c.type === 'regular' ? 'green' : 'amber'}">${TYPE_LABEL[c.type]}</span>${loyal ? '<span class="tag green">Loyal</span>' : ''}</div>
       </div>
       <div class="card"><p class="speech">“${esc(speech)}”</p>${order}</div>
+      ${t.flash ? `<div class="notice" data-animate>${icon('truck', 16)} ${esc(t.flash)}</div>` : ''}
       ${actions}
     </div>
     <div class="foot" style="background:none;position:static"><span class="small muted" style="font-weight:600">Stock now</span>

@@ -4,7 +4,7 @@ import {
   GOODS, START_CASH, START_STOCK, START_PAY, PAY_STEP, RULES, LEVELS, BADGES, NOTE_ORDER, CUSTOMERS, REACTIONS,
 } from './data.js';
 import {
-  CUST, fmt, clamp, randInt, round50, pick, pickWeighted, goodsForLevel, buyPrice, refPrice,
+  CUST, fmt, clamp, randInt, round50, pick, pickWeighted, goodsForLevel, buyPrice, refPrice, expense, describeItems,
   addStock, buyStock, waste, applySale, debtById, openDebts, owedToYou, debtPaid, debtLost,
   changeLoyalty, supplierOwed,
 } from './core.js';
@@ -51,7 +51,7 @@ export function startDay(s, rng = Math.random) {
     queue: [], idx: 0, eventAt: 0, eventDone: false, event: null,
     moneyIn: 0, profit: 0, sales: 0, salesValue: 0, cogs: 0, discounts: 0, recordedSales: 0, creditGiven: 0,
     unrecordedCredit: [], stockouts: [], wasted: [], expenses: [], repaid: [], lostDebts: [],
-    belowCost: null, personal: [], paidSelf: 0, notices: [], pending: null, chat: [], outcome: null, reaction: null,
+    belowCost: null, personal: [], paidSelf: 0, asks: {}, wordSpread: [], flash: null, notices: [], pending: null, chat: [], outcome: null, reaction: null,
   };
   const t = s.today;
   for (const d of s.supplier) {
@@ -67,6 +67,10 @@ export function startDay(s, rng = Math.random) {
   }
   s.supplier = s.supplier.filter((d) => !d.paid);
   t.notices.push(...morningEffects(s));
+  for (const [item, n] of Object.entries(s.lastAsks || {})) {
+    if (n >= RULES.asksWarn) t.notices.push(`Yesterday ${n} customers asked for ${GOODS[item].short.toLowerCase()} and you didn't have enough. Buy more today.`);
+  }
+  if (s.mods.fewer) t.notices.push('Word spread that your shop runs out of goods. Fewer customers are coming today.');
   t.queue = makeQueue(s, rng);
   t.eventAt = Math.max(2, Math.floor(t.queue.length / 2));
   s.phase = 'morning';
@@ -83,6 +87,7 @@ export function migrate(s) {
   Object.assign(s.stats, { pocketPays: 0, capitalTakes: 0, overpayStreak: 0, ...s.stats });
   if (s.today && !Array.isArray(s.today.personal)) s.today.personal = [];
   s.today && (s.today.paidSelf ??= 0);
+  if (s.today) { s.today.asks ??= {}; s.today.wordSpread ??= []; }
   return s;
 }
 
@@ -119,7 +124,8 @@ export function openShop(s) {
 function makeQueue(s, rng) {
   let [lo, hi] = RULES.customersPerDay[s.level];
   if (s.mods.rush) { lo = Math.round(lo * 1.6); hi = Math.round(hi * 1.6); }
-  const n = randInt(rng, lo, hi);
+  let n = randInt(rng, lo, hi);
+  if (s.mods.fewer) { n = Math.max(3, n - s.mods.fewer); delete s.mods.fewer; }
   const available = (type) => CUSTOMERS.filter((c) => c.type === type && s.customers[c.id].skipUntil <= s.day).map((c) => c.id);
   const ids = [];
   const take = (type, count) => {
@@ -195,9 +201,18 @@ export function currentCustomer(s) {
   const paysNow = r.kind === 'credit' ? Math.min(total - 100, Math.max(0, Math.round((total * r.frac) / 100) * 100)) : total;
   const discTotal = Math.round((total * (1 - r.disc)) / 50) * 50;
   return {
-    ...r, customer: c, items, missing, total, walks, paysNow, discTotal,
+    ...r, customer: c, items, missing, total, walks, paysNow, discTotal, rush: rushOrder(s, wanted),
     clock: clockFor(t.idx, t.queue.length), number: t.idx + 1, of: t.queue.length,
   };
+}
+
+// Sending someone to the market for what's missing: normal price plus transport.
+function rushOrder(s, wanted) {
+  const items = wanted.filter((it) => it.have < it.qty)
+    .map((it) => ({ item: it.item, qty: Math.max(RULES.rushMinQty, it.qty - it.have) }));
+  if (!items.length) return null;
+  const goods = items.reduce((a, it) => a + it.qty * buyPrice(s, it.item), 0);
+  return { items, goods, fee: RULES.rushFee, cost: goods + RULES.rushFee };
 }
 
 function clockFor(idx, n) {
@@ -213,11 +228,21 @@ export function serve(s, action) {
   const v = currentCustomer(s);
   const name = v.customer.name;
   if (action === 'next') return advance(s);
+  t.flash = null;
+
+  if (action === 'restock') {
+    const r = v.rush;
+    if (!r || s.cash < r.cost) return;
+    for (const it of r.items) buyStock(s, it.item, it.qty);
+    expense(s, r.fee, 'Transport for quick restock');
+    t.flash = `You sent a boy to the market. He brought ${describeItems(r.items)} (${fmt(r.cost)} with transport). ${name} waited.`;
+    return;
+  }
 
   if (!v.items.length) {
     t.stockouts.push(...v.missing);
     changeLoyalty(s, v.cid, -1);
-    t.outcome = { text: `You have no ${v.missing.map((i) => GOODS[i].short.toLowerCase()).join(' or ')}. ${name} goes to another stall.`, tone: 'bad' };
+    t.outcome = { text: `You have no ${v.missing.map((i) => GOODS[i].short.toLowerCase()).join(' or ')}. ${name} goes to another stall.${askedAgain(s, v.missing)}`, tone: 'bad' };
     return;
   }
   if (action === 'refuse') {
@@ -229,7 +254,11 @@ export function serve(s, action) {
     t.outcome = { text: `"${fmt(v.total)}? Too much!" ${name} buys somewhere cheaper. Your prices may be too high.`, tone: 'bad' };
     return;
   }
-  if (v.missing.length) t.stockouts.push(...v.missing);
+  let shortNote = '';
+  if (v.missing.length) {
+    t.stockouts.push(...v.missing);
+    shortNote = askedAgain(s, v.missing);
+  }
 
   let paid = v.total;
   let discount = 0;
@@ -261,11 +290,31 @@ export function serve(s, action) {
   t.pending = sale;
   t.reaction = reactionFor(v, said, sale, s.day + RULES.creditDueDays, note);
   t.chat = [];
-  if (v.missing.length) t.chat.push({ from: 'titi', text: `You didn't have enough ${v.missing.map((i) => GOODS[i].short.toLowerCase()).join(' or ')}, so you sold less.` });
+  if (v.missing.length) t.chat.push({ from: 'titi', text: `You didn't have enough ${v.missing.map((i) => GOODS[i].short.toLowerCase()).join(' or ')}, so you sold less.${shortNote}` });
   t.chat.push({ from: 'titi', text: sale.total > sale.paid
     ? `You gave ${name} credit. Tell me what happened, the way you'd say it.`
     : `${name} paid ${fmt(sale.paid)}. Record the sale.` });
   s.phase = 'record';
+}
+
+// Count customers asking for goods you don't have. Warn at 2; at 3 word spreads and regulars stay away.
+function askedAgain(s, missing) {
+  const t = s.today;
+  let msg = '';
+  for (const item of new Set(missing)) {
+    const n = (t.asks[item] = (t.asks[item] || 0) + 1);
+    const nm = GOODS[item].short.toLowerCase();
+    if (n === RULES.asksWarn) msg += ` That's ${n} customers asking for ${nm} today. Send for more, or buy more tomorrow morning.`;
+    if (n === RULES.asksWordSpreads && !t.wordSpread.includes(item)) {
+      t.wordSpread.push(item);
+      s.mods.fewer = (s.mods.fewer || 0) + RULES.wordSpreadFewerCustomers;
+      const away = CUSTOMERS.filter((c) => c.type === 'regular' && s.customers[c.id].skipUntil <= s.day)
+        .slice(0, RULES.wordSpreadRegularsAway);
+      for (const c of away) s.customers[c.id].skipUntil = s.day + 2;
+      msg += ` Word is spreading: "that shop never has ${nm}". ${away.map((c) => c.name).join(' and ')} will buy elsewhere for a few days.`;
+    }
+  }
+  return msg;
 }
 
 // What the customer says after a sale. The line rotates so the same words don't repeat every time.
@@ -434,6 +483,7 @@ export function endDay(s, rng = Math.random) {
   t.noteKey = s.path === 'learning' ? (t.event?.note && !s.seen['note_' + t.event.note] ? t.event.note : NOTE_ORDER.find((k) => !s.seen['note_' + k])) : null;
   if (t.noteKey) s.seen['note_' + t.noteKey] = true;
   t.levelUp = !s.completed && levelGoalMet(s);
+  s.lastAsks = { ...t.asks };
   s.history.push({ day: s.day, level: s.level, moneyIn: t.moneyIn, profit: t.profit, stars: t.stars });
   s.phase = 'evening';
 }
@@ -472,7 +522,10 @@ function pickTip(s) {
   const fromBusiness = t.personal.find((p) => p.from === 'business');
   if (fromBusiness) return `You took ${fmt(fromBusiness.amount)} from the business money for family needs. Pay from your pocket instead: that is what your daily pay is for.`;
   if (s.stats.overpayStreak >= RULES.overpayWarnDays) return `You're paying yourself more than the business earns. Lower your daily pay, or your cash for stock will run down.`;
-  if (t.stockouts.length) return `${GOODS[t.stockouts[0]].name} ran out. Running out means lost sales. Buy a little more tomorrow.`;
+  if (t.stockouts.length) {
+    const [item, n] = Object.entries(t.asks).sort((a, b) => b[1] - a[1])[0] || [t.stockouts[0], 1];
+    return `${GOODS[item].name} ran out: ${n} customer${n > 1 ? 's' : ''} asked for it. Running out means lost sales. Buy a little more tomorrow, or send for more when it happens.`;
+  }
   const thrown = t.wasted.find((w) => w.label === 'went bad');
   if (thrown) return `You threw away ${thrown.qty} ${GOODS[thrown.item].unit === 'loaf' ? 'loaves' : GOODS[thrown.item].short.toLowerCase()}. Buy short-life goods in smaller amounts.`;
   const dueTomorrow = openDebts(s, { recordedOnly: true }).find((d) => d.due === s.day + 1);
