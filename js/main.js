@@ -3,6 +3,7 @@ import * as E from './engine.js';
 import * as UI from './ui.js';
 import { LEVELS } from './data.js';
 import { CUST, fmt } from './core.js';
+import * as Voice from './voice.js';
 
 const SAVE_KEY = 'ogashop.save.v1';
 const app = document.getElementById('app');
@@ -52,6 +53,12 @@ function view() {
 }
 
 let lastKey = '';
+let lastSaid = '';
+
+function sayFrom(el) {
+  const cid = el.dataset.who;
+  Voice.speak(el.dataset.say, { who: cid, she: !!CUST[cid]?.she });
+}
 function render() {
   app.innerHTML = view();
   // Scroll to top when the screen changes, and keep the chat in view on the tiTi screen.
@@ -61,6 +68,11 @@ function render() {
     app.querySelector('[data-animate]')?.classList.add('enter');
   }
   lastKey = key;
+  // Speak what the customer says, once per new line on screen.
+  const say = app.querySelector('[data-say]');
+  const said = say ? `${key}|${say.dataset.say}` : '';
+  if (say && said !== lastSaid) sayFrom(say);
+  lastSaid = said;
   if (s?.phase === 'record' && !ui.screen) {
     const chat = app.querySelector('.chat');
     chat?.lastElementChild?.scrollIntoView({ block: 'nearest' });
@@ -130,6 +142,8 @@ const actions = {
 
   remind: (arg) => { E.remind(s, Number(arg)); },
   'set-path': (arg) => { s.path = arg; },
+  'set-voice': (arg) => { Voice.setEnabled(arg); },
+  say: () => { const el = app.querySelector('[data-say]'); if (el) sayFrom(el); },
   reset: () => {
     if (!ui.confirmReset) { ui.confirmReset = true; return; }
     clearSave();
@@ -165,6 +179,7 @@ app.addEventListener('click', (e) => {
 app.addEventListener('change', (e) => {
   const el = e.target;
   if (el.matches('input[type="radio"][data-action]')) run(el.dataset.action, el.value);
+  if (el.matches('input[type="checkbox"][data-action]')) run(el.dataset.action, el.checked);
 });
 
 app.addEventListener('input', (e) => {

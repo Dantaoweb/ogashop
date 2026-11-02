@@ -3,6 +3,7 @@ import { GOODS, LEVELS, BADGES, NOTES, EXPLAIN, TYPE_LABEL, CREDITVOICE_URL } fr
 import { CUST, fmt, goodsForLevel, buyPrice, supplierOwed, owedToYou, openDebts, supplierCreditError } from './core.js';
 import { currentCustomer, eventView, scoreParts, suggestMessage } from './engine.js';
 import { face, good, scene } from './art.js';
+import * as Voice from './voice.js';
 
 export const esc = (v) => String(v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -34,6 +35,7 @@ const PATHS = {
   doc: '<path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8z"/><path d="M9 13l2 2 4-4"/>',
   coin: '<circle cx="12" cy="12" r="9"/><path d="M12 7v10M9 10h4.5a1.5 1.5 0 0 1 0 3H10a1.5 1.5 0 0 0 0 3h5"/>',
   calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+  sound: '<path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16 9a3 3 0 0 1 0 6M18.5 6.5a7 7 0 0 1 0 11"/>',
 };
 export const icon = (name, size = 24, sw = 1.8) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" ${P} stroke-width="${sw}" aria-hidden="true">${PATHS[name] || ''}</svg>`;
 
@@ -43,6 +45,12 @@ const stockChip = (s, id, lowAt) => `<span class="chip${s.stock[id] <= lowAt ? '
 const items = (list) => list.map((it) => `${it.qty} ${GOODS[it.item].short.toLowerCase()}`).join(' and ');
 const btn = (action, label, cls = 'primary', arg = '', extra = '') =>
   `<button type="button" class="btn ${cls}" data-action="${action}"${arg !== '' ? ` data-arg="${esc(arg)}"` : ''} ${extra}>${label}</button>`;
+
+// Marks what a customer says, so main.js can speak it; adds a button to hear it again.
+const sayAttrs = (text, cid) => `data-say="${esc(text)}" data-who="${cid}"`;
+const sayBtn = () => (Voice.supported && Voice.enabled()
+  ? `<button type="button" class="icon-btn say-btn" data-action="say" aria-label="Hear it again">${icon('sound', 20)}</button>` : '');
+const quoted = (text) => (text.match(/"([^"]+)"/) || [])[1] || '';
 
 function titi(text, extra = '') {
   return `<div class="titi-tip"${extra}><span class="avatar">tiTi</span><p>${text}</p></div>`;
@@ -207,7 +215,8 @@ export function customerScreen(s) {
 
   let actions;
   if (t.outcome) {
-    actions = `<div class="card ${t.outcome.tone === 'bad' ? 'bad' : ''}"><p style="margin:0">${esc(t.outcome.text)}</p></div>
+    const words = quoted(t.outcome.text);
+    actions = `<div class="card ${t.outcome.tone === 'bad' ? 'bad' : ''}" ${words ? sayAttrs(words, c.id) : ''}><p style="margin:0">${esc(t.outcome.text)}</p></div>
       ${btn('serve', 'Next customer', 'primary block', 'next')}`;
   } else if (!v.items.length) {
     actions = `<div class="card warn"><b>You have no ${esc(v.missing.map((i) => GOODS[i].short.toLowerCase()).join(' or '))}.</b><span class="small muted">Running out means lost sales.${askedNote(t, v.missing)}</span></div>
@@ -249,7 +258,7 @@ export function customerScreen(s) {
         <b style="font-size:21px">${esc(c.name)}</b>
         <div class="wrap" style="justify-content:center"><span class="tag ${c.type === 'regular' ? 'green' : 'amber'}">${TYPE_LABEL[c.type]}</span>${loyal ? '<span class="tag green">Loyal</span>' : ''}</div>
       </div>
-      <div class="card"><p class="speech">“${esc(speech)}”</p>${order}</div>
+      <div class="card" ${t.outcome ? '' : sayAttrs(speech, c.id)}><div class="between" style="align-items:flex-start"><p class="speech">“${esc(speech)}”</p>${t.outcome ? '' : sayBtn()}</div>${order}</div>
       ${t.flash ? `<div class="notice" data-animate>${icon('truck', 16)} ${esc(t.flash)}</div>` : ''}
       ${actions}
     </div>
@@ -263,10 +272,11 @@ export function customerScreen(s) {
 // The customer's face and what they say after a sale.
 function reaction(r) {
   if (!r) return '';
-  return `<div class="reaction" data-animate>
+  return `<div class="reaction" data-animate ${sayAttrs(r.text, r.cid)}>
     <span class="mini-face lg">${face(r.cid, { size: 56, mood: r.mood })}</span>
     <div class="grow"><b class="small">${esc(CUST[r.cid].name)}</b><div class="say">“${esc(r.text)}”</div>
       ${r.note ? `<div class="small" style="color:var(--green);font-weight:700">${icon('check', 14, 3)} ${esc(r.note)}</div>` : ''}</div>
+    ${sayBtn()}
   </div>`;
 }
 
@@ -508,6 +518,8 @@ export function settingsScreen(s, ui) {
       <div class="card"><h3>How you play</h3>
         ${opt('business', 'I run a business', 'Fewer explanations.')}
         ${opt('learning', 'I\'m learning business', 'tiTi explains new ideas and adds "Did you know?" notes.')}</div>
+      ${Voice.supported ? `<div class="card"><h3>Sound</h3>
+        <label class="settings-opt"><input type="checkbox" data-action="set-voice" ${Voice.enabled() ? 'checked' : ''}><span><b>Customers speak</b><div class="small muted">Customers say what they want out loud, using your phone's voice. Their words also stay on screen.</div></span></label></div>` : ''}
       ${ui.canInstall ? `<div class="card"><h3>Add to home screen</h3><span class="small muted">Play like an app, even without data.</span>${btn('install', 'Install Oga Shop', 'secondary small')}</div>` : ''}
       <div class="card"><h3>About</h3>
         <span class="small">Oga Shop is a free learning game by CreditVoice. There is no real money in the game. Your progress is saved only on this phone; nothing is sent anywhere.</span>

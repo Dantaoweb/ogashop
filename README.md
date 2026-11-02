@@ -20,6 +20,8 @@ Plain HTML, CSS and JavaScript modules. No build step and no dependencies, so Gi
 | `js/parser.js` | tiTi reading messages like "sold 2 rice to Mama Bola 5000, paid 3000" |
 | `js/core.js` | Shared money, stock and debt helpers |
 | `js/engine.js` | Day loop, customers, debts, score, badges, levels |
+| `js/art.js` | Cartoon customers, goods, table and shop (drawn in code) |
+| `js/voice.js` | Customers speaking, using the phone's own voice |
 | `js/ui.js` | Screens |
 | `js/main.js` | Saving, screen switching, button handling |
 | `sw.js` | Offline support (caches the game after the first visit) |
