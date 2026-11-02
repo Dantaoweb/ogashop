@@ -286,6 +286,40 @@ test('savings goal: progress, how long, reached in the evening', async () => {
   assert.match(G.delayNote({ goal: { name: 'Car' }, pay: 1000 }, 2500), /3 days further away/);
 });
 
+test('count the change: right, short, too much, skip', () => {
+  const play = (taps, result = 'give') => {
+    const s = E.newGame('business', mulberry32(40));
+    s.today.queue = [{ cid: 'musa', items: [{ item: 'garri', qty: 3 }], kind: 'cash', frac: 1, disc: 0.1, walkRoll: 0.99, acceptRoll: 0, moodRoll: 0.99, changeRoll: 0 }];
+    s.today.eventAt = 99;
+    E.openShop(s);
+    E.serve(s, 'sell');
+    assert.equal(s.phase, 'change');
+    assert.deepEqual([s.today.change.handed, s.today.change.due], [2000, 350]);
+    for (const n of taps) E.changeTap(s, n);
+    E.changeDone(s, result);
+    assert.equal(s.phase, 'record');
+    return s;
+  };
+  const right = play([200, 100, 50]);
+  assert.equal(right.stats.changeRight, 1);
+  assert.match(right.today.reaction.text, /Correct change/);
+  const short = play([200, 100]);
+  assert.equal(short.stats.unhappy, 1);
+  assert.match(short.today.reaction.text, /short-changed/);
+  const much = play([500]);
+  assert.equal(much.today.profit, 1650 - 3 * 400 - 150);
+  const skip = play([], 'skip');
+  assert.equal(skip.stats.unhappy + skip.stats.changeRight, 0);
+  // only once a day
+  const s = E.newGame('business', mulberry32(41));
+  const q = () => ({ cid: 'musa', items: [{ item: 'garri', qty: 3 }], kind: 'cash', frac: 1, disc: 0.1, walkRoll: 0.99, acceptRoll: 0, moodRoll: 0.99, changeRoll: 0 });
+  s.today.queue = [q(), q()]; s.today.eventAt = 99;
+  E.openShop(s);
+  E.serve(s, 'sell'); E.changeDone(s, 'skip'); E.skipRecord(s);
+  E.serve(s, 'sell');
+  assert.equal(s.phase, 'record');
+});
+
 test('out of stock loses the sale', () => {
   const s = E.newGame('business', mulberry32(5));
   s.stock.rice = 0;

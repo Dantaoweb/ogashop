@@ -48,6 +48,11 @@ export function play(seed, habits, maxDays = 60) {
           const sale = s.today.pending;
           if (rng() < habits.record) E.titiMessage(s, suggestMessage(sale, sale.cid ? CUST[sale.cid].name : null));
           E.skipRecord(s);
+        } else if (s.phase === 'change') {
+          const c = s.today.change;
+          let left = c.due;
+          for (const n of [500, 200, 100, 50]) while (left >= n) { E.changeTap(s, n); left -= n; }
+          E.changeDone(s, 'give');
         } else if (s.phase === 'event') {
           const v = E.eventView(s);
           const i = v.choices.findIndex((c) => !c.disabled);

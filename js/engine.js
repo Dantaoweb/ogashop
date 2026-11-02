@@ -21,7 +21,7 @@ export function newGame(path, rng = Math.random) {
     cash: START_CASH, pay: START_PAY, pocket: 0, stock: {}, cost: {}, prices: {}, batches: [], market: {},
     customers: {}, debts: [], nextDebtId: 1, supplier: [], bills: [], nextBillId: 1, billNext: {},
     levelProfit: 0, totalProfit: 0, score: 50,
-    stats: { recW: 0, totW: 0, dueAmt: 0, paidOnTime: 0, days: 0, cleanDays: 0, repaid: 0, lost: 0, noLateStreak: 0, pocketPays: 0, capitalTakes: 0, overpayStreak: 0, served: 0, unhappy: 0, billsPaid: 0, billsLateDays: 0 },
+    stats: { recW: 0, totW: 0, dueAmt: 0, paidOnTime: 0, days: 0, cleanDays: 0, repaid: 0, lost: 0, noLateStreak: 0, pocketPays: 0, capitalTakes: 0, overpayStreak: 0, served: 0, unhappy: 0, billsPaid: 0, billsLateDays: 0, changeRight: 0 },
     badges: [], seen: {}, eventLog: {}, mods: {}, history: [], goal: null, goalsReached: [],
     phase: 'morning', today: null,
   };
@@ -92,7 +92,7 @@ export function buy(s, item, qty, credit = false) {
 export function migrate(s) {
   s.pay ??= START_PAY;
   s.pocket ??= 0;
-  Object.assign(s.stats, { pocketPays: 0, capitalTakes: 0, overpayStreak: 0, served: 0, unhappy: 0, billsPaid: 0, billsLateDays: 0, ...s.stats });
+  Object.assign(s.stats, { pocketPays: 0, capitalTakes: 0, overpayStreak: 0, served: 0, unhappy: 0, billsPaid: 0, billsLateDays: 0, changeRight: 0, ...s.stats });
   s.bills ??= [];
   s.goal ??= null;
   s.goalsReached ??= [];
@@ -227,7 +227,7 @@ function makeRequest(s, cid, rng) {
   if (type === 'neverpays') { kind = 'credit'; frac = rng() * 0.3; }
   if (type === 'big' && s.level >= 2 && rng() < 0.5) { kind = 'credit'; frac = 0.5; }
   if (type === 'bargainer') kind = 'discount';
-  return { cid, items, kind, frac, disc: 0.1 + rng() * 0.05, walkRoll: rng(), acceptRoll: rng(), moodRoll: rng() };
+  return { cid, items, kind, frac, disc: 0.1 + rng() * 0.05, walkRoll: rng(), acceptRoll: rng(), moodRoll: rng(), changeRoll: rng() };
 }
 
 // What the current customer wants, given today's stock and prices.
@@ -375,6 +375,52 @@ export function serve(s, action) {
   t.chat.push({ from: 'titi', text: sale.total > sale.paid
     ? `You gave ${name} credit. Tell me what happened, the way you'd say it.`
     : `${name} paid ${fmt(sale.paid)}. Record the sale.` });
+  s.phase = 'record';
+  // Sometimes a cash customer pays with ₦1,000 notes and you count the change.
+  const notes = Math.ceil(sale.total / 1000) * 1000;
+  if (sale.paid === sale.total && notes > sale.total && !t.changeDone && (v.changeRoll ?? 1) < RULES.changeChance) {
+    t.changeDone = true;
+    t.change = { cid: v.cid, total: sale.total, handed: notes, due: notes - sale.total, given: [] };
+    s.phase = 'change';
+  }
+}
+
+// ---------- Count the change ----------
+
+export function changeTap(s, note) {
+  const c = s.today.change;
+  if (c && RULES.changeNotes.includes(note) && c.given.length < 20) c.given.push(note);
+}
+
+export function changeUndo(s) {
+  s.today.change?.given.pop();
+}
+
+// result: 'give' (count what the player picked), 'skip' (tiTi counts), 'timeout' (customer got tired of waiting)
+export function changeDone(s, result) {
+  const t = s.today;
+  const c = t.change;
+  if (!c) return;
+  const name = CUST[c.cid].name;
+  const given = c.given.reduce((a, n) => a + n, 0);
+  let r;
+  if (result === 'skip') {
+    r = { text: 'Thank you!', mood: 'happy', note: `tiTi counted ${fmt(c.due)} change for you.` };
+  } else if (result === 'timeout') {
+    unhappy(s);
+    r = { text: 'Ah, you are too slow! Give me my change, I have to go.', mood: 'sad', note: `${name} got tired of waiting. The change was ${fmt(c.due)}.` };
+  } else if (given === c.due) {
+    s.stats.changeRight++;
+    r = { text: 'Correct change. Thank you, my friend!', mood: 'happy', note: `Right change: ${fmt(c.due)}. ${name} trusts your shop.` };
+  } else if (given < c.due) {
+    unhappy(s);
+    r = { text: `You short-changed me! I paid ${fmt(c.handed)}.`, mood: 'sad', note: `You gave ${fmt(given)}, but the change was ${fmt(c.due)}. You had to give the rest.` };
+  } else {
+    expense(s, given - c.due, 'Too much change given');
+    r = { text: 'Thank you o!', mood: 'happy', note: `You gave ${fmt(given)}, but the change was ${fmt(c.due)}. You lost ${fmt(given - c.due)}.` };
+  }
+  t.reaction = { cid: c.cid, ...r };
+  t.change = null;
   s.phase = 'record';
 }
 
@@ -618,7 +664,7 @@ export function scoreParts(s) {
     // Family needs paid from your own pay count for you; taking from the business counts against.
     money: (st.pocketPays + st.billsPaid + 1.2) / (st.pocketPays + st.billsPaid + st.capitalTakes + st.billsLateDays + 2),
     // Complaints, refused trusted customers and refusals count against; good sales for.
-    customers: clamp((st.served - 2 * st.unhappy + 4) / (st.served + 5), 0, 1),
+    customers: clamp((st.served + st.changeRight - 2 * st.unhappy + 4) / (st.served + st.changeRight + 5), 0, 1),
   };
 }
 

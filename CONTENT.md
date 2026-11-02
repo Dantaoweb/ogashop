@@ -180,6 +180,14 @@ The score moves slowly: at most ±6 points a day, so one bad day never wipes out
 - Family needs paid from the pocket say how many days later the goal comes. Putting pocket money into the business says it takes from the goal.
 - When the pocket covers the price in the evening, the goal is bought: celebration and a Goal reached badge.
 
+## 7g. Mini-game: Count the change *(tune)*
+
+- At most once a day, a cash customer (35% chance per cash sale) pays with ₦1,000 notes, e.g. ₦2,000 for ₦1,650.
+- The player taps ₦500, ₦200, ₦100 and ₦50 notes to make the change, then **Give change**. Undo is allowed.
+- 15-second patience bar (not on the learning path, which also shows "Change = what they paid − the sale").
+- Right change: counts for Happy customers. Too little: the customer is unhappy. Too much: the extra comes off profit. Too slow: the customer is unhappy.
+- "Let tiTi count it" skips with no reward and no penalty. Skill only, no luck.
+
 ## 8. Open points for review
 
 1. **Prices:** check every buy and sell price with traders in at least two markets.

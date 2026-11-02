@@ -5,7 +5,7 @@ import { LEVELS } from './data.js';
 import { CUST, fmt } from './core.js';
 import * as Voice from './voice.js';
 import { setGoal, clearGoal } from './goals.js';
-import { GOALS } from './data.js';
+import { GOALS, RULES } from './data.js';
 
 const SAVE_KEY = 'ogashop.save.v1';
 const app = document.getElementById('app');
@@ -51,6 +51,7 @@ function view() {
     case 'selling': return UI.customerScreen(s);
     case 'record': return UI.recordScreen(s, ui);
     case 'event': return UI.eventScreen(s);
+    case 'change': return UI.changeScreen(s, ui);
     case 'evening': return UI.eveningScreen(s);
     default: return UI.morningScreen(s, ui);
   }
@@ -58,6 +59,14 @@ function view() {
 
 let lastKey = '';
 let lastSaid = '';
+let changeTimer = null;
+
+// The customer's patience while you count the change (not on the learning path).
+function watchChangeTimer() {
+  const counting = s?.phase === 'change' && !ui.screen && s.path !== 'learning';
+  if (counting && !changeTimer) changeTimer = setTimeout(() => { changeTimer = null; run('change-timeout'); }, RULES.changeSeconds * 1000);
+  if (!counting && changeTimer) { clearTimeout(changeTimer); changeTimer = null; }
+}
 
 function sayFrom(el) {
   const cid = el.dataset.who;
@@ -77,6 +86,7 @@ function render() {
   const said = say ? `${key}|${say.dataset.say}` : '';
   if (say && said !== lastSaid) sayFrom(say);
   lastSaid = said;
+  watchChangeTimer();
   if (s?.phase === 'record' && !ui.screen) {
     const chat = app.querySelector('.chat');
     chat?.lastElementChild?.scrollIntoView({ block: 'nearest' });
@@ -152,6 +162,11 @@ const actions = {
   remind: (arg) => { E.remind(s, Number(arg)); },
   'set-path': (arg) => { s.path = arg; },
   'set-voice': (arg) => { Voice.setEnabled(arg); },
+  'change-tap': (arg) => { E.changeTap(s, Number(arg)); },
+  'change-undo': () => { E.changeUndo(s); },
+  'change-give': () => { E.changeDone(s, 'give'); },
+  'change-skip': () => { E.changeDone(s, 'skip'); },
+  'change-timeout': () => { if (s.phase === 'change') E.changeDone(s, 'timeout'); },
   say: () => { const el = app.querySelector('[data-say]'); if (el) sayFrom(el); },
   reset: () => {
     if (!ui.confirmReset) { ui.confirmReset = true; return; }

@@ -318,7 +318,9 @@ function reaction(r) {
   return `<div class="reaction" data-animate ${sayAttrs(r.text, r.cid)}>
     <span class="mini-face lg">${face(r.cid, { size: 56, mood: r.mood })}</span>
     <div class="grow"><b class="small">${esc(CUST[r.cid].name)}</b><div class="say">“${esc(r.text)}”</div>
-      ${r.note ? `<div class="small" style="color:var(--green);font-weight:700">${icon('check', 14, 3)} ${esc(r.note)}</div>` : ''}</div>
+      ${r.note ? (r.mood === 'sad'
+        ? `<div class="small" style="color:var(--red);font-weight:700">${esc(r.note)}</div>`
+        : `<div class="small" style="color:var(--green);font-weight:700">${icon('check', 14, 3)} ${esc(r.note)}</div>`) : ''}</div>
     ${sayBtn()}
   </div>`;
 }
@@ -364,6 +366,35 @@ export function recordScreen(s, ui) {
           <button type="submit" class="btn primary" style="width:48px;min-height:48px;padding:0;border-radius:14px" aria-label="Send to tiTi">${icon('send', 22, 2)}</button></form>
         <div class="between"><button type="button" class="link" data-action="record-next">Skip recording</button>
           <span class="small muted">${sale.total > sale.paid ? 'Unrecorded credit can be forgotten.' : 'Unrecorded sales lower your score.'}</span></div>`}
+    </div>
+  </main>`;
+}
+
+// ---------- Count the change ----------
+
+export function changeScreen(s, ui) {
+  const c = s.today.change;
+  const given = c.given.reduce((a, n) => a + n, 0);
+  const timed = s.path !== 'learning';
+  const notes = RULES.changeNotes.map((n) => `<button type="button" class="note-btn" data-action="change-tap" data-arg="${n}" aria-label="Add ${fmt(n)}">${fmt(n)}</button>`).join('');
+  return `<main class="screen">
+    <header class="top" style="flex-direction:row;align-items:center;justify-content:space-between">
+      <div><div class="kicker">Day ${s.day} · Count the change</div><div class="title display">Give the right change</div></div></header>
+    <div class="body">
+      <div class="reaction" ${sayAttrs(`Here is ${fmt(c.handed)}.`, c.cid)}><span class="mini-face lg">${face(c.cid, { size: 56 })}</span>
+        <div class="grow"><b class="small">${esc(CUST[c.cid].name)}</b><div class="say">“Here is ${fmt(c.handed)}.”</div></div>${sayBtn()}</div>
+      ${timed ? `<div class="progress lg" aria-hidden="true"><div class="patience" style="animation-duration:${RULES.changeSeconds}s"></div></div>
+        <span class="small muted">${esc(CUST[c.cid].name)} is waiting…</span>` : ''}
+      <div class="card"><div class="between"><span class="muted">The sale</span><b>${fmt(c.total)}</b></div>
+        <div class="between"><span class="muted">Customer paid</span><b>${fmt(c.handed)}</b></div>
+        <div class="between" style="padding-top:8px;border-top:1px dashed var(--line)"><span>You are giving</span><b style="font-size:22px">${fmt(given)}</b></div>
+        ${c.given.length ? `<div class="wrap">${c.given.map((n) => `<span class="chip">${fmt(n)}</span>`).join('')}</div>` : '<span class="small muted">Tap the notes below to count the change.</span>'}
+        ${s.path === 'learning' ? `<span class="small" style="color:var(--green)">Change = what they paid − the sale.</span>` : ''}</div>
+      <div class="grid2">${notes}</div>
+    </div>
+    <div class="foot">
+      <div class="grid2">${btn('change-undo', 'Undo', 'secondary small', '', c.given.length ? '' : 'disabled')}${btn('change-give', 'Give change', 'primary small', '', c.given.length ? '' : 'disabled')}</div>
+      <button type="button" class="link" data-action="change-skip" style="align-self:center">Let tiTi count it</button>
     </div>
   </main>`;
 }
