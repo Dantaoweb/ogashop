@@ -258,6 +258,34 @@ test('stuck with no stock and no cash: pocket top-up, then restart', () => {
   assert.equal(s.phase, 'morning');
 });
 
+test('savings goal: progress, how long, reached in the evening', async () => {
+  const G = await import('../js/goals.js');
+  const s = E.newGame('business', mulberry32(30));
+  assert.match(G.setGoal(s, '', 5000), /name/);
+  assert.equal(G.setGoal(s, 'Smartphone', 90000), null);
+  s.pocket = 30000;
+  s.pay = 1500;
+  const g = G.goalStatus(s);
+  assert.equal(g.pct, 33);
+  assert.equal(g.days, 40);
+  assert.match(g.when, /40 days/);
+  G.setGoal(s, 'House', 35000000);
+  assert.match(G.goalStatus(s).when, /about 64 years.*Grow the business/);
+  s.pay = 0;
+  assert.match(G.goalStatus(s).when, /never comes/);
+  G.setGoal(s, 'School fees for one term', 40000);
+  s.pay = 1000;
+  s.pocket = 39500;
+  s.today.queue = []; s.today.eventAt = 99;
+  E.openShop(s);
+  assert.equal(s.phase, 'evening');
+  assert.equal(s.today.goalReached.name, 'School fees for one term');
+  assert.equal(s.pocket, 500);
+  assert.equal(s.goal, null);
+  assert.ok(s.badges.includes('goal_reached'));
+  assert.match(G.delayNote({ goal: { name: 'Car' }, pay: 1000 }, 2500), /3 days further away/);
+});
+
 test('out of stock loses the sale', () => {
   const s = E.newGame('business', mulberry32(5));
   s.stock.rice = 0;

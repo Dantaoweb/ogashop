@@ -1,8 +1,9 @@
 // Screens. Each returns an HTML string; buttons carry data-action (and data-arg) handled in main.js.
-import { GOODS, LEVELS, BADGES, NOTES, EXPLAIN, TYPE_LABEL, CREDITVOICE_URL, RULES } from './data.js';
+import { GOODS, LEVELS, BADGES, NOTES, EXPLAIN, TYPE_LABEL, CREDITVOICE_URL, RULES, GOALS } from './data.js';
 import { CUST, fmt, goodsForLevel, buyPrice, supplierOwed, owedToYou, openDebts, supplierCreditError } from './core.js';
 import { currentCustomer, eventView, scoreParts, suggestMessage, billsDueSoon, billOwed, cashNeededSoon, isStuck } from './engine.js';
 import { face, good, scene } from './art.js';
+import { goalStatus, daysToGoal, howLong } from './goals.js';
 import * as Voice from './voice.js';
 
 export const esc = (v) => String(v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -40,7 +41,7 @@ const PATHS = {
 };
 export const icon = (name, size = 24, sw = 1.8) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" ${P} stroke-width="${sw}" aria-hidden="true">${PATHS[name] || ''}</svg>`;
 
-const BADGE_ICON = { first_sale: 'coin', record_keeper: 'doc', fully_stocked: 'box', never_lost_debt: 'check', debt_free_week: 'calendar' };
+const BADGE_ICON = { first_sale: 'coin', record_keeper: 'doc', fully_stocked: 'box', never_lost_debt: 'check', debt_free_week: 'calendar', goal_reached: 'star' };
 
 const stockChip = (s, id, lowAt) => `<span class="chip${s.stock[id] <= lowAt ? ' low' : ''}">${good(id, 18)}${esc(GOODS[id].short)} ${s.stock[id]}</span>`;
 const items = (list) => list.map((it) => `${it.qty} ${GOODS[it.item].short.toLowerCase()}`).join(' and ');
@@ -130,6 +131,17 @@ function billsCard(s) {
   return `<div class="card warn"><h3>Bills coming</h3>${rows}<span class="small muted">Bills are paid from the business cash. Keep money aside for them.</span></div>`;
 }
 
+// The savings goal inside the daily pay card.
+function goalBox(s) {
+  const g = goalStatus(s);
+  if (!g) return `<div class="between" style="padding-top:10px;border-top:1px dashed var(--line)"><span class="small muted">Saving for something? Your pocket can be your savings.</span>${btn('open', 'Choose a goal', 'secondary small', 'goals')}</div>`;
+  return `<div style="display:flex;flex-direction:column;gap:6px;padding-top:10px;border-top:1px dashed var(--line)">
+    <div class="between"><b class="small">My goal: ${esc(g.name)}</b><button type="button" class="link" data-action="open" data-arg="goals" style="padding:4px 0">Change</button></div>
+    <div class="progress lg"><div style="width:${g.pct}%"></div></div>
+    <div class="between small"><span class="muted">${fmt(g.saved)} of ${fmt(g.price)} (${g.pct}%)</span></div>
+    <span class="small" style="color:var(--ink-2)">${esc(g.when)}</span></div>`;
+}
+
 // Warn when buying stock would leave too little for bills due soon.
 function billWarning(s, cost) {
   const need = cashNeededSoon(s);
@@ -184,10 +196,11 @@ export function morningScreen(s, ui) {
         ${btn('restart-level', `Start Level ${s.level} again`, 'primary small block')}</div>` : ''}
       ${explain(s, 'pay')}
       <div class="card"><div class="between"><div><b>Your daily pay</b><div class="small muted">Moves to your pocket each evening · Pocket: <b style="color:var(--ink)">${fmt(s.pocket)}</b></div>
-        ${s.pocket > 0 ? `<button type="button" class="link" data-action="topup" style="padding:6px 0;color:var(--green)">Put ${fmt(s.pocket)} into the business</button>` : ''}</div>
+        ${s.pocket > 0 ? `<button type="button" class="link" data-action="topup" style="padding:6px 0;color:var(--green)">Put ${fmt(s.pocket)} into the business${s.goal ? ' (takes it from your goal)' : ''}</button>` : ''}</div>
         <div class="stepper"><button type="button" class="step" data-action="pay" data-arg="-500" aria-label="Lower your daily pay" ${s.pay <= 0 ? 'disabled' : ''}>−</button>
           <output>${fmt(s.pay)}</output>
-          <button type="button" class="step" data-action="pay" data-arg="500" aria-label="Raise your daily pay">+</button></div></div></div>
+          <button type="button" class="step" data-action="pay" data-arg="500" aria-label="Raise your daily pay">+</button></div></div>
+        ${goalBox(s)}</div>
       <div class="between"><h2 style="font-size:18px">Your stock</h2><span class="small muted">Set prices, buy stock</span></div>
       <div class="list">${rows}</div>
       ${ui.error ? `<div class="toast" role="alert">${esc(ui.error)}</div>` : ''}
@@ -423,6 +436,10 @@ export function eveningScreen(s) {
       ${happened.length ? `<div class="card"><h3>Today</h3>${happened.map((h) => `<span class="small">${esc(h)}</span>`).join('')}</div>` : ''}
       <div class="card"><h3>Who owes you</h3>${debtRows || '<span class="small muted">Nobody owes you money.</span>'}</div>
       <div class="card"><h3>Stock left</h3><div class="wrap">${goodsForLevel(s.level).map((id) => stockChip(s, id, 0)).join('')}</div></div>
+      ${t.goalReached ? `<div class="card soft pop" style="align-items:center;text-align:center"><span class="badge"><span class="disc">${icon('star', 26)}</span></span>
+        <b style="font-size:20px">Goal reached: ${esc(t.goalReached.name)}!</b>
+        <span class="small">You saved ${fmt(t.goalReached.price)} from your own pay${t.goalReached.days ? ` in ${t.goalReached.days} days` : ''}, without touching the business money.</span>
+        ${btn('open', 'Choose your next goal', 'primary small', 'goals')}</div>` : ''}
       ${titi(`<b>Tip:</b> ${esc(t.tip)}`)}
       ${t.noteKey ? `<div class="card warn"><b>Did you know?</b><span style="font-size:15px">${esc(NOTES[t.noteKey])}</span></div>` : ''}
     </div>
@@ -465,6 +482,35 @@ export function scoreScreen(s) {
         }).join('')}</div></div>
     </div>
     <div class="foot">${btn('score-next', t.levelUp ? `Finish Level ${s.level}!` : `Start Day ${s.day + 1}`, t.levelUp ? 'amber block' : 'primary block')}</div>
+  </main>`;
+}
+
+// ---------- Savings goals ----------
+
+export function goalsScreen(s, ui) {
+  const days = (price) => {
+    const d = daysToGoal(s, price);
+    if (d === 0) return 'You have enough';
+    if (d == null) return 'Set a daily pay first';
+    return `${d <= 1 ? 'Tomorrow' : `In ${howLong(d)}`} at ${fmt(s.pay)} a day`;
+  };
+  const rows = GOALS.map((g) => `<button type="button" class="choice${s.goal?.name === g.name ? ' credit' : ''}" data-action="set-goal" data-arg="${g.id}">
+      <span class="between" style="width:100%"><b>${esc(g.name)}</b><b style="color:var(--ink)">${fmt(g.price)}</b></span><span>${days(g.price)}</span></button>`).join('');
+  return `<main class="screen">
+    <header class="top"><div class="row"><button type="button" class="icon-btn" data-action="close" aria-label="Back" style="margin-left:-10px">${icon('back', 22, 2)}</button><h1 class="title display">Save for a goal</h1></div></header>
+    <div class="body">
+      ${titi(`Your daily pay goes into your pocket. Pick something to save for: these are real prices, so big goals take a long time. A bigger business means bigger pay. Pocket now: <b>${fmt(s.pocket)}</b>.`)}
+      ${ui.error ? `<div class="toast" role="alert">${esc(ui.error)}</div>` : ''}
+      <div style="display:flex;flex-direction:column;gap:8px">${rows}</div>
+      <form data-form="goal" class="card"><h3>Or your own goal</h3>
+        <label class="small muted" for="goal-name">What is it?</label>
+        <input id="goal-name" name="name" type="text" maxlength="40" placeholder="e.g. Freezer for my shop" style="height:44px;border:1px solid var(--line-2);border-radius:12px;padding:0 12px;font-size:16px">
+        <label class="small muted" for="goal-price">Price (₦)</label>
+        <input id="goal-price" name="price" type="number" inputmode="numeric" min="1000" step="500" placeholder="e.g. 150000" style="height:44px;border:1px solid var(--line-2);border-radius:12px;padding:0 12px;font-size:16px">
+        <button type="submit" class="btn primary small">Save for this</button></form>
+      ${s.goal ? btn('clear-goal', 'Stop saving for a goal', 'secondary small block') : ''}
+      ${s.goalsReached.length ? `<div class="card"><h3>Goals reached</h3>${s.goalsReached.map((g) => `<div class="between small"><span>${esc(g.name)}</span><b>${fmt(g.price)} · Day ${g.day}</b></div>`).join('')}</div>` : ''}
+    </div>
   </main>`;
 }
 

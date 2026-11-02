@@ -172,6 +172,14 @@ The score moves slowly: at most ±6 points a day, so one bad day never wipes out
 - An unpaid bill gets a ₦500 late fee every day until paid, and each late day counts against Money habits. Bills paid count for it.
 - No borrowing in Stage 1 (loans are Level 5). A player short of cash can put their pocket money back into the business. A player with no stock and no money at all can start the level again.
 
+## 7f. Savings goals
+
+- Optional. The player picks something to save for, or types their own goal and price. Savings are the pocket (their daily pay).
+- Real prices (estimates to check): school fees for one term ₦40,000 · smartphone ₦90,000 · sewing machine ₦120,000 · motorcycle (okada) ₦1,200,000 · plot of land ₦5,000,000 · keke ₦5,000,000 · used car ₦9,000,000 · bus ₦25,000,000 · house ₦35,000,000.
+- The goal card shows progress and how long at the current pay ("about 16 years"). Over a year, it adds: grow the business to grow your pay.
+- Family needs paid from the pocket say how many days later the goal comes. Putting pocket money into the business says it takes from the goal.
+- When the pocket covers the price in the evening, the goal is bought: celebration and a Goal reached badge.
+
 ## 8. Open points for review
 
 1. **Prices:** check every buy and sell price with traders in at least two markets.

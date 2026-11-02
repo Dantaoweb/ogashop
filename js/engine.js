@@ -9,6 +9,7 @@ import {
   changeLoyalty, supplierOwed, supplierCreditError,
 } from './core.js';
 import { EVENT_BY_ID, drawEvent, morningEffects } from './events.js';
+import { checkGoal } from './goals.js';
 import { scheduleBills, payDueBills, chargeLateFees, dropFutureBills, payBill, cashNeededSoon, billsDueSoon, billOwed } from './bills.js';
 import { parseSale, checkSale, detectQuery, suggestMessage } from './parser.js';
 
@@ -21,7 +22,7 @@ export function newGame(path, rng = Math.random) {
     customers: {}, debts: [], nextDebtId: 1, supplier: [], bills: [], nextBillId: 1, billNext: {},
     levelProfit: 0, totalProfit: 0, score: 50,
     stats: { recW: 0, totW: 0, dueAmt: 0, paidOnTime: 0, days: 0, cleanDays: 0, repaid: 0, lost: 0, noLateStreak: 0, pocketPays: 0, capitalTakes: 0, overpayStreak: 0, served: 0, unhappy: 0, billsPaid: 0, billsLateDays: 0 },
-    badges: [], seen: {}, eventLog: {}, mods: {}, history: [],
+    badges: [], seen: {}, eventLog: {}, mods: {}, history: [], goal: null, goalsReached: [],
     phase: 'morning', today: null,
   };
   for (const id of Object.keys(GOODS)) {
@@ -93,6 +94,8 @@ export function migrate(s) {
   s.pocket ??= 0;
   Object.assign(s.stats, { pocketPays: 0, capitalTakes: 0, overpayStreak: 0, served: 0, unhappy: 0, billsPaid: 0, billsLateDays: 0, ...s.stats });
   s.bills ??= [];
+  s.goal ??= null;
+  s.goalsReached ??= [];
   s.nextBillId ??= 1;
   s.billNext ??= {};
   if (s.today && !Array.isArray(s.today.personal)) s.today.personal = [];
@@ -594,6 +597,7 @@ export function endDay(s, rng = Math.random) {
   award('fully_stocked', clean && t.sales >= 5);
   award('never_lost_debt', st.repaid >= 3 && st.lost === 0);
   award('debt_free_week', st.noLateStreak >= 7);
+  t.goalReached = checkGoal(s);
 
   t.tip = pickTip(s);
   t.noteKey = s.path === 'learning' ? (t.event?.note && !s.seen['note_' + t.event.note] ? t.event.note : NOTE_ORDER.find((k) => !s.seen['note_' + k])) : null;

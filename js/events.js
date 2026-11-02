@@ -2,6 +2,7 @@
 // eligible(s) returns a plain context object (saved with the game) or null.
 // choices(s, ctx) returns buttons; run(s, ctx, rng) applies the choice and returns tiTi's outcome text.
 import { GOODS, FAMILY_NEEDS } from './data.js';
+import { delayNote } from './goals.js';
 import {
   CUST, fmt, pick, randInt, buyPrice, refPrice, setMarket, expense, waste, buyStock,
   supplierCreditError, applySale, openDebts, debtPaid, debtLost, changeLoyalty, personal,
@@ -81,7 +82,7 @@ export const EVENTS = [
       return [
         { label: `Pay from my pocket (${fmt(n.amount)})`, sub: `You have ${fmt(s.pocket)} from your own pay.`,
           disabled: s.pocket < n.amount ? `Your pocket has only ${fmt(s.pocket)}. Your daily pay goes in each evening.` : null,
-          run: (st) => { personal(st, n.amount, cap, 'pocket'); return `Paid from your own pay. The business money is safe for restocking.`; } },
+          run: (st) => { personal(st, n.amount, cap, 'pocket'); return `Paid from your own pay. The business money is safe for restocking.${delayNote(st, n.amount)}`; } },
         { label: 'Take it from the business money', sub: `Cash for stock goes down by ${fmt(n.amount)}.`,
           run: (st) => { personal(st, n.amount, cap, 'business'); return `You took ${fmt(n.amount)} from the business money. That money was meant for restocking.`; } },
         { label: 'Not today', sub: 'Explain that it has to wait.',

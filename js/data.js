@@ -76,6 +76,19 @@ export const RULES = {
   wordSpreadRegularsAway: 2,
 };
 
+// Things to save for, at real Nigerian prices (estimates to check). Small ones are reachable in Stage 1.
+export const GOALS = [
+  { id: 'fees', name: 'School fees for one term', price: 40000 },
+  { id: 'phone', name: 'Smartphone', price: 90000 },
+  { id: 'sewing', name: 'Sewing machine', price: 120000 },
+  { id: 'okada', name: 'Motorcycle (okada)', price: 1200000 },
+  { id: 'land', name: 'Plot of land', price: 5000000 },
+  { id: 'keke', name: 'Keke (tricycle)', price: 5000000 },
+  { id: 'car', name: 'Car (used)', price: 9000000 },
+  { id: 'bus', name: 'Bus', price: 25000000 },
+  { id: 'house', name: 'House', price: 35000000 },
+];
+
 // Big bills (tune). first/day count from the level's first day; announced RULES.billNoticeDays ahead.
 export const BILLS = {
   1: { recurring: [{ id: 'stall', label: 'Market stall fee', amount: 3000, every: 7, first: 7 }], oneOff: [] },
@@ -108,6 +121,7 @@ export const BADGES = {
   fully_stocked:   { name: 'Fully stocked',     desc: 'A whole day without running out.' },
   never_lost_debt: { name: 'Never lost a debt', desc: 'Got 3 debts back and lost none.' },
   debt_free_week:  { name: 'Debt-free week',    desc: '7 days in a row with no late debts.' },
+  goal_reached:    { name: 'Goal reached',      desc: 'Saved up and bought your goal.' },
 };
 
 // What customers say after a sale. {due} becomes the day credit is due.

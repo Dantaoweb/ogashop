@@ -4,6 +4,8 @@ import * as UI from './ui.js';
 import { LEVELS } from './data.js';
 import { CUST, fmt } from './core.js';
 import * as Voice from './voice.js';
+import { setGoal, clearGoal } from './goals.js';
+import { GOALS } from './data.js';
 
 const SAVE_KEY = 'ogashop.save.v1';
 const app = document.getElementById('app');
@@ -40,6 +42,7 @@ function view() {
   if (ui.screen === 'settings') return UI.settingsScreen(s, ui);
   if (ui.screen === 'debts') return UI.debtsScreen(s);
   if (ui.screen === 'prices') return UI.pricesScreen(s);
+  if (ui.screen === 'goals') return UI.goalsScreen(s, ui);
   if (ui.screen === 'score') return UI.scoreScreen(s);
   if (ui.screen === 'level2') return UI.level2Screen(s);
   if (ui.screen === 'done') return UI.doneScreen(s);
@@ -98,6 +101,8 @@ const actions = {
   pay: (arg) => { E.setPay(s, s.pay + Number(arg)); },
   'pay-bill': (arg) => { ui.error = E.payBill(s, Number(arg)); },
   topup: () => { E.topUp(s); },
+  'set-goal': (arg) => { const g = GOALS.find((x) => x.id === arg); if (g) { setGoal(s, g.name, g.price); ui.screen = null; ui.error = null; } },
+  'clear-goal': () => { clearGoal(s); ui.screen = null; },
   'restart-level': () => { E.restartLevel(s); ui.buy = {}; },
   price: (arg) => {
     const [item, d] = arg.split(':');
@@ -191,6 +196,15 @@ app.addEventListener('input', (e) => {
 });
 
 app.addEventListener('submit', (e) => {
+  const goalForm = e.target.closest('[data-form="goal"]');
+  if (goalForm) {
+    e.preventDefault();
+    ui.error = setGoal(s, goalForm.elements.name.value, goalForm.elements.price.value);
+    if (!ui.error) ui.screen = null;
+    save();
+    render();
+    return;
+  }
   const form = e.target.closest('[data-form="titi"]');
   if (!form) return;
   e.preventDefault();
