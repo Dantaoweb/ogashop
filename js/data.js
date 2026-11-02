@@ -66,6 +66,7 @@ export const RULES = {
   overpayWarnDays: 3,
   // Sending for stock in the middle of the day: normal price plus transport, at least this many units.
   // Count the change: chance a cash sale is paid with ₦1,000 notes that need change (once a day at most).
+  runSeconds: 20,
   changeChance: 0.35,
   changeSeconds: 15,
   changeNotes: [500, 200, 100, 50],

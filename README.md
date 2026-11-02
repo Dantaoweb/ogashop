@@ -22,6 +22,8 @@ Plain HTML, CSS and JavaScript modules. No build step and no dependencies, so Gi
 | `js/engine.js` | Day loop, customers, debts, score, badges, levels |
 | `js/art.js` | Cartoon customers, goods, table and shop (drawn in code) |
 | `js/voice.js` | Customers speaking, using the phone's own voice |
+| `js/run.js` | Market run mini-game (browser only) |
+| `js/bills.js`, `js/goals.js` | Big bills; savings goals |
 | `js/ui.js` | Screens |
 | `js/main.js` | Saving, screen switching, button handling |
 | `sw.js` | Offline support (caches the game after the first visit) |

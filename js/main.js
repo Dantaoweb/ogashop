@@ -5,6 +5,7 @@ import { LEVELS } from './data.js';
 import { CUST, fmt } from './core.js';
 import * as Voice from './voice.js';
 import { setGoal, clearGoal } from './goals.js';
+import { startRun } from './run.js';
 import { GOALS, RULES } from './data.js';
 
 const SAVE_KEY = 'ogashop.save.v1';
@@ -52,6 +53,7 @@ function view() {
     case 'record': return UI.recordScreen(s, ui);
     case 'event': return UI.eventScreen(s);
     case 'change': return UI.changeScreen(s, ui);
+    case 'run': return UI.runScreen(s);
     case 'evening': return UI.eveningScreen(s);
     default: return UI.morningScreen(s, ui);
   }
@@ -60,6 +62,31 @@ function view() {
 let lastKey = '';
 let lastSaid = '';
 let changeTimer = null;
+let runStop = null;
+
+function stopRun() {
+  runStop?.();
+  runStop = null;
+}
+
+// The market run plays on its own (no re-render until it ends).
+function watchRun() {
+  if (s?.phase !== 'run' || ui.screen) { stopRun(); return; }
+  const field = app.querySelector('#run-field');
+  if (!field || runStop) return;
+  const timeEl = app.querySelector('#run-time');
+  const gotEl = app.querySelector('#run-got');
+  const total = s.today.run.items.reduce((a, it) => a + it.qty, 0);
+  runStop = startRun(field, {
+    items: s.today.run.items,
+    seconds: RULES.runSeconds,
+    onTick: ({ timeLeft, got }) => {
+      timeEl.textContent = `${Math.ceil(timeLeft / 1000)}s`;
+      gotEl.textContent = `${Object.values(got).reduce((a, n) => a + n, 0)} / ${total}`;
+    },
+    onEnd: (got) => { runStop = null; run('run-done', got); },
+  });
+}
 
 // The customer's patience while you count the change (not on the learning path).
 function watchChangeTimer() {
@@ -87,6 +114,7 @@ function render() {
   if (say && said !== lastSaid) sayFrom(say);
   lastSaid = said;
   watchChangeTimer();
+  watchRun();
   if (s?.phase === 'record' && !ui.screen) {
     const chat = app.querySelector('.chat');
     chat?.lastElementChild?.scrollIntoView({ block: 'nearest' });
@@ -162,6 +190,9 @@ const actions = {
   remind: (arg) => { E.remind(s, Number(arg)); },
   'set-path': (arg) => { s.path = arg; },
   'set-voice': (arg) => { Voice.setEnabled(arg); },
+  'run-start': () => { E.startRun(s); },
+  'run-done': (got) => { E.runDone(s, got); },
+  'run-boy': () => { stopRun(); E.runSendBoy(s); },
   'change-tap': (arg) => { E.changeTap(s, Number(arg)); },
   'change-undo': () => { E.changeUndo(s); },
   'change-give': () => { E.changeDone(s, 'give'); },

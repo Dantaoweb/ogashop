@@ -385,6 +385,49 @@ export function serve(s, action) {
   }
 }
 
+// ---------- Market run ----------
+
+// Run to the market yourself: goods at the normal price, no transport fee, but the customer is waiting.
+export function startRun(s) {
+  const v = currentCustomer(s);
+  const r = v?.rush;
+  if (!r || s.cash < r.goods) return;
+  s.today.flash = null;
+  s.today.run = { cid: v.cid, items: r.items };
+  s.phase = 'run';
+}
+
+// got: { item: caught }. You keep what you caught; if it's not all, the customer has gone.
+export function runDone(s, got) {
+  const t = s.today;
+  const run = t.run;
+  if (!run) return;
+  const name = CUST[run.cid].name;
+  const bought = [];
+  let all = true;
+  for (const it of run.items) {
+    const q = Math.min(it.qty, Math.max(0, Math.floor(Number(got?.[it.item]) || 0)));
+    if (q < it.qty) all = false;
+    if (q && !buyStock(s, it.item, q)) bought.push({ item: it.item, qty: q });
+  }
+  t.run = null;
+  s.phase = 'selling';
+  if (all) {
+    t.flash = `You ran to the market and back with ${describeItems(bought)}. No transport fee! ${name} waited.`;
+    return;
+  }
+  changeLoyalty(s, run.cid, -1);
+  unhappy(s);
+  t.outcome = { text: `You came back with ${bought.length ? describeItems(bought) : 'nothing'}, not enough. ${name} got tired of waiting and left.`, tone: 'bad' };
+}
+
+// Changed your mind: send the boy after all (normal ₦300 transport).
+export function runSendBoy(s) {
+  s.today.run = null;
+  s.phase = 'selling';
+  serve(s, 'restock');
+}
+
 // ---------- Count the change ----------
 
 export function changeTap(s, note) {

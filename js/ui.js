@@ -5,6 +5,7 @@ import { currentCustomer, eventView, scoreParts, suggestMessage, billsDueSoon, b
 import { face, good, scene } from './art.js';
 import { goalStatus, daysToGoal, howLong } from './goals.js';
 import * as Voice from './voice.js';
+import { runnerSvg } from './run.js';
 
 export const esc = (v) => String(v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -230,6 +231,16 @@ function rushButton(s, v, cls) {
     <span>${short ? `You have only ${fmt(s.cash)}.` : `${esc(r.items.map((it) => `${it.qty} ${GOODS[it.item].short.toLowerCase()}`).join(' and '))} at normal price + ${fmt(r.fee)} transport. ${v.customer.name} waits.`}</span></button>`;
 }
 
+// "Run to the market yourself": no transport fee, if you catch everything in time.
+function runButton(s, v) {
+  const r = v.rush;
+  const short = s.cash < r.goods;
+  const what = r.items.map((it) => `${it.qty} ${GOODS[it.item].short.toLowerCase()}`).join(' and ');
+  return `<button type="button" class="choice" data-action="run-start" ${short ? 'disabled' : ''}>
+    <b>${icon('person', 16)} Run to the market yourself (${fmt(r.goods)})</b>
+    <span>${short ? `You have only ${fmt(s.cash)}.` : `No transport fee. Catch ${esc(what)} in ${RULES.runSeconds} seconds, or ${esc(v.customer.name)} leaves.`}</span></button>`;
+}
+
 function askedNote(t, missing) {
   const n = Math.max(...missing.map((i) => t.asks[i] || 0));
   return n ? ` ${n} customer${n > 1 ? 's' : ''} already asked today.` : '';
@@ -263,6 +274,7 @@ export function customerScreen(s) {
   } else if (!v.items.length) {
     actions = `<div class="card warn"><b>You have no ${esc(v.missing.map((i) => GOODS[i].short.toLowerCase()).join(' or '))}.</b><span class="small muted">Running out means lost sales.${askedNote(t, v.missing)}</span></div>
       ${rushButton(s, v, 'primary')}
+      ${runButton(s, v)}
       ${btn('serve', 'Sorry, I don\'t have it', 'secondary block', 'sell')}`;
   } else {
     const ch = (action, cls, title, sub) => `<button type="button" class="choice ${cls}" data-action="serve" data-arg="${action}"><b>${title}</b><span>${sub}</span></button>`;
@@ -278,7 +290,7 @@ export function customerScreen(s) {
       parts.push(ch('discount', '', 'Give discount', `${fmt(v.discTotal)}: less profit, happier customer`));
     }
     parts.push(ch('refuse', '', 'Refuse', `${c.she ? 'She' : 'He'} may not come back`));
-    actions = `${v.rush ? rushButton(s, v, '') : ''}<div class="grid2">${parts.join('')}</div>`;
+    actions = `${v.rush ? rushButton(s, v, '') + runButton(s, v) : ''}<div class="grid2">${parts.join('')}</div>`;
   }
 
   const order = v.items.length ? `<div class="between small" style="padding-top:10px;border-top:1px dashed var(--line)">
@@ -367,6 +379,29 @@ export function recordScreen(s, ui) {
         <div class="between"><button type="button" class="link" data-action="record-next">Skip recording</button>
           <span class="small muted">${sale.total > sale.paid ? 'Unrecorded credit can be forgotten.' : 'Unrecorded sales lower your score.'}</span></div>`}
     </div>
+  </main>`;
+}
+
+// ---------- Market run ----------
+
+export function runScreen(s) {
+  const r = s.today.run;
+  const total = r.items.reduce((a, it) => a + it.qty, 0);
+  const what = r.items.map((it) => `${it.qty} ${GOODS[it.item].short.toLowerCase()}`).join(' and ');
+  return `<main class="screen">
+    <header class="top" style="flex-direction:row;align-items:center;justify-content:space-between">
+      <div><div class="kicker">Market run · ${esc(CUST[r.cid].name)} is waiting</div><div class="title display">Catch ${esc(what)}</div></div>
+      <div style="text-align:right"><div class="kicker">Time</div><b id="run-time" style="font-size:22px">${RULES.runSeconds}s</b></div></header>
+    <div class="body" style="gap:10px">
+      <div class="between"><span class="wrap">${r.items.map((it) => `<span class="chip">${good(it.item, 18)}${esc(GOODS[it.item].short)}</span>`).join('')}</span>
+        <b id="run-got">0 / ${total}</b></div>
+      <div id="run-field" class="run-field" role="application" aria-label="Market run. Tap left or right to change lane.">
+        <div class="runner">${runnerSvg()}</div></div>
+      <div class="grid2"><button type="button" id="run-left" class="btn secondary" aria-label="Move left">${icon('back', 22, 2.4)} Left</button>
+        <button type="button" id="run-right" class="btn secondary" aria-label="Move right">Right <span style="display:inline-block;transform:scaleX(-1)">${icon('back', 22, 2.4)}</span></button></div>
+      <span class="small muted">Catch the goods. Dodge puddles, okadas and wheelbarrows: each bump costs 2 seconds.</span>
+    </div>
+    <div class="foot"><button type="button" class="link" data-action="run-boy" style="align-self:center">Send the boy instead (+${fmt(RULES.rushFee)} transport)</button></div>
   </main>`;
 }
 

@@ -188,6 +188,14 @@ The score moves slowly: at most ±6 points a day, so one bad day never wipes out
 - Right change: counts for Happy customers. Too little: the customer is unhappy. Too much: the extra comes off profit. Too slow: the customer is unhappy.
 - "Let tiTi count it" skips with no reward and no penalty. Skill only, no luck.
 
+## 7h. Mini-game: Market run *(tune)*
+
+- Offered only when a customer wants something you've run out of: a third choice next to "Send for more now" and "Sorry".
+- 20 seconds, three lanes. Tap left or right (buttons or either side of the field). Catch the goods you need; puddles, okadas and wheelbarrows each cost 2 seconds. Slower for players who turn down motion on their phone.
+- Catch everything: the goods at normal price and **no ₦300 transport fee**; the customer waited.
+- Time runs out first: you keep (and pay for) what you caught, but the customer has left unhappy.
+- "Send the boy instead" is always there, at the normal transport fee. Skill only, no luck prizes.
+
 ## 8. Open points for review
 
 1. **Prices:** check every buy and sell price with traders in at least two markets.

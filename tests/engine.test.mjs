@@ -286,6 +286,36 @@ test('savings goal: progress, how long, reached in the evening', async () => {
   assert.match(G.delayNote({ goal: { name: 'Car' }, pay: 1000 }, 2500), /3 days further away/);
 });
 
+test('market run: catch everything = no transport fee; not enough = customer leaves', () => {
+  const setup = () => {
+    const s = E.newGame('business', mulberry32(50));
+    s.stock.rice = 0;
+    s.today.queue = [{ cid: 'musa', items: [{ item: 'rice', qty: 2 }], kind: 'cash', frac: 1, disc: 0.1, walkRoll: 0.99, acceptRoll: 0, moodRoll: 0.99, changeRoll: 1 }];
+    s.today.eventAt = 99;
+    E.openShop(s);
+    E.startRun(s);
+    assert.equal(s.phase, 'run');
+    return s;
+  };
+  const win = setup();
+  const cash = win.cash;
+  E.runDone(win, { rice: 3 });
+  assert.equal(win.phase, 'selling');
+  assert.equal(win.stock.rice, 3);
+  assert.equal(win.cash, cash - 6000);
+  assert.equal(win.today.profit, 0, 'no transport fee');
+  assert.match(win.today.flash, /No transport fee/);
+  const lose = setup();
+  E.runDone(lose, { rice: 1 });
+  assert.equal(lose.stock.rice, 1);
+  assert.match(lose.today.outcome.text, /got tired of waiting/);
+  assert.equal(lose.stats.unhappy, 1);
+  const boy = setup();
+  E.runSendBoy(boy);
+  assert.equal(boy.stock.rice, 3);
+  assert.equal(boy.today.profit, -300);
+});
+
 test('count the change: right, short, too much, skip', () => {
   const play = (taps, result = 'give') => {
     const s = E.newGame('business', mulberry32(40));

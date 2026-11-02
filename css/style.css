@@ -205,6 +205,13 @@ h1, h2, h3 { margin: 0; line-height: 1.15; }
 @media (prefers-reduced-motion: reduce) { .scene-customer.enter, .pop { animation: none; } }
 .reaction { display: flex; gap: 12px; align-items: center; background: var(--amber-row); border: 1px solid #F1D98A; border-radius: 16px; padding: 10px 12px; }
 .reaction .say { font-size: 16px; line-height: 1.4; }
+.run-field { position: relative; height: 340px; border-radius: 16px; overflow: hidden; touch-action: manipulation;
+  background: repeating-linear-gradient(90deg, #E9DCC0 0 calc(33.33% - 2px), #D6C39E calc(33.33% - 2px) 33.33%); border: 1px solid #D6C39E; }
+.run-obj, .runner { position: absolute; top: 0; left: 0; will-change: transform; }
+.runner.got { animation: got .3s ease-out; }
+.runner.hit { animation: hit .35s ease-out; }
+@keyframes got { 50% { filter: drop-shadow(0 0 8px #F5B70A); } }
+@keyframes hit { 25% { margin-left: -6px; } 75% { margin-left: 6px; } }
 .note-btn { border: 2px solid #9CC9A8; background: #E7F4EA; color: var(--green); border-radius: 12px; min-height: 64px; font-size: 20px; font-weight: 800; }
 .note-btn:active { transform: scale(.96); }
 .progress > .patience { height: 100%; width: 100%; background: var(--amber); border-radius: 999px; animation: patience linear forwards; }
