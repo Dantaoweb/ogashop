@@ -219,6 +219,45 @@ test('refusing credit: trusted customers count against you, non-payers are a goo
   assert.deepEqual(s.today.creditWalkouts, ['mrade']);
 });
 
+test('bills: announced 3 days ahead, paid on the day, late fees if not', () => {
+  const s = E.newGame('business', mulberry32(20));
+  while (s.day < 4) { s.phase = 'evening'; E.startDay(s, mulberry32(s.day)); }
+  assert.equal(s.bills.length, 1);
+  assert.equal(s.bills[0].due, 7);
+  assert.ok(s.today.notices.some((n) => /stall fee of ₦3,000, due on Day 7/.test(n)));
+  assert.equal(E.cashNeededSoon(s), 3000);
+  while (s.day < 7) E.startDay(s, mulberry32(s.day));
+  s.cash = 1000;
+  s.today.queue = []; E.openShop(s);
+  assert.equal(s.phase, 'evening');
+  assert.equal(s.bills.length, 1, 'not enough cash: still owed');
+  E.startDay(s, mulberry32(8));
+  assert.equal(E.billOwed(s.bills[0]), 3500);
+  assert.equal(s.stats.billsLateDays, 1);
+  s.cash = 5000;
+  assert.equal(E.payBill(s, s.bills[0].id), null);
+  assert.equal(s.cash, 1500);
+  assert.equal(s.bills.length, 0);
+  assert.ok(s.today.expenses.some((e) => /stall fee \(late\)/.test(e.label)));
+});
+
+test('stuck with no stock and no cash: pocket top-up, then restart', () => {
+  const s = E.newGame('business', mulberry32(21));
+  for (const id of Object.keys(s.stock)) s.stock[id] = 0;
+  s.cash = 100;
+  s.pocket = 1000;
+  assert.equal(E.isStuck(s), false);
+  E.topUp(s);
+  assert.equal(s.cash, 1100);
+  assert.equal(s.pocket, 0);
+  s.cash = 100;
+  assert.equal(E.isStuck(s), true);
+  E.restartLevel(s, mulberry32(1));
+  assert.equal(s.cash, 20000);
+  assert.equal(s.stock.rice, 5);
+  assert.equal(s.phase, 'morning');
+});
+
 test('out of stock loses the sale', () => {
   const s = E.newGame('business', mulberry32(5));
   s.stock.rice = 0;

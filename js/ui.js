@@ -1,7 +1,7 @@
 // Screens. Each returns an HTML string; buttons carry data-action (and data-arg) handled in main.js.
-import { GOODS, LEVELS, BADGES, NOTES, EXPLAIN, TYPE_LABEL, CREDITVOICE_URL } from './data.js';
+import { GOODS, LEVELS, BADGES, NOTES, EXPLAIN, TYPE_LABEL, CREDITVOICE_URL, RULES } from './data.js';
 import { CUST, fmt, goodsForLevel, buyPrice, supplierOwed, owedToYou, openDebts, supplierCreditError } from './core.js';
-import { currentCustomer, eventView, scoreParts, suggestMessage } from './engine.js';
+import { currentCustomer, eventView, scoreParts, suggestMessage, billsDueSoon, billOwed, cashNeededSoon, isStuck } from './engine.js';
 import { face, good, scene } from './art.js';
 import * as Voice from './voice.js';
 
@@ -117,6 +117,28 @@ export function startScreen(ui, hasSave, saveInfo) {
 
 // ---------- Morning ----------
 
+function billsCard(s) {
+  const bills = billsDueSoon(s);
+  if (!bills.length) return '';
+  const rows = bills.map((b) => {
+    const days = b.due - s.day;
+    const when = b.due < s.day ? `<span style="color:var(--red);font-weight:700">Late · +${fmt(RULES.billLateFee)} a day</span>`
+      : days === 0 ? '<span style="color:var(--amber-ink);font-weight:700">Due tonight</span>' : `Due Day ${b.due} (in ${days} day${days > 1 ? 's' : ''})`;
+    return `<div class="between"><div><b>${esc(b.label)} · ${fmt(billOwed(b))}</b><div class="small muted">${when}</div></div>
+      ${btn('pay-bill', 'Pay now', 'secondary small', b.id, s.cash < billOwed(b) ? 'disabled' : '')}</div>`;
+  }).join('');
+  return `<div class="card warn"><h3>Bills coming</h3>${rows}<span class="small muted">Bills are paid from the business cash. Keep money aside for them.</span></div>`;
+}
+
+// Warn when buying stock would leave too little for bills due soon.
+function billWarning(s, cost) {
+  const need = cashNeededSoon(s);
+  const left = s.cash - cost;
+  if (!need || left >= need) return '';
+  const next = billsDueSoon(s)[0];
+  return `<span class="small" style="color:var(--red);font-weight:600">After buying you'll have ${fmt(left)}, but the ${esc(next.label.toLowerCase())} (${fmt(billOwed(next))}) is due on Day ${next.due}.</span>`;
+}
+
 export function morningScreen(s, ui) {
   const t = s.today;
   const goods = goodsForLevel(s.level);
@@ -156,8 +178,13 @@ export function morningScreen(s, ui) {
       ${sup ? `<div class="card warn"><div class="between"><div><b>You owe your supplier ${fmt(sup)}</b>
         <div class="small muted">${s.supplier.some((d) => d.late) ? 'Late! Pay to get credit again.' : `Due Day ${Math.min(...s.supplier.map((d) => d.due))}`}</div></div>
         ${btn('pay-supplier', 'Pay', 'secondary small')}</div></div>` : ''}
+      ${billsCard(s)}
+      ${isStuck(s) ? `<div class="card bad"><b>You have no stock and no money to buy any.</b>
+        <span class="small">tiTi: "This happens when all the cash goes to stock and bills come. Next time keep some cash aside."</span>
+        ${btn('restart-level', `Start Level ${s.level} again`, 'primary small block')}</div>` : ''}
       ${explain(s, 'pay')}
-      <div class="card"><div class="between"><div><b>Your daily pay</b><div class="small muted">Moves to your pocket each evening · Pocket: <b style="color:var(--ink)">${fmt(s.pocket)}</b></div></div>
+      <div class="card"><div class="between"><div><b>Your daily pay</b><div class="small muted">Moves to your pocket each evening · Pocket: <b style="color:var(--ink)">${fmt(s.pocket)}</b></div>
+        ${s.pocket > 0 ? `<button type="button" class="link" data-action="topup" style="padding:6px 0;color:var(--green)">Put ${fmt(s.pocket)} into the business</button>` : ''}</div>
         <div class="stepper"><button type="button" class="step" data-action="pay" data-arg="-500" aria-label="Lower your daily pay" ${s.pay <= 0 ? 'disabled' : ''}>−</button>
           <output>${fmt(s.pay)}</output>
           <button type="button" class="step" data-action="pay" data-arg="500" aria-label="Raise your daily pay">+</button></div></div></div>
@@ -172,7 +199,8 @@ export function morningScreen(s, ui) {
           ${btn('buy', s.cash < cost ? `Need ${fmt(cost - s.cash)} more` : 'Pay cash', 'primary small block', 'cash', s.cash < cost ? 'disabled' : '')}
           ${s.level >= 2 ? btn('buy', 'Supplier credit', 'secondary small block', 'credit', credErr ? 'disabled' : '') : ''}
         </div>
-        ${s.level >= 2 && !credErr ? '<span class="small muted">Supplier credit: pay in 3 days.</span>' : ''}</div>`
+        ${s.level >= 2 && !credErr ? '<span class="small muted">Supplier credit: pay in 3 days.</span>' : ''}
+        ${billWarning(s, cost)}</div>`
       : btn('open-shop', 'Open shop', 'primary block')}
     </div>
   </main>`;
@@ -375,6 +403,7 @@ export function eveningScreen(s) {
     ...t.repaid.map((r) => `${CUST[r.cid].name} paid back ${fmt(r.amount)}.`),
     ...t.lostDebts.map((r) => `${CUST[r.cid].name}'s ${fmt(r.amount)} is lost${r.recorded ? '' : ' (it was never recorded)'}.`),
     ...t.wasted.map((w) => `${w.qty} ${GOODS[w.item].short.toLowerCase()} ${w.label}.`),
+    ...(t.billNotes || []),
     ...(t.complaints.length ? [`${t.complaints.length} customer${t.complaints.length > 1 ? 's' : ''} complained about prices you raised during the day.`] : []),
     ...(t.creditWalkouts.length ? [`${t.creditWalkouts.length} trusted customer${t.creditWalkouts.length > 1 ? 's' : ''} left because you refused credit.`] : []),
     ...(t.goodCalls.length ? [`Good call: you refused credit to ${[...new Set(t.goodCalls)].map((c) => CUST[c].name).join(' and ')}.`] : []),

@@ -6,9 +6,10 @@ import {
 import {
   CUST, fmt, clamp, randInt, round50, pick, pickWeighted, goodsForLevel, buyPrice, refPrice, expense, describeItems,
   addStock, buyStock, waste, applySale, debtById, openDebts, owedToYou, debtPaid, debtLost,
-  changeLoyalty, supplierOwed,
+  changeLoyalty, supplierOwed, supplierCreditError,
 } from './core.js';
 import { EVENT_BY_ID, drawEvent, morningEffects } from './events.js';
+import { scheduleBills, payDueBills, chargeLateFees, dropFutureBills, payBill, cashNeededSoon, billsDueSoon, billOwed } from './bills.js';
 import { parseSale, checkSale, detectQuery, suggestMessage } from './parser.js';
 
 export const SAVE_VERSION = 1;
@@ -17,9 +18,9 @@ export function newGame(path, rng = Math.random) {
   const s = {
     v: SAVE_VERSION, path, level: 1, day: 0, levelStartDay: 1, completed: false,
     cash: START_CASH, pay: START_PAY, pocket: 0, stock: {}, cost: {}, prices: {}, batches: [], market: {},
-    customers: {}, debts: [], nextDebtId: 1, supplier: [],
+    customers: {}, debts: [], nextDebtId: 1, supplier: [], bills: [], nextBillId: 1, billNext: {},
     levelProfit: 0, totalProfit: 0, score: 50,
-    stats: { recW: 0, totW: 0, dueAmt: 0, paidOnTime: 0, days: 0, cleanDays: 0, repaid: 0, lost: 0, noLateStreak: 0, pocketPays: 0, capitalTakes: 0, overpayStreak: 0, served: 0, unhappy: 0 },
+    stats: { recW: 0, totW: 0, dueAmt: 0, paidOnTime: 0, days: 0, cleanDays: 0, repaid: 0, lost: 0, noLateStreak: 0, pocketPays: 0, capitalTakes: 0, overpayStreak: 0, served: 0, unhappy: 0, billsPaid: 0, billsLateDays: 0 },
     badges: [], seen: {}, eventLog: {}, mods: {}, history: [],
     phase: 'morning', today: null,
   };
@@ -51,7 +52,7 @@ export function startDay(s, rng = Math.random) {
     queue: [], idx: 0, eventAt: 0, eventDone: false, event: null,
     moneyIn: 0, profit: 0, sales: 0, salesValue: 0, cogs: 0, discounts: 0, recordedSales: 0, creditGiven: 0,
     unrecordedCredit: [], stockouts: [], wasted: [], expenses: [], repaid: [], lostDebts: [],
-    belowCost: null, personal: [], paidSelf: 0, asks: {}, wordSpread: [], flash: null, morningPrices: null, eventRaised: {}, complaints: [], creditWalkouts: [], goodCalls: [], notices: [], pending: null, chat: [], outcome: null, reaction: null,
+    belowCost: null, personal: [], paidSelf: 0, asks: {}, wordSpread: [], flash: null, morningPrices: null, eventRaised: {}, complaints: [], creditWalkouts: [], goodCalls: [], billNotes: [], notices: [], pending: null, chat: [], outcome: null, reaction: null,
   };
   const t = s.today;
   for (const d of s.supplier) {
@@ -66,6 +67,12 @@ export function startDay(s, rng = Math.random) {
     }
   }
   s.supplier = s.supplier.filter((d) => !d.paid);
+  t.notices.push(...chargeLateFees(s), ...payDueBills(s, { lateOnly: true }));
+  const known = new Set(s.bills.map((b) => b.id));
+  scheduleBills(s);
+  for (const b of s.bills.filter((x) => !known.has(x.id))) {
+    t.notices.push(`Coming up: ${b.label.toLowerCase()} of ${fmt(b.amount)}, due on Day ${b.due}. Keep cash aside for it.`);
+  }
   t.notices.push(...morningEffects(s));
   for (const [item, n] of Object.entries(s.lastAsks || {})) {
     if (n >= RULES.asksWarn) t.notices.push(`Yesterday ${n} customers asked for ${GOODS[item].short.toLowerCase()} and you didn't have enough. Buy more today.`);
@@ -84,14 +91,49 @@ export function buy(s, item, qty, credit = false) {
 export function migrate(s) {
   s.pay ??= START_PAY;
   s.pocket ??= 0;
-  Object.assign(s.stats, { pocketPays: 0, capitalTakes: 0, overpayStreak: 0, served: 0, unhappy: 0, ...s.stats });
+  Object.assign(s.stats, { pocketPays: 0, capitalTakes: 0, overpayStreak: 0, served: 0, unhappy: 0, billsPaid: 0, billsLateDays: 0, ...s.stats });
+  s.bills ??= [];
+  s.nextBillId ??= 1;
+  s.billNext ??= {};
   if (s.today && !Array.isArray(s.today.personal)) s.today.personal = [];
   s.today && (s.today.paidSelf ??= 0);
   if (s.today) {
-    Object.assign(s.today, { asks: {}, wordSpread: [], eventRaised: {}, complaints: [], creditWalkouts: [], goodCalls: [], ...s.today });
+    Object.assign(s.today, { asks: {}, wordSpread: [], eventRaised: {}, complaints: [], creditWalkouts: [], goodCalls: [], billNotes: [], ...s.today });
     if (s.phase !== 'morning') s.today.morningPrices ??= { ...s.prices };
   }
   return s;
+}
+
+// Put your own pay back into the business. It's your money, not a loan.
+export function topUp(s) {
+  if (s.pocket <= 0) return;
+  s.cash += s.pocket;
+  s.today.notices.push(`You put ${fmt(s.pocket)} from your pocket into the business.`);
+  s.pocket = 0;
+}
+
+// No stock, and not enough money (or supplier credit) to buy even one item.
+export function isStuck(s) {
+  const goods = goodsForLevel(s.level);
+  if (goods.some((id) => s.stock[id] > 0)) return false;
+  const cheapest = Math.min(...goods.map((id) => buyPrice(s, id)));
+  if (s.cash + s.pocket >= cheapest) return false;
+  return s.level < 2 || !!supplierCreditError(s, cheapest);
+}
+
+// A fresh start for this level: starting cash and stock, bills and supplier debts cleared.
+export function restartLevel(s, rng = Math.random) {
+  s.cash = START_CASH;
+  for (const id of Object.keys(GOODS)) s.stock[id] = 0;
+  s.batches = [];
+  for (const [id, qty] of Object.entries(START_STOCK)) addStock(s, id, qty, GOODS[id].buy);
+  s.levelProfit = 0;
+  s.bills = [];
+  s.billNext = {};
+  s.supplier = [];
+  s.levelStartDay = s.day + 1;
+  startDay(s, rng);
+  s.today.notices.unshift(`A fresh start for Level ${s.level}. Keep cash aside for bills this time.`);
 }
 
 export function setPay(s, amount) {
@@ -522,6 +564,10 @@ export function endDay(s, rng = Math.random) {
     else if (s.day - d.due >= RULES.writeOffAfterLateDays) debtLost(s, d);
   }
 
+  // Bills due today are paid from the day's cash, before your own pay.
+  t.billNotes = payDueBills(s);
+  for (const b of s.bills.filter((x) => x.due === s.day)) t.billNotes.push(`You couldn't pay the ${b.label.toLowerCase()} (${fmt(b.amount)}). From tomorrow it costs ${fmt(RULES.billLateFee)} more each day.`);
+
   // Your daily pay moves from the business cash to your pocket.
   t.paidSelf = Math.max(0, Math.min(s.pay, s.cash));
   s.cash -= t.paidSelf;
@@ -566,7 +612,7 @@ export function scoreParts(s) {
     stock: st.days ? st.cleanDays / st.days : 0.6,
     profit: clamp(s.levelProfit / LEVELS[s.level].goalProfit, 0, 1),
     // Family needs paid from your own pay count for you; taking from the business counts against.
-    money: (st.pocketPays + 1.2) / (st.pocketPays + st.capitalTakes + 2),
+    money: (st.pocketPays + st.billsPaid + 1.2) / (st.pocketPays + st.billsPaid + st.capitalTakes + st.billsLateDays + 2),
     // Complaints, refused trusted customers and refusals count against; good sales for.
     customers: clamp((st.served - 2 * st.unhappy + 4) / (st.served + 5), 0, 1),
   };
@@ -591,6 +637,10 @@ function pickTip(s) {
   if (t.unrecordedCredit.length) return `You didn't record ${name(t.unrecordedCredit[0].cid)}'s credit. Some customers "forget". Record every credit sale.`;
   if (t.lostDebts.some((d) => !d.recorded)) return 'An unrecorded debt was forgotten today. A record is what gets you paid.';
   if (t.belowCost) return `A discount on ${GOODS[t.belowCost.item].short.toLowerCase()} went below your buy price of ${fmt(t.belowCost.cost)}. That sale lost money.`;
+  const unpaid = s.bills.find((b) => b.due <= s.day);
+  if (unpaid) return `The ${unpaid.label.toLowerCase()} is unpaid, and late fees grow every day. Keep cash aside for bills: don't spend it all on stock.`;
+  const soon = billsDueSoon(s).find((b) => b.due > s.day);
+  if (soon && s.cash < cashNeededSoon(s)) return `The ${soon.label.toLowerCase()} (${fmt(billOwed(soon))}) is due on Day ${soon.due} and you have ${fmt(s.cash)}. Buy less stock tomorrow so you can pay it.`;
   if (t.complaints.length) return `${t.complaints.length} customer${t.complaints.length > 1 ? 's' : ''} complained that you raised the price of ${GOODS[t.complaints[0].item].short.toLowerCase()} during the day. Set prices in the morning, and raise them only when your costs go up.`;
   if (t.creditWalkouts.length) return `${CUST[t.creditWalkouts[0]].name} left when you refused credit, but has a good record with you. Trusted customers are worth credit, as long as you record it.`;
   const fromBusiness = t.personal.find((p) => p.from === 'business');
@@ -616,6 +666,7 @@ export function levelUp(s) {
     s.level = 2;
     s.levelProfit = 0;
     s.levelStartDay = s.day + 1;
+    dropFutureBills(s);
     return 'level2';
   }
   s.completed = true;
@@ -626,4 +677,4 @@ export function morningSummary(s) {
   return { cash: s.cash, profit: s.levelProfit, owed: owedToYou(s), supplier: supplierOwed(s) };
 }
 
-export { buyPrice, refPrice, goodsForLevel, owedToYou, openDebts, supplierOwed, suggestMessage, BADGES };
+export { buyPrice, refPrice, goodsForLevel, owedToYou, openDebts, supplierOwed, suggestMessage, BADGES, payBill, cashNeededSoon, billsDueSoon, billOwed };

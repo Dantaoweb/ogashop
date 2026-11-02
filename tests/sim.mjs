@@ -32,6 +32,7 @@ export function play(seed, habits, maxDays = 60) {
         }
       }
       if (habits.remind) for (const d of E.openDebts(s)) if (d.due <= s.day) E.remind(s, d.id);
+      if (E.isStuck(s)) E.restartLevel(s, rng);
       E.openShop(s);
       let guard = 0;
       while (s.phase !== 'evening' && guard++ < 200) {

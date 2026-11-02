@@ -96,6 +96,9 @@ const actions = {
   seen: (arg) => { s.seen[arg] = true; },
 
   pay: (arg) => { E.setPay(s, s.pay + Number(arg)); },
+  'pay-bill': (arg) => { ui.error = E.payBill(s, Number(arg)); },
+  topup: () => { E.topUp(s); },
+  'restart-level': () => { E.restartLevel(s); ui.buy = {}; },
   price: (arg) => {
     const [item, d] = arg.split(':');
     E.setPrice(s, item, s.prices[item] + Number(d));

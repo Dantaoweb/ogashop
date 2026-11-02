@@ -121,8 +121,8 @@ Shown after the evening results, one per day, tied to the day's lesson.
 
 | Level | Goal to move up | Typical days |
 |---|---|---|
-| 1. The Table | ₦30,000 profit this level and a business score of 65 | about 12 days |
-| 2. The Shop | ₦45,000 profit this level, a score of 70, and no debt more than 7 days late | about 13 days |
+| 1. The Table | ₦27,000 profit this level and a business score of 66 | about 12 days |
+| 2. The Shop | ₦32,000 profit this level, a score of 70, and no debt more than 7 days late | about 15 days |
 
 The PRD's example goal (₦100,000 profit and a score of 60) would take more than 30 in-game days from a ₦20,000 table, so the goals above are lower. Check them in playtesting against the 60% target for players finishing Level 1. Day counts come from `node tests/sim.mjs`, which plays 40 games with a bot that records every sale, restocks and reminds. A bot that records only half its sales takes about 19 days for Level 1; one that never records can't finish.
 
@@ -162,6 +162,15 @@ The score moves slowly: at most ±6 points a day, so one bad day never wipes out
 - After a raise, later buyers of that item may complain ("Ah! Rice was ₦2,500 this morning!"): regulars always, others 60% of the time. Bargainers who complain leave. When the raise follows a supplier price rise (event #1), it's milder: 50% and 30%.
 - Each complaint lowers that customer's loyalty and counts against Happy customers.
 - Refusing credit (cash only, and they leave, or Refuse) counts against you only for **trusted** customers: not the never-pays type, and nothing late or lost. Refusing an untrusted customer is shown as a good call and has no penalty.
+
+## 7e. Big bills *(tune)*
+
+- Bills are announced 3 days ahead in the morning, and paid from the business cash (a business cost) on the evening they are due.
+- Level 1: market stall fee ₦3,000 every 7 days (Day 7, 14, …).
+- Level 2: shop rent ₦8,000 every 7 days, plus one-off bills: NEPA bill ₦2,500 (day 4 of the level) and padlock and door repair ₦2,000 (day 10).
+- When buying stock would leave less cash than the bills due in the next 3 days, the buy box warns: "After buying you'll have ₦2,000, but the market stall fee (₦3,000) is due on Day 7." Buying is still allowed.
+- An unpaid bill gets a ₦500 late fee every day until paid, and each late day counts against Money habits. Bills paid count for it.
+- No borrowing in Stage 1 (loans are Level 5). A player short of cash can put their pocket money back into the business. A player with no stock and no money at all can start the level again.
 
 ## 8. Open points for review
 
