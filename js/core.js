@@ -73,6 +73,19 @@ function addProfit(s, amount) {
   s.totalProfit += amount;
 }
 
+// Money taken for yourself or family. Not a business cost: cash goes down, profit doesn't.
+// from: 'pocket' (your own pay) or 'business' (the business money / capital).
+export function personal(s, amount, label, from) {
+  if (from === 'pocket') {
+    s.pocket -= amount;
+    s.stats.pocketPays++;
+  } else {
+    s.cash -= amount;
+    s.stats.capitalTakes++;
+  }
+  s.today.personal.push({ label, amount, from });
+}
+
 export function expense(s, amount, label) {
   s.cash -= amount;
   addProfit(s, -amount);

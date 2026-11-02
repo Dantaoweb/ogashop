@@ -1,10 +1,10 @@
 // The event deck — CONTENT.md section 3.
 // eligible(s) returns a plain context object (saved with the game) or null.
 // choices(s, ctx) returns buttons; run(s, ctx, rng) applies the choice and returns tiTi's outcome text.
-import { GOODS } from './data.js';
+import { GOODS, FAMILY_NEEDS } from './data.js';
 import {
   CUST, fmt, pick, randInt, buyPrice, refPrice, setMarket, expense, waste, buyStock,
-  supplierCreditError, applySale, openDebts, debtPaid, debtLost, changeLoyalty,
+  supplierCreditError, applySale, openDebts, debtPaid, debtLost, changeLoyalty, personal,
 } from './core.js';
 
 const remaining = (s) => s.today.queue.length - s.today.idx;
@@ -64,16 +64,30 @@ export const EVENTS = [
     note: 'margin',
   },
   {
-    id: 'sister', levels: [1], once: true, icon: 'person',
-    eligible: (s) => (s.today.moneyIn >= 3000 ? {} : null),
-    title: () => 'Your sister needs money',
-    text: () => 'Your sister asks for ₦3,000 from today\'s sales for school fees.',
-    choices: () => [
-      { label: 'Give it from the business money', sub: 'Cash goes down by ₦3,000.',
-        run: (st) => { st.cash -= 3000; st.today.personal = true; return 'You gave ₦3,000 from the till. That money was meant for restocking.'; } },
-      { label: 'Ask her to wait for my pay day', sub: 'Pay yourself a fixed amount from profit.',
-        run: () => 'Good. Paying yourself a fixed amount keeps business money and family money apart.' },
-    ],
+    id: 'family', levels: [1, 2], icon: 'person',
+    // The first one is always the sister's school fees; after that, any family need.
+    eligible: (s) => {
+      // Not on Day 1: the player's pocket only fills after the first evening.
+      if (s.day < 2 || s.today.moneyIn < 1000) return null;
+      const seen = s.eventLog.family;
+      return { need: seen ? Math.floor((s.day * 7 + s.today.idx) % FAMILY_NEEDS.length) : 0 };
+    },
+    title: (s, ctx) => `${FAMILY_NEEDS[ctx.need].who} needs money`,
+    text: (s, ctx) => { const n = FAMILY_NEEDS[ctx.need]; return `${n.who} asks you for ${fmt(n.amount)} for ${n.what}.`; },
+    choices: (s, ctx) => {
+      const n = FAMILY_NEEDS[ctx.need];
+      const label = `${n.who.replace('Your ', '')}: ${n.what}`;
+      const cap = label[0].toUpperCase() + label.slice(1);
+      return [
+        { label: `Pay from my pocket (${fmt(n.amount)})`, sub: `You have ${fmt(s.pocket)} from your own pay.`,
+          disabled: s.pocket < n.amount ? `Your pocket has only ${fmt(s.pocket)}. Your daily pay goes in each evening.` : null,
+          run: (st) => { personal(st, n.amount, cap, 'pocket'); return `Paid from your own pay. The business money is safe for restocking.`; } },
+        { label: 'Take it from the business money', sub: `Cash for stock goes down by ${fmt(n.amount)}.`,
+          run: (st) => { personal(st, n.amount, cap, 'business'); return `You took ${fmt(n.amount)} from the business money. That money was meant for restocking.`; } },
+        { label: 'Not today', sub: 'Explain that it has to wait.',
+          run: () => 'OK. Family needs are real: that is why you pay yourself a fixed amount every day.' },
+      ];
+    },
     note: 'personal',
   },
   {
@@ -297,7 +311,7 @@ export const EVENTS = [
 export const EVENT_BY_ID = Object.fromEntries(EVENTS.map((e) => [e.id, e]));
 
 // Always shown once in Level 1, when they become possible.
-export const MUST_SEE = { 1: ['sister', 'paid_already'] };
+export const MUST_SEE = { 1: ['family', 'paid_already'] };
 
 export function drawEvent(s, rng) {
   const recent = (id) => s.eventLog[id] && s.day - s.eventLog[id] < 3;

@@ -63,7 +63,7 @@ One event per day, drawn from the deck for the player's level. No event repeats 
 | # | Event | Level | What happens | Choices | Lesson | CreditVoice link |
 |---|---|---|---|---|---|---|
 | 1 | **Rice price goes up** | 1 | Supplier: rice now ₦2,300, up from ₦2,000. | Raise price to ₦2,800 (some bargainers leave) · Keep ₦2,500 (profit per bucket drops to ₦200) | Know your margin; prices must follow costs. | Profit report |
-| 2 | **Sister needs money** | 1 | Your sister asks for ₦3,000 from today's sales for school fees. | Give from the business money · Ask her to wait for your pay day (tiTi explains paying yourself a fixed amount) | Keep business money and personal money separate. | Expenses vs sales |
+| 2 | **Family needs money** (repeats) | 1–2 | From Day 2. First time: your sister needs ₦3,000 for school fees. Later: mother's hospital bill, brother's transport, aunty's naming ceremony, rent, a church or mosque contribution (₦1,000–₦3,000). | Pay from my pocket · Take it from the business money · Not today | Keep business money and personal money separate: pay yourself a fixed amount and spend from that. | Expenses vs personal money |
 | 3 | **Heavy rain** | 1 | Rain all afternoon. Fewer customers. | Cover the garri (costs ₦300 for nylon) · Leave it (2 cups get damp and can't be sold) | Small costs protect stock. | Stock |
 | 4 | **Hot day** | 1 | Very hot. Twice the usual demand for sachet water. | Buy 5 more bags now (₦1,750) · Sell what you have | Stock to demand; running out loses sales. | Low-stock alert |
 | 5 | **Market levy** | 1 | Council collector asks for the ₦500 daily levy. | Pay ₦500 · Argue (lose time: one customer leaves) | Running costs reduce profit; record expenses too. | Expenses |
@@ -130,18 +130,26 @@ The PRD's example goal (₦100,000 profit and a score of 60) would take more tha
 
 | Habit | Weight | How it is measured |
 |---|---|---|
-| Recording sales | 35% | Share of sales recorded with tiTi (credit sales count double) |
-| Debt recovery | 25% | Share of money owed that was paid back on time |
-| Stock management | 20% | Days with no stockouts and no thrown-away goods |
+| Recording sales | 30% | Share of sales recorded with tiTi (credit sales count double) |
+| Debt recovery | 22% | Share of money owed that was paid back on time |
+| Stock management | 18% | Days with no stockouts and no thrown-away goods |
 | Profit | 20% | Profit compared with the level's target |
+| Money habits | 10% | Family needs paid from your pocket count for you; taking from the business money counts against |
 
 The score moves slowly: at most ±6 points a day, so one bad day never wipes out good habits.
 
 ---
 
+## 7b. Daily pay *(tune)*
+
+- The player sets a daily pay in the morning (starts at ₦1,000, steps of ₦500). Each evening it moves from the business cash to **Your pocket**.
+- Family needs can be paid from the pocket. Taking from the business money lowers the Money habits score; paying from the pocket raises it.
+- If the daily pay is more than the day's profit for 3 days running, tiTi warns that the business is paying out more than it earns.
+- The evening **Money out** list shows business costs (lower profit) apart from personal money and pay (lower cash only).
+
 ## 8. Open points for review
 
 1. **Prices:** check every buy and sell price with traders in at least two markets.
 2. **Names:** the customer names come from different regions on purpose; check that they feel familiar and respectful.
-3. **Sister event (#2):** Stage 1 has no "pay yourself" setting; the second choice only explains the idea. Decide whether to add a real daily pay setting later.
+3. **Family needs (#2):** resolved: the player sets a daily pay and pays family needs from their pocket (section 7b).
 4. **Generator (#10):** resolved for Stage 1: the player pays a neighbour to cool drinks, so owning a generator stays a Level 5 asset.

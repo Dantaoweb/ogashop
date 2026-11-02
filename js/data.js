@@ -6,6 +6,8 @@ export const CREDITVOICE_URL = 'https://creditvoiceai.com/?utm_source=ogashop&ut
 export const START_CASH = 20000;
 export const START_STOCK = { rice: 5, garri: 10, water: 4, recharge: 10 };
 export const SUPPLIER_CREDIT_LIMIT = 15000;
+export const START_PAY = 1000; // daily pay the player gives themselves; they can change it
+export const PAY_STEP = 500;
 export const SUPPLIER_CREDIT_DAYS = 3;
 
 export const GOODS = {
@@ -56,7 +58,20 @@ export const RULES = {
   acceptCashOnly: { regular: 0.7, credit: 0.4, neverpays: 0.25, big: 0.5, bargainer: 0.7 },
   acceptFullPrice: 0.5,
   scoreMaxStep: 6,
+  // Business score weights (sum to 1). CONTENT.md section 7.
+  weights: { recording: 0.30, debts: 0.22, stock: 0.18, profit: 0.20, money: 0.10 },
+  overpayWarnDays: 3,
 };
+
+// Family needs that come up during the day. Paid from your pocket (good) or the business money (capital).
+export const FAMILY_NEEDS = [
+  { who: 'Your sister', what: 'school fees', amount: 3000 },
+  { who: 'Your mother', what: 'hospital bill', amount: 2500 },
+  { who: 'Your brother', what: 'transport to Lagos', amount: 1500 },
+  { who: 'Your aunty', what: 'naming ceremony', amount: 2000 },
+  { who: 'Your landlord', what: 'part of the house rent', amount: 3000 },
+  { who: 'Your church or mosque', what: 'a contribution', amount: 1000 },
+];
 
 export const LEVELS = {
   1: { name: 'The Table', goalProfit: 30000, goalScore: 65,
@@ -106,5 +121,7 @@ export const EXPLAIN = {
   record: 'After every sale, tell me what happened in a short message. I\'ll keep the record. A sale you don\'t record is easy to forget.',
   discount: 'A discount means less profit on that sale. Check your buy price first: never sell below what you paid.',
   event: 'Things happen in business. There is no wrong answer here, but each choice has a cost.',
+  pay: 'Set your daily pay: the amount you take for yourself at the end of each day. Family needs come out of your pocket, not the business money.',
+  personal: 'Personal money is not a business cost. It makes your cash go down, but not your profit. That\'s why it\'s listed apart from expenses.',
   level2: 'You have a shop now! New goods, supplier credit, and reminders for people who owe you. Bread goes bad after 3 days, so buy it in small amounts.',
 };

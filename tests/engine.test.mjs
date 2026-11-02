@@ -77,6 +77,52 @@ test('every sale gets a customer reaction', () => {
   }
 });
 
+test('family needs: pocket counts for you, business money against', () => {
+  const pocket = E.newGame('business', mulberry32(9));
+  const capital = E.newGame('business', mulberry32(9));
+  pocket.stats.pocketPays = 3;
+  capital.stats.capitalTakes = 3;
+  assert.ok(E.scoreParts(pocket).money > 0.8);
+  assert.ok(E.scoreParts(capital).money < 0.3);
+});
+
+test('daily pay moves to the pocket in the evening; family event records the money', () => {
+  const s = E.newGame('business', mulberry32(10));
+  s.today.queue = [{ cid: 'musa', items: [{ item: 'garri', qty: 2 }], kind: 'cash', frac: 1, disc: 0.1, walkRoll: 0.99, acceptRoll: 0 }];
+  s.today.eventAt = 99;
+  E.openShop(s);
+  E.serve(s, 'sell');
+  E.skipRecord(s);
+  assert.equal(s.phase, 'evening');
+  assert.equal(s.pocket, 1000);
+  assert.equal(s.today.paidSelf, 1000);
+  // A family need paid from the pocket is listed and doesn't touch business cash or profit.
+  s.pocket = 5000;
+  const cash = s.cash;
+  const profit = s.today.profit;
+  s.today.event = { id: 'family', ctx: { need: 0 }, outcome: null };
+  E.chooseEvent(s, 0);
+  assert.equal(s.pocket, 2000);
+  assert.equal(s.cash, cash);
+  assert.equal(s.today.profit, profit);
+  assert.deepEqual(s.today.personal[0], { label: 'Sister: school fees', amount: 3000, from: 'pocket' });
+  E.chooseEvent(s, 1); // already answered: ignored
+  s.today.event = { id: 'family', ctx: { need: 1 }, outcome: null };
+  E.chooseEvent(s, 1);
+  assert.equal(s.cash, cash - 2500);
+  assert.equal(s.today.personal[1].from, 'business');
+});
+
+test('old saves get daily pay fields', () => {
+  const s = E.newGame('business', mulberry32(11));
+  delete s.pay; delete s.pocket; delete s.stats.pocketPays; s.today.personal = false;
+  E.migrate(s);
+  assert.equal(s.pay, 1000);
+  assert.equal(s.pocket, 0);
+  assert.equal(s.stats.pocketPays, 0);
+  assert.deepEqual(s.today.personal, []);
+});
+
 test('out of stock loses the sale', () => {
   const s = E.newGame('business', mulberry32(5));
   s.stock.rice = 0;

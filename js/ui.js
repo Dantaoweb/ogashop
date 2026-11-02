@@ -146,6 +146,11 @@ export function morningScreen(s, ui) {
       ${sup ? `<div class="card warn"><div class="between"><div><b>You owe your supplier ${fmt(sup)}</b>
         <div class="small muted">${s.supplier.some((d) => d.late) ? 'Late! Pay to get credit again.' : `Due Day ${Math.min(...s.supplier.map((d) => d.due))}`}</div></div>
         ${btn('pay-supplier', 'Pay', 'secondary small')}</div></div>` : ''}
+      ${explain(s, 'pay')}
+      <div class="card"><div class="between"><div><b>Your daily pay</b><div class="small muted">Moves to your pocket each evening · Pocket: <b style="color:var(--ink)">${fmt(s.pocket)}</b></div></div>
+        <div class="stepper"><button type="button" class="step" data-action="pay" data-arg="-500" aria-label="Lower your daily pay" ${s.pay <= 0 ? 'disabled' : ''}>−</button>
+          <output>${fmt(s.pay)}</output>
+          <button type="button" class="step" data-action="pay" data-arg="500" aria-label="Raise your daily pay">+</button></div></div></div>
       <div class="between"><h2 style="font-size:18px">Your stock</h2><span class="small muted">Set prices, buy stock</span></div>
       <div class="list">${rows}</div>
       ${ui.error ? `<div class="toast" role="alert">${esc(ui.error)}</div>` : ''}
@@ -316,6 +321,21 @@ function stars(n) {
     `<svg width="28" height="28" viewBox="0 0 24 24" fill="${i < n ? '#F5B70A' : 'none'}" stroke="${i < n ? '#F5B70A' : '#6B7B71'}" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true">${PATHS.star}</svg>`).join('')}</div>`;
 }
 
+// Everything that left the business today: costs (lower profit) and personal money (lower cash only).
+function moneyOut(s) {
+  const t = s.today;
+  const row = (label, amount, tag, color) => `<div class="between small"><span>${esc(label)}${tag ? ` <span class="tag ${color}">${tag}</span>` : ''}</span><b>${fmt(amount)}</b></div>`;
+  const rows = [
+    ...t.expenses.map((e) => row(e.label, e.amount, 'Business cost', 'amber')),
+    ...t.personal.map((p) => row(p.label, p.amount, p.from === 'pocket' ? 'From your pocket' : 'From business money', p.from === 'pocket' ? 'green' : 'red')),
+    ...(t.paidSelf ? [row('Your daily pay', t.paidSelf, 'To your pocket', 'green')] : []),
+  ];
+  if (!rows.length) return '';
+  return `<div class="card"><h3>Money out</h3>${rows.join('')}
+    <span class="small muted">Business costs lower your profit. Personal money and your pay only lower your cash. Pocket now: <b style="color:var(--ink)">${fmt(s.pocket)}</b></span></div>
+    ${t.personal.length ? explain(s, 'personal') : ''}`;
+}
+
 export function eveningScreen(s) {
   const t = s.today;
   const debts = openDebts(s);
@@ -326,7 +346,6 @@ export function eveningScreen(s) {
     ...t.repaid.map((r) => `${CUST[r.cid].name} paid back ${fmt(r.amount)}.`),
     ...t.lostDebts.map((r) => `${CUST[r.cid].name}'s ${fmt(r.amount)} is lost${r.recorded ? '' : ' (it was never recorded)'}.`),
     ...t.wasted.map((w) => `${w.qty} ${GOODS[w.item].short.toLowerCase()} ${w.label}.`),
-    ...t.expenses.map((e) => `${e.label}: ${fmt(e.amount)}.`),
     ...(t.discounts ? [`Discounts given today: ${fmt(t.discounts)}. That came straight off your profit.`] : []),
   ];
   return `<main class="screen">
@@ -339,6 +358,7 @@ export function eveningScreen(s) {
         <div class="card soft"><span class="small" style="font-weight:600;color:var(--green)">Profit</span><b class="display" style="font-size:26px;color:${t.profit >= 0 ? 'var(--green)' : 'var(--red)'}">${fmt(t.profit)}</b></div>
       </div>
       ${t.salesValue > 0 ? `<p class="small" style="margin:0;color:var(--ink-2)">You sold goods worth ${fmt(t.salesValue)}, but they cost you ${fmt(t.cogs)}. Busy is not the same as profitable.${t.creditGiven ? ` ${fmt(t.creditGiven)} of today's sales were on credit: profit, but not cash yet.` : ''}</p>` : ''}
+      ${moneyOut(s)}
       ${happened.length ? `<div class="card"><h3>Today</h3>${happened.map((h) => `<span class="small">${esc(h)}</span>`).join('')}</div>` : ''}
       <div class="card"><h3>Who owes you</h3>${debtRows || '<span class="small muted">Nobody owes you money.</span>'}</div>
       <div class="card"><h3>Stock left</h3><div class="wrap">${goodsForLevel(s.level).map((id) => stockChip(s, id, 0)).join('')}</div></div>
@@ -372,7 +392,7 @@ export function scoreScreen(s) {
         <div style="display:flex;flex-direction:column;gap:6px"><b style="color:${delta >= 0 ? 'var(--green)' : 'var(--red)'}">${delta >= 0 ? '+' : ''}${delta} today</b>
           <span class="small" style="color:var(--ink-2)">Your score comes from good habits, not just cash.</span></div>
       </div>
-      <div class="card">${bar('Recording sales', p.recording)}${bar('Debt recovery', p.debts)}${bar('Stock management', p.stock)}${bar('Profit', p.profit)}</div>
+      <div class="card">${bar('Recording sales', p.recording)}${bar('Debt recovery', p.debts)}${bar('Stock management', p.stock)}${bar('Profit', p.profit)}${bar('Money habits', p.money)}</div>
       <div class="card strong"><h3>${s.completed ? 'Free play' : `Goal to finish Level ${s.level}`}</h3>
         ${goal('Profit this level', Math.max(0, s.levelProfit), L.goalProfit, `${fmt(s.levelProfit)} / ${fmt(L.goalProfit)}`)}
         ${goal('Business score', s.score, L.goalScore, `${s.score} / ${L.goalScore}`)}

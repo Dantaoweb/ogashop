@@ -16,7 +16,7 @@ function load() {
   try {
     const raw = localStorage.getItem(SAVE_KEY);
     const data = raw && JSON.parse(raw);
-    return data && data.v === E.SAVE_VERSION ? data : null;
+    return data && data.v === E.SAVE_VERSION ? E.migrate(data) : null;
   } catch {
     return null;
   }
@@ -82,6 +82,7 @@ const actions = {
   close: () => { ui.screen = null; },
   seen: (arg) => { s.seen[arg] = true; },
 
+  pay: (arg) => { E.setPay(s, s.pay + Number(arg)); },
   price: (arg) => {
     const [item, d] = arg.split(':');
     E.setPrice(s, item, s.prices[item] + Number(d));

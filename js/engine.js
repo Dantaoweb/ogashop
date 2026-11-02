@@ -1,7 +1,7 @@
 // The game rules: one day = morning → customers (+ one event) → evening → score.
 // Pure state changes, no DOM, so it can be tested in Node.
 import {
-  GOODS, START_CASH, START_STOCK, RULES, LEVELS, BADGES, NOTE_ORDER, CUSTOMERS, REACTIONS,
+  GOODS, START_CASH, START_STOCK, START_PAY, PAY_STEP, RULES, LEVELS, BADGES, NOTE_ORDER, CUSTOMERS, REACTIONS,
 } from './data.js';
 import {
   CUST, fmt, clamp, randInt, round50, pick, pickWeighted, goodsForLevel, buyPrice, refPrice,
@@ -16,10 +16,10 @@ export const SAVE_VERSION = 1;
 export function newGame(path, rng = Math.random) {
   const s = {
     v: SAVE_VERSION, path, level: 1, day: 0, levelStartDay: 1, completed: false,
-    cash: START_CASH, stock: {}, cost: {}, prices: {}, batches: [], market: {},
+    cash: START_CASH, pay: START_PAY, pocket: 0, stock: {}, cost: {}, prices: {}, batches: [], market: {},
     customers: {}, debts: [], nextDebtId: 1, supplier: [],
     levelProfit: 0, totalProfit: 0, score: 50,
-    stats: { recW: 0, totW: 0, dueAmt: 0, paidOnTime: 0, days: 0, cleanDays: 0, repaid: 0, lost: 0, noLateStreak: 0 },
+    stats: { recW: 0, totW: 0, dueAmt: 0, paidOnTime: 0, days: 0, cleanDays: 0, repaid: 0, lost: 0, noLateStreak: 0, pocketPays: 0, capitalTakes: 0, overpayStreak: 0 },
     badges: [], seen: {}, eventLog: {}, mods: {}, history: [],
     phase: 'morning', today: null,
   };
@@ -51,7 +51,7 @@ export function startDay(s, rng = Math.random) {
     queue: [], idx: 0, eventAt: 0, eventDone: false, event: null,
     moneyIn: 0, profit: 0, sales: 0, salesValue: 0, cogs: 0, discounts: 0, recordedSales: 0, creditGiven: 0,
     unrecordedCredit: [], stockouts: [], wasted: [], expenses: [], repaid: [], lostDebts: [],
-    belowCost: null, personal: false, notices: [], pending: null, chat: [], outcome: null, reaction: null,
+    belowCost: null, personal: [], paidSelf: 0, notices: [], pending: null, chat: [], outcome: null, reaction: null,
   };
   const t = s.today;
   for (const d of s.supplier) {
@@ -74,6 +74,20 @@ export function startDay(s, rng = Math.random) {
 
 export function buy(s, item, qty, credit = false) {
   return buyStock(s, item, qty, { credit });
+}
+
+// Saves from before daily pay existed get the new fields.
+export function migrate(s) {
+  s.pay ??= START_PAY;
+  s.pocket ??= 0;
+  Object.assign(s.stats, { pocketPays: 0, capitalTakes: 0, overpayStreak: 0, ...s.stats });
+  if (s.today && !Array.isArray(s.today.personal)) s.today.personal = [];
+  s.today && (s.today.paidSelf ??= 0);
+  return s;
+}
+
+export function setPay(s, amount) {
+  s.pay = clamp(Math.round(amount / PAY_STEP) * PAY_STEP, 0, 20000);
 }
 
 export function setPrice(s, item, price) {
@@ -354,6 +368,7 @@ export function eventView(s) {
 
 export function chooseEvent(s, index, rng = Math.random) {
   const ev = s.today.event;
+  if (!ev || ev.outcome) return; // already answered (e.g. a double tap)
   const choice = EVENT_BY_ID[ev.id].choices(s, ev.ctx)[index];
   if (!choice || choice.disabled) return;
   ev.outcome = choice.run(s, ev.ctx, rng);
@@ -388,7 +403,13 @@ export function endDay(s, rng = Math.random) {
     else if (s.day - d.due >= RULES.writeOffAfterLateDays) debtLost(s, d);
   }
 
+  // Your daily pay moves from the business cash to your pocket.
+  t.paidSelf = Math.max(0, Math.min(s.pay, s.cash));
+  s.cash -= t.paidSelf;
+  s.pocket += t.paidSelf;
+
   const st = s.stats;
+  st.overpayStreak = s.pay > 0 && s.pay > t.profit ? st.overpayStreak + 1 : 0;
   st.days++;
   const clean = t.stockouts.length === 0 && t.wasted.length === 0;
   if (clean) st.cleanDays++;
@@ -424,12 +445,15 @@ export function scoreParts(s) {
     debts: st.dueAmt ? Math.min(1, st.paidOnTime / st.dueAmt) : 0.6,
     stock: st.days ? st.cleanDays / st.days : 0.6,
     profit: clamp(s.levelProfit / LEVELS[s.level].goalProfit, 0, 1),
+    // Family needs paid from your own pay count for you; taking from the business counts against.
+    money: (st.pocketPays + 1.2) / (st.pocketPays + st.capitalTakes + 2),
   };
 }
 
 function targetScore(s) {
   const p = scoreParts(s);
-  return Math.round(100 * (0.35 * p.recording + 0.25 * p.debts + 0.2 * p.stock + 0.2 * p.profit));
+  const w = RULES.weights;
+  return Math.round(100 * Object.keys(w).reduce((a, k) => a + w[k] * p[k], 0));
 }
 
 export function levelGoalMet(s) {
@@ -445,13 +469,16 @@ function pickTip(s) {
   if (t.unrecordedCredit.length) return `You didn't record ${name(t.unrecordedCredit[0].cid)}'s credit. Some customers "forget". Record every credit sale.`;
   if (t.lostDebts.some((d) => !d.recorded)) return 'An unrecorded debt was forgotten today. A record is what gets you paid.';
   if (t.belowCost) return `A discount on ${GOODS[t.belowCost.item].short.toLowerCase()} went below your buy price of ${fmt(t.belowCost.cost)}. That sale lost money.`;
-  if (t.personal) return 'Business money paid for family needs today. Pay yourself a fixed amount instead.';
+  const fromBusiness = t.personal.find((p) => p.from === 'business');
+  if (fromBusiness) return `You took ${fmt(fromBusiness.amount)} from the business money for family needs. Pay from your pocket instead: that is what your daily pay is for.`;
+  if (s.stats.overpayStreak >= RULES.overpayWarnDays) return `You're paying yourself more than the business earns. Lower your daily pay, or your cash for stock will run down.`;
   if (t.stockouts.length) return `${GOODS[t.stockouts[0]].name} ran out. Running out means lost sales. Buy a little more tomorrow.`;
   const thrown = t.wasted.find((w) => w.label === 'went bad');
   if (thrown) return `You threw away ${thrown.qty} ${GOODS[thrown.item].unit === 'loaf' ? 'loaves' : GOODS[thrown.item].short.toLowerCase()}. Buy short-life goods in smaller amounts.`;
   const dueTomorrow = openDebts(s, { recordedOnly: true }).find((d) => d.due === s.day + 1);
   if (dueTomorrow && s.level >= 2) return `${name(dueTomorrow.cid)}'s debt is due tomorrow. Send a polite reminder in the morning.`;
   if (t.moneyIn > 0 && t.profit < t.moneyIn * 0.15) return 'Busy is not the same as profitable. Most of today\'s money only paid for your stock.';
+  if (t.personal.some((p) => p.from === 'pocket')) return 'Good: family needs came from your own pay, not the business money.';
   return 'Clean day! Every sale recorded and nothing ran out.';
 }
 
