@@ -1,7 +1,7 @@
 // The game rules: one day = morning → customers (+ one event) → evening → score.
 // Pure state changes, no DOM, so it can be tested in Node.
 import {
-  GOODS, START_CASH, START_STOCK, START_PAY, PAY_STEP, PAYMENTS, RULES, LEVELS, BADGES, NOTE_ORDER, CUSTOMERS, REACTIONS,
+  GOODS, START_CASH, START_STOCK, START_PAY, PAY_STEP, PAYMENTS, HOSPITAL, RULES, LEVELS, BADGES, NOTE_ORDER, CUSTOMERS, REACTIONS,
 } from './data.js';
 import {
   CUST, fmt, clamp, randInt, round50, pick, pickWeighted, goodsForLevel, buyPrice, refPrice, expense, describeItems,
@@ -484,21 +484,30 @@ export function fakeDone(s, pick) {
 // ---------- Market run ----------
 
 // Run to the market yourself: goods at the normal price, no transport fee, but the customer is waiting.
+export const isInjured = (s) => (s.injuredUntil ?? 0) >= s.day;
+
 export function startRun(s) {
   const v = currentCustomer(s);
   const r = v?.rush;
-  if (!r || s.cash < r.goods) return;
+  if (!r || s.cash < r.goods || isInjured(s)) return;
   s.today.flash = null;
   s.today.run = { cid: v.cid, items: r.items };
   s.phase = 'run';
 }
 
 // got: { item: caught }. You keep what you caught; if it's not all, the customer has gone.
-export function runDone(s, got) {
+export function runDone(s, got, { injured = false, by = 'bicycle' } = {}) {
   const t = s.today;
   const run = t.run;
   if (!run) return;
   const name = CUST[run.cid].name;
+  if (injured) {
+    // The goods drop, the customer can't wait, and you need to get to hospital.
+    t.run = null;
+    t.injury = { cid: run.cid, by: by === 'okada' ? 'An okada' : 'A bicycle' };
+    s.phase = 'injury';
+    return;
+  }
   const bought = [];
   let all = true;
   for (const it of run.items) {
@@ -515,6 +524,39 @@ export function runDone(s, got) {
   changeLoyalty(s, run.cid, -1);
   unhappy(s);
   t.outcome = { text: `You came back with ${bought.length ? describeItems(bought) : 'nothing'}, not enough. ${name} got tired of waiting and left.`, tone: 'bad' };
+}
+
+// How the hospital bill and the ride would be paid: your pocket first (it's personal), then the
+// business cash, and anything left becomes a hospital debt.
+export function hospitalSplit(s, rideId) {
+  const ride = HOSPITAL.rides.find((r) => r.id === rideId);
+  if (!ride) return null;
+  const total = ride.cost + HOSPITAL.bill;
+  const pocket = Math.min(s.pocket, total);
+  const business = Math.min(Math.max(0, s.cash), total - pocket);
+  return { ride, total, pocket, business, debt: total - pocket - business };
+}
+
+export function chooseHospital(s, rideId) {
+  const t = s.today;
+  const inj = t.injury;
+  const sp = hospitalSplit(s, rideId);
+  if (!inj || !sp) return;
+  s.pocket -= sp.pocket;
+  s.cash -= sp.business;
+  const label = `Hospital: ${sp.ride.name.toLowerCase()} and bill`;
+  if (sp.pocket) t.personal.push({ label, amount: sp.pocket, from: 'pocket' });
+  if (sp.business) t.personal.push({ label, amount: sp.business, from: 'business' });
+  if (sp.debt) s.bills.push({ id: s.nextBillId++, kind: 'hospital', label: 'Hospital debt', amount: sp.debt, due: s.day + HOSPITAL.debtDays, late: 0 });
+  s.injuredUntil = s.day + sp.ride.heal - 1;
+  t.injured = { ride: sp.ride.name, heal: sp.ride.heal, ...sp };
+  t.injury = null;
+  s.phase = 'selling';
+  const name = CUST[inj.cid].name;
+  t.outcome = {
+    text: `You went to hospital by ${sp.ride.name.toLowerCase()} (${fmt(sp.total)} with the bill). ${name} could not wait and left. Your leg heals in ${sp.ride.heal} days.${sp.debt ? ` You couldn't pay ${fmt(sp.debt)}: it's now a hospital debt, due on Day ${s.day + HOSPITAL.debtDays}.` : ''}`,
+    tone: 'bad',
+  };
 }
 
 // Changed your mind: send the boy after all (normal ₦300 transport).
@@ -876,6 +918,7 @@ function pickTip(s) {
   if (t.unrecordedCredit.length) return `You didn't record ${name(t.unrecordedCredit[0].cid)}'s credit. Some customers "forget". Record every credit sale.`;
   if (t.lostDebts.some((d) => !d.recorded)) return 'An unrecorded debt was forgotten today. A record is what gets you paid.';
   if (t.belowCost) return `A discount on ${GOODS[t.belowCost.item].short.toLowerCase()} went below your buy price of ${fmt(t.belowCost.cost)}. That sale lost money.`;
+  if (t.injured) return `Running to the market yourself saves ₦${RULES.rushFee}, but your injury cost ${fmt(t.injured.total)}. Sometimes it's worth paying to send someone. Savings in your pocket help when emergencies come.`;
   const unpaid = s.bills.find((b) => b.due <= s.day);
   if (unpaid) return `The ${unpaid.label.toLowerCase()} is unpaid, and late fees grow every day. Keep cash aside for bills: don't spend it all on stock.`;
   const soon = billsDueSoon(s).find((b) => b.due > s.day);

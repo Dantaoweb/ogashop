@@ -1,7 +1,7 @@
 // Screens. Each returns an HTML string; buttons carry data-action (and data-arg) handled in main.js.
-import { GOODS, LEVELS, BADGES, NOTES, EXPLAIN, TYPE_LABEL, CREDITVOICE_URL, RULES, GOALS, ALL_LEVELS, PAYMENTS } from './data.js';
+import { GOODS, LEVELS, BADGES, NOTES, EXPLAIN, TYPE_LABEL, CREDITVOICE_URL, RULES, GOALS, ALL_LEVELS, PAYMENTS, HOSPITAL } from './data.js';
 import { CUST, fmt, goodsForLevel, buyPrice, supplierOwed, owedToYou, openDebts, supplierCreditError } from './core.js';
-import { currentCustomer, eventView, scoreParts, suggestMessage, billsDueSoon, billOwed, cashNeededSoon, isStuck } from './engine.js';
+import { currentCustomer, eventView, scoreParts, suggestMessage, billsDueSoon, billOwed, cashNeededSoon, isStuck, isInjured, hospitalSplit } from './engine.js';
 import { face, good, scene, levelPicture } from './art.js';
 import { goalStatus, daysToGoal, howLong } from './goals.js';
 import * as Voice from './voice.js';
@@ -39,6 +39,7 @@ const PATHS = {
   coin: '<circle cx="12" cy="12" r="9"/><path d="M12 7v10M9 10h4.5a1.5 1.5 0 0 1 0 3H10a1.5 1.5 0 0 0 0 3h5"/>',
   calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
   sound: '<path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16 9a3 3 0 0 1 0 6M18.5 6.5a7 7 0 0 1 0 11"/>',
+  bandage: '<rect x="3" y="8" width="18" height="8" rx="4" transform="rotate(-35 12 12)"/><path d="M10 11h.01M12 13h.01M14 11h.01"/>',
   tag: '<path d="M3 12V4h8l10 10-8 8z"/><circle cx="7.5" cy="8.5" r="1.5"/>',
 };
 export const icon = (name, size = 24, sw = 1.8) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" ${P} stroke-width="${sw}" aria-hidden="true">${PATHS[name] || ''}</svg>`;
@@ -73,6 +74,7 @@ function topBar(s, { title, kicker, tiles = true, dark = false } = {}) {
     <div class="between">
       <div class="grow"><div class="kicker">${esc(kicker || `Level ${s.level} · ${LEVELS[s.level].name}`)}</div>
         <h1 class="title display">${esc(title)}</h1></div>
+      ${healingMark(s)}
       <span class="pill" aria-label="Business score ${s.score}">Score ${s.score}</span>
       <button type="button" class="icon-btn" data-action="open" data-arg="records" aria-label="My records">${icon('doc')}</button>
       <button type="button" class="icon-btn" data-action="open" data-arg="debts" aria-label="Who owes you">${icon('people')}${owed ? `<span class="badge-dot">${owed}</span>` : ''}</button>
@@ -235,8 +237,19 @@ function rushButton(s, v, cls) {
 }
 
 // "Run to the market yourself": no transport fee, if you catch everything in time.
+// A bandage while the leg heals: no running to the market.
+function healingMark(s) {
+  if (!isInjured(s)) return '';
+  const left = s.injuredUntil - s.day + 1;
+  return `<span class="pill" style="color:var(--red)" aria-label="Leg healing, ${left} days left">${icon('bandage', 16)} ${left}d</span>`;
+}
+
 function runButton(s, v) {
   const r = v.rush;
+  if (isInjured(s)) {
+    return `<button type="button" class="choice" disabled><b>${icon('bandage', 16)} Run to the market yourself</b>
+      <span>Your leg is healing (${s.injuredUntil - s.day + 1} more day${s.injuredUntil > s.day ? 's' : ''}). Send the boy instead.</span></button>`;
+  }
   const short = s.cash < r.goods;
   const what = r.items.map((it) => `${it.qty} ${GOODS[it.item].short.toLowerCase()}`).join(' and ');
   return `<button type="button" class="choice" data-action="run-start" ${short ? 'disabled' : ''}>
@@ -304,6 +317,7 @@ export function customerScreen(s) {
     <header class="top" style="flex-direction:row;align-items:center;justify-content:space-between">
       <div><div class="kicker">Day ${s.day} · Selling</div><div class="title display">${v.clock}</div></div>
       <div class="row"><div style="text-align:right"><div class="kicker">Cash</div><b>${fmt(s.cash)}</b></div>
+        ${healingMark(s)}
         <button type="button" class="icon-btn" data-action="open" data-arg="prices" aria-label="Change prices">${icon('tag')}</button>
         <button type="button" class="icon-btn" data-action="open" data-arg="debts" aria-label="Who owes you">${icon('people')}</button></div>
     </header>
@@ -408,6 +422,31 @@ export function runScreen(s) {
       <span class="small muted">Catch the goods. Dodge puddles, okadas and wheelbarrows: each bump costs 2 seconds.</span>
     </div>
     <div class="foot"><button type="button" class="link" data-action="run-boy" style="align-self:center">Send the boy instead (+${fmt(RULES.rushFee)} transport)</button></div>
+  </main>`;
+}
+
+// ---------- Broken leg ----------
+
+export function injuryScreen(s) {
+  const name = CUST[s.today.injury.cid].name;
+  const rows = HOSPITAL.rides.map((r) => {
+    const sp = hospitalSplit(s, r.id);
+    const parts = [sp.pocket && `${fmt(sp.pocket)} from your pocket`, sp.business && `${fmt(sp.business)} from the business`, sp.debt && `${fmt(sp.debt)} as hospital debt`].filter(Boolean).join(', ');
+    return `<button type="button" class="choice${sp.debt ? '' : ''}" data-action="hospital" data-arg="${r.id}">
+      <span class="between" style="width:100%"><b>${esc(r.name)}</b><b style="color:var(--ink)">${fmt(r.cost)}</b></span>
+      <span>Heals in ${r.heal} days · total with bill ${fmt(sp.total)}</span>
+      <span style="${sp.debt ? 'color:var(--red);font-weight:700' : ''}">${parts}</span></button>`;
+  }).join('');
+  return `<main class="screen">
+    <header class="top" style="background:var(--red)"><div class="kicker" style="color:#FFE3E0">Market run · accident</div><div class="title display">You broke your leg!</div></header>
+    <div class="body">
+      <div class="card bad" style="flex-direction:row;align-items:center;gap:12px">
+        <span style="flex:none;width:56px;height:56px;border-radius:999px;background:#FFFFFF;color:var(--red);display:flex;align-items:center;justify-content:center">${icon('bandage', 30)}</span>
+        <span>${esc(s.today.injury.by || 'A bicycle')} hit you on the way. The goods fell, and ${esc(name)} could not wait.</span></div>
+      <span class="small muted">How do you get to hospital? The hospital bill is ${fmt(HOSPITAL.bill)}. You pay from your pocket first, then the business money. What's left becomes a debt.</span>
+      <div style="display:flex;flex-direction:column;gap:8px">${rows}</div>
+      ${titi('Faster care costs more, but you heal sooner. While your leg heals you cannot run to the market yourself.')}
+    </div>
   </main>`;
 }
 

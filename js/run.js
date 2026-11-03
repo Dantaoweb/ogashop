@@ -9,6 +9,7 @@ const BUMP_MS = 2000;
 const OBSTACLES = {
   puddle: '<svg width="52" height="30" viewBox="0 0 52 30" aria-hidden="true"><ellipse cx="26" cy="17" rx="24" ry="11" fill="#6FA8D6"/><ellipse cx="20" cy="14" rx="9" ry="3" fill="#CFE7F7"/></svg>',
   okada: '<svg width="56" height="44" viewBox="0 0 56 44" aria-hidden="true"><circle cx="12" cy="32" r="9" fill="none" stroke="#1F2A24" stroke-width="4"/><circle cx="44" cy="32" r="9" fill="none" stroke="#1F2A24" stroke-width="4"/><path d="M12 32 L24 18 H38 L44 32" fill="none" stroke="#C0392B" stroke-width="5" stroke-linecap="round"/><circle cx="30" cy="8" r="6" fill="#5C3A21"/><path d="M30 14 L28 22" stroke="#2F6FB0" stroke-width="6" stroke-linecap="round"/></svg>',
+  bicycle: '<svg width="56" height="40" viewBox="0 0 56 40" aria-hidden="true"><circle cx="12" cy="28" r="10" fill="none" stroke="#1F2A24" stroke-width="3"/><circle cx="44" cy="28" r="10" fill="none" stroke="#1F2A24" stroke-width="3"/><path d="M12 28 L22 12 L36 12 L44 28 M22 12 L30 28 L36 12 M20 8 H26 M36 12 L38 6" fill="none" stroke="#2F6FB0" stroke-width="3" stroke-linecap="round"/></svg>',
   barrow: '<svg width="56" height="40" viewBox="0 0 56 40" aria-hidden="true"><path d="M6 10 H40 L34 26 H12 Z" fill="#8A939C"/><circle cx="22" cy="32" r="6" fill="#1F2A24"/><path d="M40 12 L54 22" stroke="#8B5A2B" stroke-width="4" stroke-linecap="round"/></svg>',
 };
 
@@ -16,8 +17,9 @@ const RUNNER = '<svg width="48" height="56" viewBox="0 0 48 56" aria-hidden="tru
 
 export function runnerSvg() { return RUNNER; }
 
-// items: [{ item, qty }]. Calls onEnd({ item: caught }) once, when everything is caught or time is up.
-export function startRun(field, { items, seconds = 20, onEnd, onTick }) {
+// items: [{ item, qty }]. Calls onEnd({ item: caught }, { injured }) once: everything caught, time up,
+// or the runner is hit by a bicycle or okada and breaks a leg (chance injuryChance).
+export function startRun(field, { items, seconds = 20, injuryChance = 0, onEnd, onTick }) {
   const need = Object.fromEntries(items.map((it) => [it.item, it.qty]));
   const got = Object.fromEntries(items.map((it) => [it.item, 0]));
   const slow = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
@@ -59,7 +61,7 @@ export function startRun(field, { items, seconds = 20, onEnd, onTick }) {
       el.innerHTML = good(kind, 44);
       w = 44;
     } else {
-      kind = ['puddle', 'okada', 'barrow'][Math.floor(Math.random() * 3)];
+      kind = ['puddle', 'okada', 'barrow', 'bicycle'][Math.floor(Math.random() * 4)];
       el.innerHTML = OBSTACLES[kind];
       w = 56;
     }
@@ -89,7 +91,11 @@ export function startRun(field, { items, seconds = 20, onEnd, onTick }) {
       const touching = o.lane === lane && o.y > playerY - 40 && o.y < playerY + 30;
       if (touching) {
         if (o.good && got[o.kind] < need[o.kind]) { got[o.kind]++; flash('got'); }
-        if (!o.good) { timeLeft -= BUMP_MS; flash('hit'); }
+        if (!o.good) {
+          if ((o.kind === 'bicycle' || o.kind === 'okada') && Math.random() < injuryChance) { o.el.remove(); return end(true, o.kind); }
+          timeLeft -= BUMP_MS;
+          flash('hit');
+        }
       }
       if (touching || o.y > H) { o.el.remove(); objs.splice(i, 1); }
     }
@@ -114,9 +120,9 @@ export function startRun(field, { items, seconds = 20, onEnd, onTick }) {
     rightBtn?.removeEventListener('pointerdown', right);
     field.removeEventListener('pointerdown', tapField);
   }
-  function end() {
+  function end(injured = false, by = null) {
     cleanup();
-    onEnd({ ...got });
+    onEnd({ ...got }, { injured, by });
   }
 
   frame = requestAnimationFrame((t) => { last = t; step(t); });

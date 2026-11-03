@@ -221,6 +221,14 @@ The score moves slowly: at most ±6 points a day, so one bad day never wipes out
 - Automatic records count in My records, debts and the quiz, but the recording score only counts sales the player had to record.
 - Customers greet by the time of day: good morning (before 12), good afternoon (before 4 pm), good evening.
 
+## 7l. Market run accident: broken leg *(tune)*
+
+- In Market run, hitting a bicycle or okada has a 1 in 3 chance of a fall: "You broke your leg!" The goods drop and the waiting customer leaves.
+- Getting to hospital: horse ₦2,000 (heals in 5 days), keke ₦3,000 (4 days), taxi ₦6,000 (3 days), ambulance ₦15,000 (2 days). Plus a ₦10,000 hospital bill.
+- Paid from the pocket first (it's personal), then the business cash. What's left becomes a **hospital debt** due in 3 days, with the usual late fees.
+- A bandage mark shows in the top bar while healing; running to the market is not possible until the leg heals, so the player sends the boy.
+- tiTi's tip: running yourself saves ₦300 but an injury costs much more; savings help in emergencies.
+
 ## 8. Open points for review
 
 1. **Prices:** check every buy and sell price with traders in at least two markets.

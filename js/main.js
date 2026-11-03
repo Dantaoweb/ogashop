@@ -61,6 +61,7 @@ function view() {
     case 'run': return UI.runScreen(s);
     case 'fake': return UI.fakeScreen(s);
     case 'pay': return UI.payScreen(s);
+    case 'injury': return UI.injuryScreen(s);
     case 'evening': return UI.eveningScreen(s, ui);
     default: return UI.morningScreen(s, ui);
   }
@@ -91,7 +92,8 @@ function watchRun() {
       timeEl.textContent = `${Math.ceil(timeLeft / 1000)}s`;
       gotEl.textContent = `${Object.values(got).reduce((a, n) => a + n, 0)} / ${total}`;
     },
-    onEnd: (got) => { runStop = null; run('run-done', got); },
+    injuryChance: RULES.injuryChance,
+    onEnd: (got, info) => { runStop = null; run('run-done', { got, ...info }); },
   });
 }
 
@@ -216,7 +218,8 @@ const actions = {
   'quick-answer': (arg) => { const q = s.today.quick; if (q && q.questions[0].picked == null) { Quiz.answer(q, Number(arg)); Quiz.finish(s, q); } ui.quickRecords = false; },
   'quick-check': () => { ui.quickRecords = true; },
   'run-start': () => { E.startRun(s); },
-  'run-done': (got) => { E.runDone(s, got); },
+  'run-done': (arg) => { E.runDone(s, arg.got, { injured: arg.injured, by: arg.by }); },
+  hospital: (arg) => { E.chooseHospital(s, arg); },
   'run-boy': () => { stopRun(); E.runSendBoy(s); },
   'change-tap': (arg) => { E.changeTap(s, Number(arg)); },
   'change-undo': () => { E.changeUndo(s); },

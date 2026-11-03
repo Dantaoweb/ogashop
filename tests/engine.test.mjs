@@ -420,6 +420,38 @@ test('transfer and POS: CreditVoice records automatically, another bank does not
   assert.equal(s.payments.accountNumber, '0123456789');
 });
 
+test('broken leg in Market run: hospital ride, pocket first, debt if short, no running while healing', () => {
+  const s = E.newGame('business', mulberry32(90));
+  s.stock.rice = 0;
+  s.pocket = 4000;
+  s.cash = 5000;
+  const q = () => ({ cid: 'musa', items: [{ item: 'rice', qty: 1 }], kind: 'cash', frac: 1, disc: 0.1, walkRoll: 0.99, acceptRoll: 0, moodRoll: 0.99, changeRoll: 1, fakeRoll: 1, payRoll: 0 });
+  s.today.queue = [q(), q()];
+  s.today.eventAt = 99;
+  E.openShop(s);
+  s.cash = 10000;
+  E.startRun(s);
+  s.cash = 5000;
+  E.runDone(s, { rice: 0 }, { injured: true });
+  assert.equal(s.phase, 'injury');
+  const sp = E.hospitalSplit(s, 'taxi');
+  assert.deepEqual([sp.total, sp.pocket, sp.business, sp.debt], [16000, 4000, 5000, 7000]);
+  E.chooseHospital(s, 'taxi');
+  assert.equal(s.phase, 'selling');
+  assert.equal(s.pocket, 0);
+  assert.equal(s.cash, 0);
+  assert.equal(s.bills.at(-1).label, 'Hospital debt');
+  assert.equal(s.bills.at(-1).amount, 7000);
+  assert.match(s.today.outcome.text, /heals in 3 days/);
+  assert.equal(E.isInjured(s), true);
+  E.serve(s, 'next');
+  s.cash = 50000;
+  E.startRun(s);
+  assert.equal(s.phase, 'selling', 'cannot run while injured');
+  s.day += 3;
+  assert.equal(E.isInjured(s), false);
+});
+
 test('count the change: right, short, too much, skip', () => {
   const play = (taps, result = 'give') => {
     const s = E.newGame('business', mulberry32(40));
