@@ -348,6 +348,47 @@ test('recording a sale marks it in the sales log', () => {
   assert.equal(s.sales[0].recorded, true);
 });
 
+test('spot the fake note: only in Level 2; spotted, missed, wrong accusation', () => {
+  const setup = (level = 2) => {
+    const s = E.newGame('business', mulberry32(70));
+    s.level = level;
+    s.today.queue = [{ cid: 'musa', items: [{ item: 'rice', qty: 1 }], kind: 'cash', frac: 1, disc: 0.1, walkRoll: 0.99, acceptRoll: 0, moodRoll: 0.99, changeRoll: 1, fakeRoll: 0 }];
+    s.today.eventAt = 99;
+    E.openShop(s);
+    E.serve(s, 'sell');
+    return s;
+  };
+  assert.equal(setup(1).phase, 'record', 'not in Level 1');
+  const s = setup();
+  assert.equal(s.phase, 'fake');
+  const withFake = (st) => { st.today.fake = { cid: 'musa', total: 2500, notes: [{ value: 1000, fake: false }, { value: 1000, fake: true, flaw: 'print' }, { value: 500, fake: false }], fakeIdx: 1, light: false }; };
+  withFake(s);
+  E.fakeLight(s);
+  assert.equal(s.today.fake.light, true);
+  E.fakeDone(s, 1);
+  assert.equal(s.phase, 'record');
+  assert.equal(s.stats.goodChecks, 1);
+  assert.match(s.today.reaction.note, /spotted the fake/);
+  const missed = setup(); withFake(missed);
+  const profit = missed.today.profit;
+  E.fakeDone(missed, -1);
+  assert.equal(missed.today.profit, profit - 1000);
+  assert.ok(missed.today.expenses.some((e) => e.label === 'Fake note taken'));
+  const accused = setup(); withFake(accused);
+  E.fakeDone(accused, 0);
+  assert.equal(accused.stats.unhappy, 1);
+  assert.match(accused.today.reaction.text, /thief/);
+  const allReal = setup(); allReal.today.fake = { cid: 'musa', total: 2500, notes: [{ value: 1000, fake: false }, { value: 1000, fake: false }, { value: 500, fake: false }], fakeIdx: -1, light: false };
+  E.fakeDone(allReal, -1);
+  assert.equal(allReal.stats.goodChecks, 1);
+  // not again the next day
+  const again = setup();
+  E.fakeDone(again, 'skip'); E.skipRecord(again);
+  assert.equal(again.lastFakeDay, again.day);
+  const notes = E.makeNotes(3000, mulberry32(3));
+  assert.equal(notes.notes.length, 4);
+});
+
 test('count the change: right, short, too much, skip', () => {
   const play = (taps, result = 'give') => {
     const s = E.newGame('business', mulberry32(40));

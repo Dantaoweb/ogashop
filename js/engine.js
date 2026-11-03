@@ -22,7 +22,7 @@ export function newGame(path, rng = Math.random) {
     cash: START_CASH, pay: START_PAY, pocket: 0, stock: {}, cost: {}, prices: {}, batches: [], market: {},
     customers: {}, debts: [], nextDebtId: 1, supplier: [], bills: [], nextBillId: 1, billNext: {},
     levelProfit: 0, totalProfit: 0, score: 50,
-    stats: { recW: 0, totW: 0, dueAmt: 0, paidOnTime: 0, days: 0, cleanDays: 0, repaid: 0, lost: 0, noLateStreak: 0, pocketPays: 0, capitalTakes: 0, overpayStreak: 0, served: 0, unhappy: 0, billsPaid: 0, billsLateDays: 0, changeRight: 0 },
+    stats: { recW: 0, totW: 0, dueAmt: 0, paidOnTime: 0, days: 0, cleanDays: 0, repaid: 0, lost: 0, noLateStreak: 0, pocketPays: 0, capitalTakes: 0, overpayStreak: 0, served: 0, unhappy: 0, billsPaid: 0, billsLateDays: 0, changeRight: 0, goodChecks: 0 },
     badges: [], seen: {}, eventLog: {}, mods: {}, history: [], goal: null, goalsReached: [], sales: [], quizLog: [], quiz: null,
     phase: 'morning', today: null,
   };
@@ -93,7 +93,7 @@ export function buy(s, item, qty, credit = false) {
 export function migrate(s) {
   s.pay ??= START_PAY;
   s.pocket ??= 0;
-  Object.assign(s.stats, { pocketPays: 0, capitalTakes: 0, overpayStreak: 0, served: 0, unhappy: 0, billsPaid: 0, billsLateDays: 0, changeRight: 0, ...s.stats });
+  Object.assign(s.stats, { pocketPays: 0, capitalTakes: 0, overpayStreak: 0, served: 0, unhappy: 0, billsPaid: 0, billsLateDays: 0, changeRight: 0, goodChecks: 0, ...s.stats });
   s.bills ??= [];
   s.goal ??= null;
   s.sales ??= [];
@@ -231,7 +231,7 @@ function makeRequest(s, cid, rng) {
   if (type === 'neverpays') { kind = 'credit'; frac = rng() * 0.3; }
   if (type === 'big' && s.level >= 2 && rng() < 0.5) { kind = 'credit'; frac = 0.5; }
   if (type === 'bargainer') kind = 'discount';
-  return { cid, items, kind, frac, disc: 0.1 + rng() * 0.05, walkRoll: rng(), acceptRoll: rng(), moodRoll: rng(), changeRoll: rng() };
+  return { cid, items, kind, frac, disc: 0.1 + rng() * 0.05, walkRoll: rng(), acceptRoll: rng(), moodRoll: rng(), changeRoll: rng(), fakeRoll: rng() };
 }
 
 // What the current customer wants, given today's stock and prices.
@@ -387,6 +387,74 @@ export function serve(s, action) {
     t.change = { cid: v.cid, total: sale.total, handed: notes, due: notes - sale.total, given: [] };
     s.phase = 'change';
   }
+  // Level 2: sometimes the cash needs checking for a fake note.
+  if (s.phase === 'record' && s.level >= 2 && sale.paid === sale.total && sale.total >= 500 && !t.fakeDone
+      && s.day - (s.lastFakeDay ?? -99) >= 2 && (v.fakeRoll ?? 1) < RULES.fakeChance) {
+    t.fakeDone = true;
+    s.lastFakeDay = s.day;
+    t.fake = { cid: v.cid, total: sale.total, ...makeNotes(sale.total) };
+    s.phase = 'fake';
+  }
+}
+
+// ---------- Spot the fake note ----------
+
+// 3 or 4 cartoon notes; maybe one fake, with a visible flaw. Under the light only real notes show
+// the watermark and security thread.
+export function makeNotes(total, rng = Math.random) {
+  const count = total >= 2000 ? 4 : 3;
+  const notes = Array.from({ length: count }, () => ({ value: rng() < 0.6 ? 1000 : 500, fake: false, flaw: null,
+    serial: `${'ABCDEFGHJK'[Math.floor(rng() * 10)]}${'ABCDEFGHJK'[Math.floor(rng() * 10)]} ${String(Math.floor(rng() * 9000000) + 1000000)}` }));
+  let fakeIdx = -1;
+  if (rng() < RULES.fakeOdds) {
+    fakeIdx = Math.floor(rng() * count);
+    notes[fakeIdx].fake = true;
+    notes[fakeIdx].flaw = ['colour', 'print', 'serial'][Math.floor(rng() * 3)];
+  }
+  return { notes, fakeIdx, light: false };
+}
+
+export function fakeLight(s) {
+  if (s.today.fake) s.today.fake.light = true;
+}
+
+// pick: a note's index (that one is fake), -1 (all are real), 'skip' (tiTi checks), 'timeout'.
+export function fakeDone(s, pick) {
+  const t = s.today;
+  const f = t.fake;
+  if (!f) return;
+  const name = CUST[f.cid].name;
+  const fakeNote = f.notes[f.fakeIdx];
+  const loseFake = () => expense(s, fakeNote.value, 'Fake note taken');
+  let r;
+  if (pick === 'skip') {
+    r = { text: 'Thank you!', mood: 'happy', note: fakeNote ? `tiTi found a fake ${fmt(fakeNote.value)} note and ${name} changed it.` : 'tiTi checked: all the notes are real.' };
+  } else if (pick === 'timeout') {
+    unhappy(s);
+    if (fakeNote) loseFake();
+    r = { text: 'Why are you looking at my money so long? I have to go.', mood: 'sad', note: fakeNote ? `You took the money without checking. One ${fmt(fakeNote.value)} note was fake: lost.` : 'All the notes were real, but you were too slow.' };
+  } else if (pick === -1) {
+    if (fakeNote) {
+      loseFake();
+      r = { text: 'Thank you!', mood: 'happy', note: `One ${fmt(fakeNote.value)} note was fake, and you took it. ${fmt(fakeNote.value)} lost.` };
+      r.mood = 'neutral';
+      r.bad = true;
+    } else {
+      s.stats.goodChecks++;
+      r = { text: 'Thank you. You check your money well!', mood: 'happy', note: 'Right: all the notes were real.' };
+    }
+  } else if (pick === f.fakeIdx) {
+    s.stats.goodChecks++;
+    r = { text: "Ah, sorry! I didn't know. Take this one.", mood: 'happy', note: `You spotted the fake ${fmt(fakeNote.value)} note. No loss.` };
+  } else {
+    unhappy(s);
+    changeLoyalty(s, f.cid, -1);
+    if (fakeNote) loseFake();
+    r = { text: "You're calling me a thief? That note is real!", mood: 'sad', note: fakeNote ? `That note was real, and you missed the fake one: ${fmt(fakeNote.value)} lost.` : 'That note was real. All the notes were real.' };
+  }
+  t.reaction = { cid: f.cid, text: r.text, mood: r.bad ? 'sad' : r.mood, note: r.note };
+  t.fake = null;
+  s.phase = 'record';
 }
 
 // ---------- Market run ----------
@@ -715,7 +783,7 @@ export function scoreParts(s) {
     // Family needs paid from your own pay count for you; taking from the business counts against.
     money: (st.pocketPays + st.billsPaid + 1.2) / (st.pocketPays + st.billsPaid + st.capitalTakes + st.billsLateDays + 2),
     // Complaints, refused trusted customers and refusals count against; good sales for.
-    customers: clamp((st.served + st.changeRight - 2 * st.unhappy + 4) / (st.served + st.changeRight + 5), 0, 1),
+    customers: clamp((st.served + st.changeRight + st.goodChecks - 2 * st.unhappy + 4) / (st.served + st.changeRight + st.goodChecks + 5), 0, 1),
   };
 }
 

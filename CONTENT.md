@@ -204,6 +204,14 @@ The score moves slowly: at most ±6 points a day, so one bad day never wipes out
 - **Quick question** on about 1 evening in 3 (from the level's 3rd day): one shop question.
 - Results are kept on the phone (for the Stage 1 test). 80% or better earns the **Know your business** badge. The quiz never blocks moving up and doesn't change the score.
 
+## 7j. Mini-game: Spot the fake note *(tune)*
+
+- Level 2 only, at most every 2 days: a cash sale (40% chance) is paid in 3 or 4 cartoon notes (₦1,000 green, ₦500 purple). They are simple drawings, not copies of real naira notes.
+- 65% of the time one is fake, with a visible flaw: wrong colour, faded print, or no serial number. **Hold up to the light** shows the watermark and security thread on real notes only.
+- Tap the fake note, or **All are real**. 15-second patience bar (none on the learning path, which also lists what to look for).
+- Spotted the fake, or correctly "all real": counts for Happy customers, no loss. Missed a fake: its value is lost ("Fake note taken" in Money out). Called a real note fake: the customer is offended. Too slow: the customer is unhappy, and a fake is lost.
+- "Let tiTi check" skips with no loss, no reward, no penalty.
+
 ## 8. Open points for review
 
 1. **Prices:** check every buy and sell price with traders in at least two markets.

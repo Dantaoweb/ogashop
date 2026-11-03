@@ -71,6 +71,10 @@ export const RULES = {
   changeChance: 0.35,
   changeSeconds: 15,
   changeNotes: [500, 200, 100, 50],
+  // Spot the fake note (Level 2): at most every 2 days, a cash sale may be paid in notes to check.
+  fakeChance: 0.4,
+  fakeSeconds: 15,
+  fakeOdds: 0.65, // chance one of the notes really is fake
   billNoticeDays: 3,
   billLateFee: 500,
   rushFee: 300,

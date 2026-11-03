@@ -409,6 +409,46 @@ export function runScreen(s) {
   </main>`;
 }
 
+// ---------- Spot the fake note ----------
+
+const NOTE_FILL = { 1000: ['#2E7D4F', '#6FA98A'], 500: ['#6A4C93', '#A693C4'] }; // [real, fake colour]
+
+// A cartoon naira note (not a copy of the real design).
+function noteSvg(n, light) {
+  const fill = NOTE_FILL[n.value][n.fake && n.flaw === 'colour' ? 1 : 0];
+  const faded = n.fake && n.flaw === 'print' ? ' opacity="0.45"' : '';
+  const serial = n.fake && n.flaw === 'serial' ? '' : `<text x="12" y="66" font-size="9" fill="#FFFFFFCC" font-family="monospace">${esc(n.serial)}</text>`;
+  const marks = light && !n.fake ? '<circle cx="40" cy="42" r="13" fill="#FFFFFF" opacity=".55"/><rect x="88" y="0" width="3" height="76" fill="#1A1A1A" opacity=".45"/>' : '';
+  return `<svg viewBox="0 0 160 76" width="100%" aria-hidden="true"${light ? ' style="filter:brightness(1.25)"' : ''}>
+    <rect width="160" height="76" rx="6" fill="${fill}"/><rect x="5" y="5" width="150" height="66" rx="4" fill="none" stroke="#FFFFFF" stroke-opacity=".4" stroke-width="2"/>
+    <g${faded}><text x="12" y="27" font-size="17" font-weight="800" fill="#FFFFFF" font-family="system-ui,sans-serif">₦${n.value.toLocaleString('en')}</text>
+    <circle cx="124" cy="38" r="20" fill="#FFFFFF" opacity=".25"/><text x="124" y="43" text-anchor="middle" font-size="12" font-weight="800" fill="#FFFFFF">NG</text></g>
+    ${serial}${marks}</svg>`;
+}
+
+export function fakeScreen(s) {
+  const f = s.today.fake;
+  const timed = s.path !== 'learning';
+  const notes = f.notes.map((n, i) => `<button type="button" class="note-card" data-action="fake-pick" data-arg="${i}" aria-label="Note ${i + 1}: this one is fake">${noteSvg(n, f.light)}</button>`).join('');
+  return `<main class="screen">
+    <header class="top"><div class="kicker">Day ${s.day} · Check the money</div><div class="title display">Spot the fake note</div></header>
+    <div class="body">
+      <div class="reaction" ${sayAttrs(`Here is ${fmt(f.total)}.`, f.cid)}><span class="mini-face lg">${face(f.cid, { size: 56 })}</span>
+        <div class="grow"><b class="small">${esc(CUST[f.cid].name)}</b><div class="say">“Here is ${fmt(f.total)}.”</div></div>${sayBtn()}</div>
+      ${timed ? `<div class="progress lg" aria-hidden="true"><div class="patience" style="animation-duration:${RULES.fakeSeconds}s"></div></div>` : ''}
+      <span class="small muted">Tap a note if it's fake. Sometimes all of them are real.</span>
+      <div class="grid2">${notes}</div>
+      ${f.light ? titi('Real notes show a <b>watermark</b> (the light circle) and a dark <b>security thread</b>. A note without them is fake.')
+        : btn('fake-light', `${icon('sun', 18)} Hold up to the light`, 'secondary small block')}
+      ${s.path === 'learning' && !f.light ? '<span class="small" style="color:var(--green)">Look for: wrong colour, faded print, no serial number. Then check against the light.</span>' : ''}
+    </div>
+    <div class="foot">
+      ${btn('fake-pick', 'All are real', 'primary block', -1)}
+      <button type="button" class="link" data-action="fake-skip" style="align-self:center">Let tiTi check</button>
+    </div>
+  </main>`;
+}
+
 // ---------- Count the change ----------
 
 export function changeScreen(s, ui) {

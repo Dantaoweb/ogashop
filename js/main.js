@@ -59,6 +59,7 @@ function view() {
     case 'event': return UI.eventScreen(s);
     case 'change': return UI.changeScreen(s, ui);
     case 'run': return UI.runScreen(s);
+    case 'fake': return UI.fakeScreen(s);
     case 'evening': return UI.eveningScreen(s, ui);
     default: return UI.morningScreen(s, ui);
   }
@@ -94,10 +95,17 @@ function watchRun() {
 }
 
 // The customer's patience while you count the change (not on the learning path).
+// Also used for Spot the fake note.
+let timerPhase = null;
 function watchChangeTimer() {
-  const counting = s?.phase === 'change' && !ui.screen && s.path !== 'learning';
-  if (counting && !changeTimer) changeTimer = setTimeout(() => { changeTimer = null; run('change-timeout'); }, RULES.changeSeconds * 1000);
-  if (!counting && changeTimer) { clearTimeout(changeTimer); changeTimer = null; }
+  const phase = s?.phase;
+  const counting = (phase === 'change' || phase === 'fake') && !ui.screen && s.path !== 'learning';
+  if (changeTimer && (!counting || timerPhase !== phase)) { clearTimeout(changeTimer); changeTimer = null; }
+  if (counting && !changeTimer) {
+    timerPhase = phase;
+    const secs = phase === 'change' ? RULES.changeSeconds : RULES.fakeSeconds;
+    changeTimer = setTimeout(() => { changeTimer = null; run(phase === 'change' ? 'change-timeout' : 'fake-timeout'); }, secs * 1000);
+  }
 }
 
 function sayFrom(el) {
@@ -214,6 +222,10 @@ const actions = {
   'change-give': () => { E.changeDone(s, 'give'); },
   'change-skip': () => { E.changeDone(s, 'skip'); },
   'change-timeout': () => { if (s.phase === 'change') E.changeDone(s, 'timeout'); },
+  'fake-light': () => { E.fakeLight(s); },
+  'fake-pick': (arg) => { E.fakeDone(s, Number(arg)); },
+  'fake-skip': () => { E.fakeDone(s, 'skip'); },
+  'fake-timeout': () => { if (s.phase === 'fake') E.fakeDone(s, 'timeout'); },
   say: () => { const el = app.querySelector('[data-say]'); if (el) sayFrom(el); },
   reset: () => {
     if (!ui.confirmReset) { ui.confirmReset = true; return; }

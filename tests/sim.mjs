@@ -53,6 +53,8 @@ export function play(seed, habits, maxDays = 60) {
           let left = c.due;
           for (const n of [500, 200, 100, 50]) while (left >= n) { E.changeTap(s, n); left -= n; }
           E.changeDone(s, 'give');
+        } else if (s.phase === 'fake') {
+          E.fakeDone(s, s.today.fake.fakeIdx);
         } else if (s.phase === 'event') {
           const v = E.eventView(s);
           const i = v.choices.findIndex((c) => !c.disabled);
