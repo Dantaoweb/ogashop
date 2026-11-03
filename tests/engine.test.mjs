@@ -389,6 +389,37 @@ test('spot the fake note: only in Level 2; spotted, missed, wrong accusation', (
   assert.equal(notes.notes.length, 4);
 });
 
+test('transfer and POS: CreditVoice records automatically, another bank does not', () => {
+  const play = (method, provider) => {
+    const s = E.newGame('business', mulberry32(80));
+    if (provider !== 'creditvoice') E.setPayments(s, method === 'transfer' ? { account: provider } : { pos: provider });
+    const payRoll = method === 'transfer' ? 0.7 : 0.99;
+    s.today.queue = [{ cid: 'musa', items: [{ item: 'rice', qty: 1 }], kind: 'cash', frac: 1, disc: 0.1, walkRoll: 0.99, acceptRoll: 0, moodRoll: 0.99, changeRoll: 1, fakeRoll: 1, payRoll }];
+    s.today.eventAt = 99;
+    E.openShop(s);
+    assert.equal(E.currentCustomer(s).method, method);
+    E.serve(s, 'sell');
+    assert.equal(s.phase, 'pay');
+    while (s.phase === 'pay') E.payNext(s);
+    assert.equal(s.phase, 'record');
+    return s;
+  };
+  const cvT = play('transfer', 'creditvoice');
+  assert.equal(cvT.today.pending.recorded, true);
+  assert.match(cvT.today.chat.at(-1).auto, /CreditVoice recorded this transfer/);
+  const other = play('transfer', 'otherbank');
+  assert.equal(other.today.pending.recorded, false);
+  assert.equal(other.today.pending.method, 'transfer');
+  const cvPos = play('pos', 'creditvoice');
+  assert.equal(cvPos.today.pending.recorded, true);
+  const otherPos = play('pos', 'otherpos');
+  assert.equal(otherPos.today.pending.recorded, false);
+  const s = E.newGame('business', mulberry32(81));
+  assert.match(E.setPayments(s, { accountNumber: '123' }), /10 digits/);
+  assert.equal(E.setPayments(s, { accountNumber: '0123456789' }), null);
+  assert.equal(s.payments.accountNumber, '0123456789');
+});
+
 test('count the change: right, short, too much, skip', () => {
   const play = (taps, result = 'give') => {
     const s = E.newGame('business', mulberry32(40));

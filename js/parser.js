@@ -90,7 +90,7 @@ export function suggestMessage(sale, customerName) {
   const items = sale.items.map((it) => `${it.qty} ${GOODS[it.item].aliases[0]}`).join(' and ');
   const who = customerName ? ` to ${customerName}` : '';
   if (sale.discount) return `sold ${items}${who} ${sale.listTotal}, discount ${sale.discount}, paid ${sale.paid}`;
-  if (sale.paid >= sale.total) return `sold ${items}${who} ${sale.total} cash`;
+  if (sale.paid >= sale.total) return `sold ${items}${who} ${sale.total} ${sale.method === 'transfer' ? 'transfer' : sale.method === 'pos' ? 'pos' : 'cash'}`;
   return `sold ${items}${who} ${sale.total}, paid ${sale.paid}`;
 }
 

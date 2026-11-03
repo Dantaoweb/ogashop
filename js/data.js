@@ -6,6 +6,12 @@ export const CREDITVOICE_URL = 'https://creditvoiceai.com/?utm_source=ogashop&ut
 export const START_CASH = 20000;
 export const START_STOCK = { rice: 5, garri: 10, water: 4, recharge: 10 };
 export const SUPPLIER_CREDIT_LIMIT = 15000;
+// How customers pay. CreditVoice is the default: with it, tiTi records transfer and POS sales automatically.
+export const PAYMENTS = {
+  accounts: { creditvoice: 'CreditVoice account', otherbank: 'Another bank' },
+  pos: { creditvoice: 'CreditVoice POS', otherpos: 'Another POS' },
+  defaultAccountNumber: '0081234567',
+};
 export const START_PAY = 1000; // daily pay the player gives themselves; they can change it
 export const PAY_STEP = 500;
 export const SUPPLIER_CREDIT_DAYS = 3;
@@ -67,6 +73,9 @@ export const RULES = {
   // Sending for stock in the middle of the day: normal price plus transport, at least this many units.
   // Count the change: chance a cash sale is paid with ₦1,000 notes that need change (once a day at most).
   runSeconds: 20,
+  // Share of customers paying by cash / transfer / POS (the rest).
+  payMix: { 1: { cash: 0.6, transfer: 0.3 }, 2: { cash: 0.45, transfer: 0.3 } },
+  recommendChance: 0.5, // with another bank or POS, how often tiTi suggests CreditVoice (once a day at most)
   quickQuestionChance: 0.35, // some evenings ask one question about your shop
   changeChance: 0.35,
   changeSeconds: 15,

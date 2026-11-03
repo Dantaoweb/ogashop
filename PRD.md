@@ -1,9 +1,9 @@
 # CreditVoice Business Game — Product Requirements (PRD)
 
 **Name:** Oga Shop
-**Status:** v1.0 — agreed, ready for design
+**Status:** v1.1 — Stage 1 built; promotion role added
 **Owner:** CreditVoice
-**Date:** 29 October 2026
+**Date:** 29 October 2026 (v1.1: 3 November 2026)
 
 ---
 
@@ -18,6 +18,7 @@ The game is a **separate product**, built and hosted apart from the CreditVoice 
 - **Teach by doing.** Most small business owners never read a guide. A game makes the habits stick: record every sale, chase debts, know your stock, separate business money from personal money.
 - **Show what CreditVoice is for.** Every lesson mirrors a real CreditVoice feature, so a player understands the app before opening it.
 - **Bring in users.** A player who learned why records matter is ready to try CreditVoice with their real business.
+- **Promote CreditVoice, and later partner products.** The game is a promotion channel for CreditVoice: its account, POS and tiTi appear as the default tools in the shop, and show their benefit in play. In later stages the game becomes a promotion page for other products that pay for the service (see section 11b). This is done in steps.
 - **Partnerships.** Schools, NGOs, cooperatives and youth programmes can use it to teach business and money skills.
 
 ## 3. Goals and non-goals
@@ -111,6 +112,13 @@ Both paths use the same levels and the same score, so friends can compare. The p
 **Events**
 - A deck of realistic events, chosen by level: price increases, power outage, rain, festive rush, a bad supplier, a counterfeit product, a customer who relocates owing money.
 
+**Payments (added in v1.1)**
+- Customers pay by cash, bank transfer or card (POS), mixed through the day.
+- Transfer: the customer asks for the player's account number, says "I've sent it", and the player checks the account before giving the goods. POS: the player charges the amount, and the card is approved.
+- In Settings → Payments the player chooses the transfer account and POS machine. **CreditVoice is the default.** Every option works; with the CreditVoice account and POS, tiTi records the sale automatically. With another bank or POS, the player records by hand, and tiTi sometimes recommends CreditVoice.
+- Automatic records still count in the player's records, debts and quiz, but the recording score only measures sales the player had to record, so the "record every sale" lesson stays.
+- Later: a fake transfer alert scam to spot (check your account before giving goods).
+
 **tiTi in the game**
 - The player's assistant: records sales from short messages, answers "who owes me", gives one tip per day.
 - Uses the same style and words as CreditVoice, so the real app feels familiar.
@@ -137,6 +145,22 @@ Both paths use the same levels and the same score, so friends can compare. The p
   - the app menu (e.g. "Play & learn").
 - The game links back to CreditVoice at natural moments, e.g. after Level 2: "Ready to do this with your real shop? Start free on CreditVoice."
 - **No shared database, no shared code deploy.** A crash or mistake in the game cannot affect CreditVoice users.
+- CreditVoice adds its links to the game from its own side; this project never changes the CreditVoice app or website.
+
+## 11b. Promotion and partner placements (later stages)
+
+The game will grow, step by step, into a promotion page for CreditVoice and for other products that pay for the service:
+
+1. **Now (Stage 1):** CreditVoice account, POS and tiTi as the default tools, with their benefit shown in play (automatic recording), and links to CreditVoice.
+2. **Next:** CreditVoice banners and product cards at natural moments (level complete, the levels page, Settings).
+3. **Later:** paid placements from partners: their account numbers or POS machines as in-game choices, banners and product cards. Each placement is chosen to fit the lesson it appears in.
+
+Rules for every placement:
+- Clearly labelled as **Sponsored** or **Ad** when it is paid for, and kept apart from tiTi's advice.
+- No false claims inside the game (for example, other banks' transfers are never shown as failing because they are not a partner).
+- Never forced: a player can always finish a level without using a sponsored product.
+- Follows Nigerian advertising rules (ARCON) and the Nigeria Data Protection Act; no player data is shared with advertisers without consent.
+- Suitable for teenagers (no gambling, loans or betting ads).
 
 ## 12. Platform and technical requirements
 
@@ -155,6 +179,7 @@ Both paths use the same levels and the same score, so friends can compare. The p
 - No real money, no gambling mechanics (no spins, loot boxes or paid chances).
 - Clearly a learning game, not an investment or loan product.
 - Financing in the game is explained as fiction; the real CreditVoice note applies: CreditVoice does not lend money.
+- Promotion is honest: in-game payments and products behave the way they do in real life, and paid placements are labelled (section 11b).
 - Suitable for teenagers and adults. If school use is a priority, add a teacher mode without public chat.
 
 ## 14. Stage 1 — first release (to test the idea)

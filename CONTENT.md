@@ -212,6 +212,15 @@ The score moves slowly: at most ±6 points a day, so one bad day never wipes out
 - Spotted the fake, or correctly "all real": counts for Happy customers, no loss. Missed a fake: its value is lost ("Fake note taken" in Money out). Called a real note fake: the customer is offended. Too slow: the customer is unhappy, and a fake is lost.
 - "Let tiTi check" skips with no loss, no reward, no penalty.
 
+## 7k. Payments: cash, transfer, card *(tune)*
+
+- Mix of customers: Level 1 about 60% cash, 30% transfer, 10% card; Level 2 about 45% cash, 30% transfer, 25% card. Bargainers pay cash.
+- Transfer: give your account number → "I've sent it" → check your account (credit alert) → done. Card: charge the amount on POS → approved.
+- Settings → Payments: transfer account (CreditVoice account / another bank), account number (10 digits, default 0081234567) and POS (CreditVoice POS / another POS). **CreditVoice is the default.**
+- All options work. With CreditVoice, tiTi records the sale automatically; with another bank or POS, the player types the record, and about half the days tiTi suggests switching to CreditVoice.
+- Automatic records count in My records, debts and the quiz, but the recording score only counts sales the player had to record.
+- Customers greet by the time of day: good morning (before 12), good afternoon (before 4 pm), good evening.
+
 ## 8. Open points for review
 
 1. **Prices:** check every buy and sell price with traders in at least two markets.

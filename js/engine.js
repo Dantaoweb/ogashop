@@ -1,7 +1,7 @@
 // The game rules: one day = morning → customers (+ one event) → evening → score.
 // Pure state changes, no DOM, so it can be tested in Node.
 import {
-  GOODS, START_CASH, START_STOCK, START_PAY, PAY_STEP, RULES, LEVELS, BADGES, NOTE_ORDER, CUSTOMERS, REACTIONS,
+  GOODS, START_CASH, START_STOCK, START_PAY, PAY_STEP, PAYMENTS, RULES, LEVELS, BADGES, NOTE_ORDER, CUSTOMERS, REACTIONS,
 } from './data.js';
 import {
   CUST, fmt, clamp, randInt, round50, pick, pickWeighted, goodsForLevel, buyPrice, refPrice, expense, describeItems,
@@ -24,6 +24,7 @@ export function newGame(path, rng = Math.random) {
     levelProfit: 0, totalProfit: 0, score: 50,
     stats: { recW: 0, totW: 0, dueAmt: 0, paidOnTime: 0, days: 0, cleanDays: 0, repaid: 0, lost: 0, noLateStreak: 0, pocketPays: 0, capitalTakes: 0, overpayStreak: 0, served: 0, unhappy: 0, billsPaid: 0, billsLateDays: 0, changeRight: 0, goodChecks: 0 },
     badges: [], seen: {}, eventLog: {}, mods: {}, history: [], goal: null, goalsReached: [], sales: [], quizLog: [], quiz: null,
+    payments: { account: 'creditvoice', accountNumber: PAYMENTS.defaultAccountNumber, pos: 'creditvoice' },
     phase: 'morning', today: null,
   };
   for (const id of Object.keys(GOODS)) {
@@ -96,6 +97,7 @@ export function migrate(s) {
   Object.assign(s.stats, { pocketPays: 0, capitalTakes: 0, overpayStreak: 0, served: 0, unhappy: 0, billsPaid: 0, billsLateDays: 0, changeRight: 0, goodChecks: 0, ...s.stats });
   s.bills ??= [];
   s.goal ??= null;
+  s.payments ??= { account: 'creditvoice', accountNumber: PAYMENTS.defaultAccountNumber, pos: 'creditvoice' };
   s.sales ??= [];
   s.quizLog ??= [];
   s.quiz ??= null;
@@ -231,7 +233,7 @@ function makeRequest(s, cid, rng) {
   if (type === 'neverpays') { kind = 'credit'; frac = rng() * 0.3; }
   if (type === 'big' && s.level >= 2 && rng() < 0.5) { kind = 'credit'; frac = 0.5; }
   if (type === 'bargainer') kind = 'discount';
-  return { cid, items, kind, frac, disc: 0.1 + rng() * 0.05, walkRoll: rng(), acceptRoll: rng(), moodRoll: rng(), changeRoll: rng(), fakeRoll: rng() };
+  return { cid, items, kind, frac, disc: 0.1 + rng() * 0.05, walkRoll: rng(), acceptRoll: rng(), moodRoll: rng(), changeRoll: rng(), fakeRoll: rng(), payRoll: rng() };
 }
 
 // What the current customer wants, given today's stock and prices.
@@ -255,7 +257,8 @@ export function currentCustomer(s) {
   const discTotal = Math.round((total * (1 - r.disc)) / 50) * 50;
   return {
     ...r, customer: c, items, missing, total, walks, paysNow, discTotal, rush: rushOrder(s, wanted),
-    clock: clockFor(t.idx, t.queue.length), number: t.idx + 1, of: t.queue.length,
+    clock: clockFor(t.idx, t.queue.length), hour: hourFor(t.idx, t.queue.length), number: t.idx + 1, of: t.queue.length,
+    method: payMethod(s, r),
   };
 }
 
@@ -266,6 +269,18 @@ function rushOrder(s, wanted) {
   if (!items.length) return null;
   const goods = items.reduce((a, it) => a + it.qty * buyPrice(s, it.item), 0);
   return { items, goods, fee: RULES.rushFee, cost: goods + RULES.rushFee };
+}
+
+// How this customer pays: cash, transfer or POS (old saves: cash).
+function payMethod(s, r) {
+  const mix = RULES.payMix[s.level] || RULES.payMix[1];
+  const roll = r.payRoll ?? 0;
+  if (r.kind === 'discount' || roll < mix.cash) return 'cash';
+  return roll < mix.cash + mix.transfer ? 'transfer' : 'pos';
+}
+
+function hourFor(idx, n) {
+  return Math.floor((8 * 60 + Math.round((idx * 10 * 60) / Math.max(1, n))) / 60);
 }
 
 function clockFor(idx, n) {
@@ -364,6 +379,8 @@ export function serve(s, action) {
     if (said === 'discount') note = s.customers[v.cid].loyalty === 2 && before < 2 ? `${name} is now a loyal customer.` : `${name} likes your shop more.`;
   }
   const sale = applySale(s, v.cid, v.items, paid, { discount });
+  sale.method = sale.paid > 0 ? v.method : 'cash';
+  if (sale.logId != null) s.sales[sale.logId].method = sale.method;
   if (!s.badges.includes('first_sale')) s.badges.push('first_sale');
   t.pending = sale;
   t.reaction = reactionFor(v, said, sale, s.day + RULES.creditDueDays, note);
@@ -378,8 +395,15 @@ export function serve(s, action) {
   if (v.missing.length) t.chat.push({ from: 'titi', text: `You didn't have enough ${v.missing.map((i) => GOODS[i].short.toLowerCase()).join(' or ')}, so you sold less.${shortNote}` });
   t.chat.push({ from: 'titi', text: sale.total > sale.paid
     ? `You gave ${name} credit. Tell me what happened, the way you'd say it.`
-    : `${name} paid ${fmt(sale.paid)}. Record the sale.` });
+    : `${name} paid ${fmt(sale.paid)}${sale.method === 'transfer' ? ' by transfer' : sale.method === 'pos' ? ' by card' : ''}. Record the sale.` });
   s.phase = 'record';
+  // Transfer or card: the payment steps come first.
+  if (sale.method !== 'cash') {
+    const provider = sale.method === 'transfer' ? s.payments.account : s.payments.pos;
+    t.payment = { method: sale.method, provider, cid: v.cid, amount: sale.paid, step: 0 };
+    s.phase = 'pay';
+    return;
+  }
   // Sometimes a cash customer pays with ₦1,000 notes and you count the change.
   const notes = Math.ceil(sale.total / 1000) * 1000;
   if (sale.paid === sale.total && notes > sale.total && !t.changeDone && (v.changeRoll ?? 1) < RULES.changeChance) {
@@ -628,15 +652,61 @@ export function titiMessage(s, text) {
     t.chat.push({ from: 'titi', text: `Almost! But ${problems.slice(0, 2).join(', and ')}. Try again.` });
     return;
   }
+  markRecorded(s, sale);
+}
+
+// The sale goes into the records (typed to tiTi, or automatically with CreditVoice).
+function markRecorded(s, sale, auto = null) {
+  const t = s.today;
+  const name = sale.cid ? CUST[sale.cid].name : null;
   sale.recorded = true;
   if (sale.logId != null && s.sales[sale.logId]) s.sales[sale.logId].recorded = true;
-  const w = sale.total > sale.paid ? 2 : 1;
-  s.stats.recW += w;
-  s.stats.totW += w;
+  // The recording score only counts sales the player had to record themselves.
+  if (!auto) {
+    const w = sale.total > sale.paid ? 2 : 1;
+    s.stats.recW += w;
+    s.stats.totW += w;
+  }
   t.recordedSales++;
   const debt = sale.debtId ? debtById(s, sale.debtId) : null;
   if (debt) debt.recorded = true;
-  t.chat.push({ from: 'titi', card: { name, what: sale.items, listTotal: sale.listTotal, discount: sale.discount, total: sale.total, paid: sale.paid, owes: sale.total - sale.paid, due: debt?.due } });
+  t.chat.push({ from: 'titi', auto, card: { name, what: sale.items, listTotal: sale.listTotal, discount: sale.discount, total: sale.total, paid: sale.paid, owes: sale.total - sale.paid, due: debt?.due, method: sale.method } });
+}
+
+// ---------- Transfer and POS ----------
+
+// Transfer: give account → customer sends → check account. POS: enter amount → card approved.
+export function payNext(s) {
+  const t = s.today;
+  const p = t.payment;
+  if (!p) return;
+  p.step++;
+  const last = p.method === 'transfer' ? 2 : 1;
+  if (p.step <= last) return;
+  const sale = t.pending;
+  t.payment = null;
+  s.phase = 'record';
+  if (p.provider === 'creditvoice') {
+    t.chat = [];
+    markRecorded(s, sale, p.method === 'transfer' ? 'CreditVoice recorded this transfer for you automatically.' : 'CreditVoice POS recorded this sale for you automatically.');
+    return;
+  }
+  if (!t.recommended && Math.random() < RULES.recommendChance) {
+    t.recommended = true;
+    t.chat.push({ from: 'titi', text: `Tip: with a ${p.method === 'transfer' ? 'CreditVoice account' : 'CreditVoice POS'}, I record ${p.method === 'transfer' ? 'transfers' : 'card sales'} for you automatically, no typing. Set it in Settings → Payments.` });
+  }
+}
+
+export function setPayments(s, change) {
+  const p = s.payments;
+  if (change.account && PAYMENTS.accounts[change.account]) p.account = change.account;
+  if (change.pos && PAYMENTS.pos[change.pos]) p.pos = change.pos;
+  if (change.accountNumber != null) {
+    const digits = String(change.accountNumber).replace(/\D/g, '').slice(0, 10);
+    if (digits.length !== 10) return 'An account number has 10 digits.';
+    p.accountNumber = digits;
+  }
+  return null;
 }
 
 function owesReply(s) {

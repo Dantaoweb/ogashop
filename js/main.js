@@ -60,6 +60,7 @@ function view() {
     case 'change': return UI.changeScreen(s, ui);
     case 'run': return UI.runScreen(s);
     case 'fake': return UI.fakeScreen(s);
+    case 'pay': return UI.payScreen(s);
     case 'evening': return UI.eveningScreen(s, ui);
     default: return UI.morningScreen(s, ui);
   }
@@ -223,6 +224,10 @@ const actions = {
   'change-skip': () => { E.changeDone(s, 'skip'); },
   'change-timeout': () => { if (s.phase === 'change') E.changeDone(s, 'timeout'); },
   'fake-light': () => { E.fakeLight(s); },
+  'pay-next': () => { E.payNext(s); },
+  'set-account': (arg) => { E.setPayments(s, { account: arg }); },
+  'set-pos': (arg) => { E.setPayments(s, { pos: arg }); },
+  'set-account-number': (arg) => { ui.error = E.setPayments(s, { accountNumber: arg }); },
   'fake-pick': (arg) => { E.fakeDone(s, Number(arg)); },
   'fake-skip': () => { E.fakeDone(s, 'skip'); },
   'fake-timeout': () => { if (s.phase === 'fake') E.fakeDone(s, 'timeout'); },
@@ -263,6 +268,7 @@ app.addEventListener('change', (e) => {
   const el = e.target;
   if (el.matches('input[type="radio"][data-action]')) run(el.dataset.action, el.value);
   if (el.matches('input[type="checkbox"][data-action]')) run(el.dataset.action, el.checked);
+  if (el.matches('input[data-action="set-account-number"]')) run(el.dataset.action, el.value);
 });
 
 app.addEventListener('input', (e) => {

@@ -1,5 +1,5 @@
 // Screens. Each returns an HTML string; buttons carry data-action (and data-arg) handled in main.js.
-import { GOODS, LEVELS, BADGES, NOTES, EXPLAIN, TYPE_LABEL, CREDITVOICE_URL, RULES, GOALS, ALL_LEVELS } from './data.js';
+import { GOODS, LEVELS, BADGES, NOTES, EXPLAIN, TYPE_LABEL, CREDITVOICE_URL, RULES, GOALS, ALL_LEVELS, PAYMENTS } from './data.js';
 import { CUST, fmt, goodsForLevel, buyPrice, supplierOwed, owedToYou, openDebts, supplierCreditError } from './core.js';
 import { currentCustomer, eventView, scoreParts, suggestMessage, billsDueSoon, billOwed, cashNeededSoon, isStuck } from './engine.js';
 import { face, good, scene, levelPicture } from './art.js';
@@ -266,7 +266,7 @@ export function customerScreen(s) {
   } else if (c.type === 'big') {
     speech = `I need ${wanted} for a party.`;
   } else {
-    speech = `Good morning! Give me ${wanted}, please.`;
+    speech = `${v.hour < 12 ? 'Good morning' : v.hour < 16 ? 'Good afternoon' : 'Good evening'}! Give me ${wanted}, please.`;
   }
 
   let actions;
@@ -289,7 +289,7 @@ export function customerScreen(s) {
       parts.push(ch('sell', 'primary', 'Give discount', `${fmt(v.discTotal)} (you lose ${fmt(v.total - v.discTotal)})`));
       parts.push(ch('fullprice', '', 'Full price', `Ask for ${fmt(v.total)}. ${c.she ? 'She' : 'He'} may leave.`));
     } else {
-      parts.push(ch('sell', 'primary', `Sell for ${fmt(v.total)}`, 'Cash now'));
+      parts.push(ch('sell', 'primary', `Sell for ${fmt(v.total)}`, v.method === 'transfer' ? 'Paid by transfer' : v.method === 'pos' ? 'Paid by card (POS)' : 'Cash now'));
       parts.push(ch('discount', '', 'Give discount', `${fmt(v.discTotal)}: less profit, happier customer`));
     }
     parts.push(ch('refuse', '', 'Refuse', `${c.she ? 'She' : 'He'} may not come back`));
@@ -316,6 +316,7 @@ export function customerScreen(s) {
         <b style="font-size:21px">${esc(c.name)}</b>
         <div class="wrap" style="justify-content:center"><span class="tag ${c.type === 'regular' ? 'green' : 'amber'}">${TYPE_LABEL[c.type]}</span>${loyal ? '<span class="tag green">Loyal</span>' : ''}</div>
       </div>
+      ${!t.outcome && v.items.length && v.method !== 'cash' && v.kind !== 'credit' ? `<span class="tag ${v.method === 'transfer' ? 'green' : 'amber'}" style="align-self:center">${v.method === 'transfer' ? 'Will pay by transfer' : 'Will pay by card (POS)'}</span>` : ''}
       <div class="card" ${t.outcome ? '' : sayAttrs(speech, c.id)}><div class="between" style="align-items:flex-start"><p class="speech">“${esc(speech)}”</p>${t.outcome ? '' : sayBtn()}</div>${order}</div>
       ${t.flash ? `<div class="notice" data-animate>${icon('truck', 16)} ${esc(t.flash)}</div>` : ''}
       ${actions}
@@ -350,8 +351,9 @@ export function recordScreen(s, ui) {
       return `<div class="bubble titi card-msg"><div class="row"><span class="avatar" style="width:24px;height:24px">${icon('check', 14, 3)}</span><b>Sale recorded</b></div>
         <dl class="kv">${c.name ? `<dt>Customer</dt><dd>${esc(c.name)}</dd>` : ''}<dt>Items</dt><dd>${esc(items(c.what))}</dd>
         ${c.discount ? `<dt>Price</dt><dd>${fmt(c.listTotal)}</dd><dt>Discount</dt><dd style="color:var(--red)">−${fmt(c.discount)}</dd>` : ''}
-        <dt>Total</dt><dd>${fmt(c.total)}</dd><dt>Paid</dt><dd>${fmt(c.paid)}</dd>
+        <dt>Total</dt><dd>${fmt(c.total)}</dd><dt>Paid</dt><dd>${fmt(c.paid)}${c.method && c.method !== 'cash' ? ` <span class="small muted">(${c.method === 'pos' ? 'card' : 'transfer'})</span>` : ''}</dd>
         ${c.owes ? `<dt>Owes</dt><dd style="color:var(--amber-ink);font-weight:700">${fmt(c.owes)}</dd><dt>Due</dt><dd>Day ${c.due}</dd>` : ''}</dl>
+        ${m.auto ? `<p class="small" style="margin:0;padding-top:8px;border-top:1px dashed var(--line);color:var(--green);font-weight:700">${esc(m.auto)}</p>` : ''}
         ${c.owes ? `<p class="small" style="margin:0;padding-top:8px;border-top:1px dashed var(--line)">${s.level >= 2 ? 'You can remind them from "Who owes you" on the due day.' : 'Recorded debts get paid back far more often.'}</p>` : ''}</div>`;
     }
     return `<div class="bubble ${m.from}">${esc(m.text)}</div>`;
@@ -406,6 +408,52 @@ export function runScreen(s) {
       <span class="small muted">Catch the goods. Dodge puddles, okadas and wheelbarrows: each bump costs 2 seconds.</span>
     </div>
     <div class="foot"><button type="button" class="link" data-action="run-boy" style="align-self:center">Send the boy instead (+${fmt(RULES.rushFee)} transport)</button></div>
+  </main>`;
+}
+
+// ---------- Transfer and POS ----------
+
+export function payScreen(s) {
+  const p = s.today.payment;
+  const c = CUST[p.cid];
+  const cv = p.provider === 'creditvoice';
+  const acctName = cv ? 'CreditVoice' : 'your bank';
+  let say;
+  let body;
+  let next;
+  if (p.method === 'transfer') {
+    if (p.step === 0) {
+      say = `I'll pay ${fmt(p.amount)} by transfer. What's your account number?`;
+      body = `<div class="card"><span class="small muted">Your account (${esc(PAYMENTS.accounts[s.payments.account])})</span><b style="font-size:22px;letter-spacing:.08em">${esc(s.payments.accountNumber)}</b></div>`;
+      next = `Give my account number`;
+    } else if (p.step === 1) {
+      say = `I've sent it. ${fmt(p.amount)}.`;
+      body = titi('Always check your account before you give the goods. Some people show fake alerts.');
+      next = 'Check my account';
+    } else {
+      say = 'Has it come?';
+      body = `<div class="card soft"><span class="small" style="font-weight:700;color:var(--green)">${esc(acctName)} · Credit alert</span><b style="font-size:20px">+${fmt(p.amount)}</b><span class="small">From ${esc(c.name)}</span></div>`;
+      next = 'Yes, it has come. Thank you!';
+    }
+  } else if (p.step === 0) {
+    say = `I'll pay ${fmt(p.amount)} with my card.`;
+    body = `<div class="card"><span class="small muted">${esc(PAYMENTS.pos[s.payments.pos])}</span><b style="font-size:22px">Amount: ${fmt(p.amount)}</b><span class="small muted">The customer puts in the card and enters their PIN.</span></div>`;
+    next = `Charge ${fmt(p.amount)} on POS`;
+  } else {
+    say = 'Done?';
+    body = `<div class="card soft"><b style="color:var(--green);font-size:20px">${icon('check', 20, 3)} Approved</b><span class="small">${fmt(p.amount)} paid by card</span></div>`;
+    next = 'Give the receipt';
+  }
+  const isLast = (p.method === 'transfer' && p.step === 2) || (p.method === 'pos' && p.step === 1);
+  return `<main class="screen">
+    <header class="top"><div class="kicker">Day ${s.day} · ${p.method === 'transfer' ? 'Bank transfer' : 'Card payment (POS)'}</div><div class="title display">${esc(c.name)} is paying</div></header>
+    <div class="body">
+      <div class="reaction" ${sayAttrs(say, p.cid)}><span class="mini-face lg">${face(p.cid, { size: 56 })}</span>
+        <div class="grow"><b class="small">${esc(c.name)}</b><div class="say">“${esc(say)}”</div></div>${sayBtn()}</div>
+      ${body}
+      ${isLast && cv ? `<span class="small" style="color:var(--green);font-weight:700">${icon('check', 14, 3)} ${p.method === 'transfer' ? 'CreditVoice account' : 'CreditVoice POS'}: tiTi will record this sale for you automatically.</span>` : ''}
+    </div>
+    <div class="foot">${btn('pay-next', next, 'primary block')}</div>
   </main>`;
 }
 
@@ -843,6 +891,16 @@ export function settingsScreen(s, ui) {
       <div class="card"><h3>How you play</h3>
         ${opt('business', 'I run a business', 'Fewer explanations.')}
         ${opt('learning', 'I\'m learning business', 'tiTi explains new ideas and adds "Did you know?" notes.')}</div>
+      <div class="card"><h3>Payments</h3>
+        <span class="small muted">How customers pay you by transfer and card. With CreditVoice, tiTi records those sales automatically.</span>
+        <b class="small">Account for transfers</b>
+        ${Object.entries(PAYMENTS.accounts).map(([id, label]) => `<label class="settings-opt" style="padding:6px 0"><input type="radio" name="acct" value="${id}" data-action="set-account" ${s.payments.account === id ? 'checked' : ''}><span>${esc(label)}${id === 'creditvoice' ? ' <span class="tag green">Records automatically</span>' : ''}</span></label>`).join('')}
+        <label class="small muted" for="acct-no">Account number</label>
+        <input id="acct-no" data-action="set-account-number" inputmode="numeric" maxlength="10" value="${esc(s.payments.accountNumber)}" style="height:44px;border:1px solid var(--line-2);border-radius:12px;padding:0 12px;font-size:16px;letter-spacing:.08em">
+        ${ui.error ? `<div class="toast" role="alert">${esc(ui.error)}</div>` : ''}
+        <b class="small">POS machine</b>
+        ${Object.entries(PAYMENTS.pos).map(([id, label]) => `<label class="settings-opt" style="padding:6px 0"><input type="radio" name="pos" value="${id}" data-action="set-pos" ${s.payments.pos === id ? 'checked' : ''}><span>${esc(label)}${id === 'creditvoice' ? ' <span class="tag green">Records automatically</span>' : ''}</span></label>`).join('')}
+      </div>
       ${Voice.supported ? `<div class="card"><h3>Sound</h3>
         <label class="settings-opt"><input type="checkbox" data-action="set-voice" ${Voice.enabled() ? 'checked' : ''}><span><b>Customers speak</b><div class="small muted">Customers say what they want out loud, using your phone's voice. Their words also stay on screen.</div></span></label></div>` : ''}
       ${ui.canInstall ? `<div class="card"><h3>Add to home screen</h3><span class="small muted">Play like an app, even without data.</span>${btn('install', 'Install Oga Shop', 'secondary small')}</div>` : ''}
