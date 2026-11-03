@@ -102,7 +102,7 @@ function watchRun() {
 let timerPhase = null;
 function watchChangeTimer() {
   const phase = s?.phase;
-  const counting = (phase === 'change' || phase === 'fake') && !ui.screen && s.path !== 'learning';
+  const counting = (phase === 'change' || phase === 'fake') && !ui.screen && s.path !== 'learning' && !s.today.change?.demand;
   if (changeTimer && (!counting || timerPhase !== phase)) { clearTimeout(changeTimer); changeTimer = null; }
   if (counting && !changeTimer) {
     timerPhase = phase;
@@ -225,7 +225,8 @@ const actions = {
   'change-undo': () => { E.changeUndo(s); },
   'change-give': () => { E.changeDone(s, 'give'); },
   'change-skip': () => { E.changeDone(s, 'skip'); },
-  'change-timeout': () => { if (s.phase === 'change') E.changeDone(s, 'timeout'); },
+  'change-timeout': () => { if (s.phase === 'change' && !s.today.change?.demand) E.changeDone(s, 'timeout'); },
+  'change-balance': () => { E.changeBalance(s); },
   'fake-light': () => { E.fakeLight(s); },
   'pay-next': () => { E.payNext(s); },
   'set-account': (arg) => { E.setPayments(s, { account: arg }); },

@@ -594,13 +594,26 @@ export function changeDone(s, result) {
     s.stats.changeRight++;
     r = { text: 'Correct change. Thank you, my friend!', mood: 'happy', note: `Right change: ${fmt(c.due)}. ${name} trusts your shop.` };
   } else if (given < c.due) {
+    // The customer demands the balance before leaving.
     unhappy(s);
-    r = { text: `You short-changed me! I paid ${fmt(c.handed)}.`, mood: 'sad', note: `You gave ${fmt(given)}, but the change was ${fmt(c.due)}. You had to give the rest.` };
+    c.demand = c.due - given;
+    return;
   } else {
     expense(s, given - c.due, 'Too much change given');
     r = { text: 'Thank you o!', mood: 'happy', note: `You gave ${fmt(given)}, but the change was ${fmt(c.due)}. You lost ${fmt(given - c.due)}.` };
   }
   t.reaction = { cid: c.cid, ...r };
+  t.change = null;
+  s.phase = 'record';
+}
+
+// After short-changing: give the customer the balance from the till.
+export function changeBalance(s) {
+  const t = s.today;
+  const c = t.change;
+  if (!c?.demand) return;
+  t.balances = [...(t.balances || []), { cid: c.cid, amount: c.demand }];
+  t.reaction = { cid: c.cid, text: 'Hmm. Next time, count my change well.', mood: 'sad', note: `You gave ${fmt(c.demand)} balance from the till. Count carefully: short change makes customers angry.` };
   t.change = null;
   s.phase = 'record';
 }

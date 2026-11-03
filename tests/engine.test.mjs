@@ -463,6 +463,11 @@ test('count the change: right, short, too much, skip', () => {
     assert.deepEqual([s.today.change.handed, s.today.change.due], [2000, 350]);
     for (const n of taps) E.changeTap(s, n);
     E.changeDone(s, result);
+    if (s.today.change?.demand) {
+      assert.equal(s.phase, 'change', 'customer demands the balance first');
+      s.demanded = s.today.change.demand;
+      E.changeBalance(s);
+    }
     assert.equal(s.phase, 'record');
     return s;
   };
@@ -471,7 +476,9 @@ test('count the change: right, short, too much, skip', () => {
   assert.match(right.today.reaction.text, /Correct change/);
   const short = play([200, 100]);
   assert.equal(short.stats.unhappy, 1);
-  assert.match(short.today.reaction.text, /short-changed/);
+  assert.equal(short.demanded, 50);
+  assert.deepEqual(short.today.balances, [{ cid: 'musa', amount: 50 }]);
+  assert.match(short.today.reaction.note, /gave ₦50 balance/);
   const much = play([500]);
   assert.equal(much.today.profit, 1650 - 3 * 400 - 150);
   const skip = play([], 'skip');

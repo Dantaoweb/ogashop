@@ -540,6 +540,20 @@ export function fakeScreen(s) {
 
 export function changeScreen(s, ui) {
   const c = s.today.change;
+  if (c.demand) {
+    const say = `You short-changed me! I paid ${fmt(c.handed)}. My balance is ${fmt(c.demand)}.`;
+    return `<main class="screen">
+      <header class="top" style="background:var(--red)"><div class="kicker" style="color:#FFE3E0">Day ${s.day} · Count the change</div><div class="title display">Short change!</div></header>
+      <div class="body">
+        <div class="reaction" ${sayAttrs(say, c.cid)}><span class="mini-face lg">${face(c.cid, { size: 56, mood: 'sad' })}</span>
+          <div class="grow"><b class="small">${esc(CUST[c.cid].name)}</b><div class="say">“${esc(say)}”</div></div>${sayBtn()}</div>
+        <div class="card"><div class="between"><span class="muted">Change you should give</span><b>${fmt(c.due)}</b></div>
+          <div class="between"><span class="muted">You gave</span><b>${fmt(c.due - c.demand)}</b></div>
+          <div class="between" style="padding-top:8px;border-top:1px dashed var(--line)"><span>Balance to give</span><b style="font-size:22px;color:var(--red)">${fmt(c.demand)}</b></div></div>
+      </div>
+      <div class="foot">${btn('change-balance', `Give ${fmt(c.demand)} balance`, 'primary block')}</div>
+    </main>`;
+  }
   const given = c.given.reduce((a, n) => a + n, 0);
   const timed = s.path !== 'learning';
   const notes = RULES.changeNotes.map((n) => `<button type="button" class="note-btn" data-action="change-tap" data-arg="${n}" aria-label="Add ${fmt(n)}">${fmt(n)}</button>`).join('');
@@ -614,6 +628,7 @@ export function eveningScreen(s, ui = {}) {
     ...t.lostDebts.map((r) => `${CUST[r.cid].name}'s ${fmt(r.amount)} is lost${r.recorded ? '' : ' (it was never recorded)'}.`),
     ...t.wasted.map((w) => `${w.qty} ${GOODS[w.item].short.toLowerCase()} ${w.label}.`),
     ...(t.billNotes || []),
+    ...(t.balances || []).map((b) => `You short-changed ${CUST[b.cid].name} and gave back ${fmt(b.amount)} balance.`),
     ...(t.complaints.length ? [`${t.complaints.length} customer${t.complaints.length > 1 ? 's' : ''} complained about prices you raised during the day.`] : []),
     ...(t.creditWalkouts.length ? [`${t.creditWalkouts.length} trusted customer${t.creditWalkouts.length > 1 ? 's' : ''} left because you refused credit.`] : []),
     ...(t.goodCalls.length ? [`Good call: you refused credit to ${[...new Set(t.goodCalls)].map((c) => CUST[c].name).join(' and ')}.`] : []),
