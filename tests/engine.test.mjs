@@ -564,6 +564,38 @@ test('too much change: ask for it back (honest returns it, Chidi often not) or l
   assert.equal(kind.phase, 'record');
 });
 
+test('cheap supplier deal: too slow or thinking lets a rival grab it', () => {
+  const setup = () => {
+    const s = E.newGame('business', mulberry32(150));
+    s.today.queue = Array.from({ length: 4 }, () => ({ cid: 'musa', items: [{ item: 'garri', qty: 1 }], kind: 'cash', frac: 1, disc: 0.1, walkRoll: 0.99, acceptRoll: 0, moodRoll: 0.99, changeRoll: 1, fakeRoll: 1, payRoll: 0 }));
+    s.today.eventAt = 99;
+    E.openShop(s);
+    s.today.event = { id: 'bulk_offer', ctx: {}, outcome: null };
+    s.phase = 'event';
+    return s;
+  };
+  const slow = setup();
+  assert.equal(E.eventView(slow).timed, true);
+  E.eventTimeout(slow, () => 0);
+  assert.match(slow.today.event.outcome, /Too slow! Emeka Stores took the cheap rice/);
+  assert.equal(slow.mods.rivalDeals[0].until, slow.day + 1);
+  slow.day++;
+  assert.ok(E.attraction(slow).parts.some(([label]) => /Emeka Stores has cheap rice/.test(label)));
+  // thinking: the offer comes back after the next customer, once, without the think option
+  const think = setup();
+  const idx = E.eventView(think).choices.findIndex((c) => c.label === 'Let me think about it');
+  E.chooseEvent(think, idx, () => 0.9);
+  assert.match(think.today.event.outcome, /after your next customer/);
+  E.continueAfterEvent(think);
+  assert.equal(think.phase, 'selling');
+  E.serve(think, 'sell'); E.skipRecord(think);
+  assert.equal(think.phase, 'event');
+  assert.equal(E.eventView(think).choices.some((c) => c.label === 'Let me think about it'), false);
+  const grabbed = setup();
+  E.chooseEvent(grabbed, idx, () => 0.1);
+  assert.match(grabbed.today.event.outcome, /Too late!/);
+});
+
 test('out of stock: customers still name a real price (no ₦0 offers)', () => {
   const s = E.newGame('business', mulberry32(130));
   s.stock.rice = 0;

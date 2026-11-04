@@ -95,6 +95,22 @@ function watchRoad() {
 }
 
 // The market run plays on its own (no re-render until it ends).
+// Cheap supplier offers: if you don't decide in time, a rival grabs the deal.
+let dealTimer = null;
+let dealKey = '';
+function watchDeal() {
+  const ev = s?.today?.event;
+  const timed = s?.phase === 'event' && !ui.screen && ev && !ev.outcome && UI.isTimedEvent(ev.id);
+  const key = timed ? `${s.day}|${s.today.idx}|${ev.id}|${!!ev.ctx?.thought}` : '';
+  if (key === dealKey) return;
+  dealKey = key;
+  clearTimeout(dealTimer);
+  dealTimer = null;
+  if (!timed) return;
+  const secs = s.path === 'learning' ? RULES.dealSecondsLearning : RULES.dealSeconds;
+  dealTimer = setTimeout(() => { dealTimer = null; run('event-timeout'); }, secs * 1000);
+}
+
 // While you're busy with a customer, the waiting line gets restless.
 let queueTimer = null;
 let queueKey = '';
@@ -172,6 +188,7 @@ function render() {
   watchChangeTimer();
   watchRun();
   watchQueue();
+  watchDeal();
   if (s?.phase === 'record' && !ui.screen) {
     const chat = app.querySelector('.chat');
     chat?.lastElementChild?.scrollIntoView({ block: 'nearest' });
@@ -232,6 +249,7 @@ const actions = {
   'record-next': () => { ui.msg = ''; E.skipRecord(s); },
 
   event: (arg) => { E.chooseEvent(s, Number(arg)); },
+  'event-timeout': () => { E.eventTimeout(s); },
   'event-continue': () => { E.continueAfterEvent(s); },
 
   'evening-next': () => { ui.screen = 'score'; },

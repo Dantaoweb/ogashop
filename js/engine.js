@@ -8,7 +8,7 @@ import {
   addStock, buyStock, waste, applySale, debtById, openDebts, owedToYou, debtPaid, debtLost,
   changeLoyalty, supplierOwed, supplierCreditError,
 } from './core.js';
-import { EVENT_BY_ID, drawEvent, morningEffects } from './events.js';
+import { EVENT_BY_ID, drawEvent, morningEffects, rivalGrab } from './events.js';
 import { checkGoal } from './goals.js';
 import { makeQuiz } from './quiz.js';
 import { challengeForDay, levelDay, LEVEL_DAYS } from './challenge.js';
@@ -212,6 +212,10 @@ export function attraction(s) {
   if (loyal > 0.1) parts.push(['Loyal customers', loyal * 0.2]);
   const asked = Object.values(s.lastAsks || {}).reduce((a, n) => a + n, 0);
   if (asked >= 3) parts.push(['Goods ran out yesterday', -0.15]);
+  for (const d of s.mods.rivalDeals || []) {
+    if (d.fake && d.from === s.day - 1) parts.push([`${d.name} sold fake goods`, 0.1]);
+    else if (!d.fake && d.until >= s.day) parts.push([`${d.name} has ${d.what}`, -0.1]);
+  }
   return { factor: clamp(1 + parts.reduce((a, [, v]) => a + v, 0), 0.6, 1.6), parts };
 }
 
@@ -937,6 +941,14 @@ function advance(s) {
 
 function nextStep(s, rng = Math.random) {
   const t = s.today;
+  // An offer the player wanted to think about comes back once.
+  if (t.retryEvent && t.idx >= t.retryEvent.at && t.idx < t.queue.length) {
+    const { id, ctx } = t.retryEvent;
+    t.retryEvent = null;
+    t.event = { id, ctx, outcome: null, note: EVENT_BY_ID[id].note || null };
+    s.phase = 'event';
+    return;
+  }
   if (!t.eventDone && t.idx >= t.eventAt && t.idx < t.queue.length) {
     t.eventDone = true;
     const ev = drawEvent(s, rng);
@@ -986,8 +998,17 @@ export function eventView(s) {
   const def = EVENT_BY_ID[ev.id];
   return {
     id: ev.id, icon: def.icon, title: def.title(s, ev.ctx), text: def.text(s, ev.ctx),
-    choices: ev.outcome ? [] : def.choices(s, ev.ctx), outcome: ev.outcome,
+    choices: ev.outcome ? [] : def.choices(s, ev.ctx), outcome: ev.outcome, timed: !!def.timed && !ev.outcome,
   };
+}
+
+// Too slow on a cheap offer: a rival takes it.
+export function eventTimeout(s, rng = Math.random) {
+  const ev = s.today.event;
+  const def = ev && EVENT_BY_ID[ev.id];
+  if (!def?.timed || ev.outcome) return;
+  const name = rivalGrab(s, rng, def.grab);
+  ev.outcome = `Too slow! ${name} took the ${def.grab.what}.${def.grab.fake ? ' Let\'s see how that goes for them.' : ' Good deals don\'t wait.'}`;
 }
 
 export function chooseEvent(s, index, rng = Math.random) {

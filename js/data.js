@@ -99,6 +99,8 @@ export const RULES = {
   payMix: { 1: { cash: 0.6, transfer: 0.3 }, 2: { cash: 0.45, transfer: 0.3 } },
   recommendChance: 0.5, // with another bank or POS, how often tiTi suggests CreditVoice (once a day at most)
   quickQuestionChance: 0.35, // some evenings ask one question about your shop
+  dealSeconds: 10, dealSecondsLearning: 20, // cheap supplier offers: decide before a rival grabs them
+  dealThinkGrab: 0.5, // "let me think about it": chance a rival grabs it first
   changeChance: 0.35,
   extraBack: { honest: 0.85, neverpays: 0.25 }, // chance a customer returns extra change when asked
   changeSeconds: 15,

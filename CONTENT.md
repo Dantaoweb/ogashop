@@ -256,6 +256,13 @@ The score moves slowly: at most ±6 points a day, so one bad day never wipes out
 - While you're busy (counting change, checking notes, transfer or card, recording), every 10 seconds (20 on the learning path) the last person in the line leaves for a rival: "Aisha got tired of waiting and went to Emeka Stores." Recording gets twice as long, so the game never pushes players to skip it.
 - When a customer reaches the front, there's a 30% chance they ask for something you're running low on (1 or 2 left).
 
+## 7p. Rivals grab cheap deals *(tune)*
+
+- The supplier bulk offer (#7) and the very cheap noodles (#12) are timed: 10 seconds (20 on the learning path), with a bar.
+- **Let me think about it**: 50% a rival grabs it straight away ("Too late! Emeka Stores bought the cheap rice"); otherwise it comes back once, after the next customer.
+- Too slow: a rival takes it.
+- A rival with cheap rice draws more customers for 2 days (your share −10%, shown on Market today). A rival who took the fake noodles has unhappy customers the next day (your share +10%).
+
 ## 8. Open points for review
 
 1. **Prices:** check every buy and sell price with traders in at least two markets.

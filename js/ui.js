@@ -6,6 +6,9 @@ import { face, good, scene, levelPicture } from './art.js';
 import { goalStatus, daysToGoal, howLong } from './goals.js';
 import * as Voice from './voice.js';
 import { runnerSvg } from './run.js';
+import { EVENT_BY_ID } from './events.js';
+
+export const isTimedEvent = (id) => !!EVENT_BY_ID[id]?.timed;
 import { result as quizResult } from './quiz.js';
 import { CHALLENGES, CHANGE_NOTES, FLAW_HINT, LEVEL_DAYS, levelDay } from './challenge.js';
 
@@ -151,7 +154,10 @@ function marketMorning(s) {
   const cost = ADVERT.cost[s.level] || ADVERT.cost[1];
   return `<div class="card"><div class="between"><b>Market today</b><span class="small muted">about ${m.size} customers</span></div>
     <div class="between small"><span>Your shop</span><b>${m.mine} expected</b></div>
-    ${m.rivals.map((r) => `<div class="between small"><span class="muted">${esc(r.name)}</span><span class="muted">${r.customers}</span></div>`).join('')}
+    ${m.rivals.map((r) => {
+      const deal = (s.mods.rivalDeals || []).find((d) => d.rival === r.id && !d.fake && d.until >= s.day);
+      return `<div class="between small"><span class="muted">${esc(r.name)}${deal ? ` <span class="tag amber">${esc(deal.what)} until Day ${deal.until}</span>` : ''}</span><span class="muted">${r.customers}</span></div>`;
+    }).join('')}
     ${m.parts.length ? `<span class="small muted">${m.parts.map(([label, v]) => `${esc(label)} ${v > 0 ? '+' : ''}${Math.round(v * 100)}%`).join(' · ')}</span>` : '<span class="small muted">Win more customers: an advert, good prices, loyal customers, full stock.</span>'}
     ${advertUp ? `<span class="tag green" style="align-self:flex-start">${icon('star', 12)} Your advert is up until Day ${s.mods.advertUntil}</span>`
       : btn('advert', `Put up an advert at your shop front (${fmt(cost)}, ${ADVERT.days} days)`, 'secondary small block', '', s.cash < cost ? 'disabled' : '')}</div>`;
@@ -737,6 +743,8 @@ export function eventScreen(s) {
     <div style="display:flex;flex-direction:column;gap:8px"><h1 id="ev-title" class="display" style="font-size:28px">${esc(v.title)}</h1>
       <p style="margin:0;font-size:16px;color:var(--ink-2)">${esc(v.text)}</p></div>
     ${explain(s, 'event')}
+    ${v.timed ? `<div class="progress lg" aria-hidden="true"><div class="patience" style="animation-duration:${s.path === 'learning' ? RULES.dealSecondsLearning : RULES.dealSeconds}s"></div></div>
+      <span class="small muted">Decide quickly: a rival is watching this deal.</span>` : ''}
     ${v.outcome ? `${titi(esc(v.outcome))}${btn('event-continue', 'Continue', 'primary block')}` : `<div style="display:flex;flex-direction:column;gap:10px">${choices}</div>`}
   </div></div></main>`;
 }

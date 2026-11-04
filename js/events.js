@@ -1,7 +1,7 @@
 // The event deck — CONTENT.md section 3.
 // eligible(s) returns a plain context object (saved with the game) or null.
 // choices(s, ctx) returns buttons; run(s, ctx, rng) applies the choice and returns tiTi's outcome text.
-import { GOODS, FAMILY_NEEDS } from './data.js';
+import { GOODS, FAMILY_NEEDS, RIVALS, RULES } from './data.js';
 import { delayNote } from './goals.js';
 import {
   CUST, fmt, pick, randInt, buyPrice, refPrice, setMarket, expense, waste, buyStock,
@@ -9,6 +9,29 @@ import {
 } from './core.js';
 
 const remaining = (s) => s.today.queue.length - s.today.idx;
+
+// A rival takes a cheap deal you didn't grab: for today and tomorrow they draw more customers
+// (or, if it was fake goods, lose them).
+export function rivalGrab(s, rng, grab) {
+  const r = RIVALS[Math.floor(rng() * RIVALS.length)];
+  s.mods.rivalDeals = [...(s.mods.rivalDeals || []).filter((d) => d.until >= s.day), { rival: r.id, name: r.name, what: grab.what, fake: !!grab.fake, from: s.day, until: s.day + 1 }];
+  return r.name;
+}
+
+// "Let me think about it": maybe a rival grabs it now; otherwise the offer comes back after the next customer.
+function thinkChoice(def) {
+  return {
+    label: 'Let me think about it', sub: 'A rival might grab it first.',
+    run: (st, ctx, rng) => {
+      if (rng() < RULES.dealThinkGrab) {
+        const name = rivalGrab(st, rng, def.grab);
+        return `Too late! ${name} bought the ${def.grab.what} while you were thinking. Good deals don't wait.`;
+      }
+      st.today.retryEvent = { id: def.id, ctx: { ...ctx, thought: true }, at: st.today.idx + 1 };
+      return 'The supplier will wait until after your next customer. Not longer.';
+    },
+  };
+}
 
 // Remove customers from the end of today's queue.
 function fewerCustomers(s, n) {
@@ -154,11 +177,11 @@ export const EVENTS = [
     note: 'record',
   },
   {
-    id: 'bulk_offer', levels: [1, 2], icon: 'box',
+    id: 'bulk_offer', levels: [1, 2], icon: 'box', timed: true, grab: { what: 'cheap rice' },
     eligible: () => ({}),
     title: () => 'Supplier bulk offer',
     text: (s) => `Your supplier offers 10 buckets of rice at ${fmt(buyPrice(s, 'rice') - 200)} each, ${fmt(200)} cheaper than usual.`,
-    choices: (s) => {
+    choices: (s, ctx) => {
       const unit = buyPrice(s, 'rice') - 200;
       const total = unit * 10;
       const out = [{ label: `Take the deal (${fmt(total)} cash)`, sub: 'Cheaper stock, but your cash is tied up.', disabled: s.cash < total ? `You have ${fmt(s.cash)}.` : null,
@@ -166,6 +189,7 @@ export const EVENTS = [
       if (s.level >= 2) out.push({ label: 'Take it on supplier credit', sub: `Pay ${fmt(total)} in 3 days.`, disabled: supplierCreditError(s, total),
         run: (st) => { buyStock(st, 'rice', 10, { unitCost: unit, credit: true }); return `Bought on credit. You owe ${fmt(total)} in 3 days.`; } });
       out.push({ label: 'Buy only what I need', sub: 'Keep your cash free.', run: () => 'Cash kept free. Cheap stock is only good if you can sell it soon.' });
+      if (!ctx?.thought) out.push(thinkChoice(EVENT_BY_ID.bulk_offer));
       return out;
     },
     note: 'stock',
@@ -226,14 +250,15 @@ export const EVENTS = [
     note: 'stock',
   },
   {
-    id: 'fake_noodles', levels: [2], once: true, icon: 'alert',
+    id: 'fake_noodles', levels: [2], once: true, icon: 'alert', timed: true, grab: { what: 'very cheap noodles', fake: true },
     eligible: () => ({}),
     title: () => 'Very cheap noodles',
     text: () => 'A seller you don\'t know offers noodles at ₦150 a pack. That\'s much cheaper than your supplier.',
-    choices: (s) => [
+    choices: (s, ctx) => [
       { label: 'Buy 20 packs for ₦3,000', sub: 'Big profit if they\'re real.', disabled: s.cash < 3000 ? `You have ${fmt(s.cash)}.` : null,
         run: (st) => { buyStock(st, 'noodles', 20, { unitCost: 150 }); st.mods.fakeNoodles = 20; return 'You bought 20 packs. Let\'s see how customers like them.'; } },
       { label: 'No, thank you', sub: 'Stick with your supplier.', run: () => 'Good call. Very cheap stock from a stranger is a risk.' },
+      ...(ctx?.thought ? [] : [thinkChoice(EVENT_BY_ID.fake_noodles)]),
     ],
   },
   {
@@ -332,6 +357,10 @@ export function drawEvent(s, rng) {
 // Effects that carry into the next morning.
 export function morningEffects(s) {
   const notes = [];
+  for (const d of s.mods.rivalDeals || []) {
+    if (d.fake && d.from === s.day - 1) notes.push(`${d.name}'s customers are complaining about fake noodles. Some are coming to you instead.`);
+    else if (!d.fake && d.until >= s.day) notes.push(`${d.name} has ${d.what} until Day ${d.until}, so they are drawing more customers.`);
+  }
   if (s.mods.fakeNoodles) {
     const lost = waste(s, 'noodles', s.mods.fakeNoodles, 'fake, returned');
     delete s.mods.fakeNoodles;
