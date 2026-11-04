@@ -23,6 +23,13 @@ export const HOSPITAL = {
     { id: 'ambulance', name: 'Ambulance', cost: 15000, heal: 2 },
   ],
 };
+// Rival shops in your market (computer-run for now; real players need a server, later).
+// price: how their prices compare with the market price; ticket: average sale per customer.
+export const RIVALS = [
+  { id: 'emeka', name: 'Emeka Stores', price: 1.0, ticket: { 1: 2200, 2: 2800 } },
+  { id: 'basira', name: "Iya Basira's Stall", price: 0.95, ticket: { 1: 1800, 2: 2400 } },
+];
+export const ADVERT = { cost: { 1: 1000, 2: 2000 }, days: 2, boost: 0.35 };
 export const START_PAY = 1000; // daily pay the player gives themselves; they can change it
 export const PAY_STEP = 500;
 export const SUPPLIER_CREDIT_DAYS = 3;
@@ -154,9 +161,9 @@ export const FAMILY_NEEDS = [
 ];
 
 export const LEVELS = {
-  1: { name: 'The Table', goalProfit: 9000, goalScore: 68,
+  1: { name: 'The Table', goalProfit: 11000, goalScore: 68,
        blurb: 'A small market table. Learn cash vs profit, and record every sale.' },
-  2: { name: 'The Shop', goalProfit: 6000, goalScore: 70, maxLateDays: 7,
+  2: { name: 'The Shop', goalProfit: 8000, goalScore: 70, maxLateDays: 7,
        blurb: 'A small shop. Restock on time, give credit carefully and get your debts back.' },
 };
 

@@ -1,7 +1,7 @@
 // The game rules: one day = morning → customers (+ one event) → evening → score.
 // Pure state changes, no DOM, so it can be tested in Node.
 import {
-  GOODS, START_CASH, START_STOCK, START_PAY, PAY_STEP, PAYMENTS, HOSPITAL, RULES, LEVELS, BADGES, NOTE_ORDER, CUSTOMERS, REACTIONS,
+  GOODS, START_CASH, START_STOCK, START_PAY, PAY_STEP, PAYMENTS, HOSPITAL, RIVALS, ADVERT, RULES, LEVELS, BADGES, NOTE_ORDER, CUSTOMERS, REACTIONS,
 } from './data.js';
 import {
   CUST, fmt, clamp, randInt, round50, pick, pickWeighted, goodsForLevel, buyPrice, refPrice, expense, describeItems,
@@ -57,7 +57,7 @@ export function startDay(s, rng = Math.random) {
     queue: [], idx: 0, eventAt: 0, eventDone: false, event: null,
     moneyIn: 0, profit: 0, sales: 0, salesValue: 0, cogs: 0, discounts: 0, recordedSales: 0, creditGiven: 0,
     unrecordedCredit: [], stockouts: [], wasted: [], expenses: [], repaid: [], lostDebts: [],
-    belowCost: null, personal: [], paidSelf: 0, asks: {}, wordSpread: [], flash: null, morningPrices: null, eventRaised: {}, complaints: [], creditWalkouts: [], goodCalls: [], billNotes: [], notices: [], pending: null, chat: [], outcome: null, reaction: null,
+    belowCost: null, personal: [], paidSelf: 0, asks: {}, wordSpread: [], flash: null, morningPrices: null, eventRaised: {}, complaints: [], creditWalkouts: [], goodCalls: [], billNotes: [], lostTo: [], market: null, notices: [], pending: null, chat: [], outcome: null, reaction: null,
   };
   const t = s.today;
   for (const d of s.supplier) {
@@ -104,6 +104,7 @@ export function migrate(s) {
   s.bills ??= [];
   s.goal ??= null;
   s.skills ??= {};
+  if (s.today) { s.today.lostTo ??= []; s.today.market ??= null; }
   s.challengeLog ??= [];
   s.payments ??= { account: 'creditvoice', accountNumber: PAYMENTS.defaultAccountNumber, pos: 'creditvoice' };
   s.sales ??= [];
@@ -199,11 +200,82 @@ export function openShop(s) {
 
 // ---------- Customers ----------
 
+// How attractive your shop is today compared with the rivals: adverts, prices, loyal customers, stock.
+export function attraction(s) {
+  const parts = [];
+  if ((s.mods.advertUntil ?? 0) >= s.day) parts.push(['Your advert', ADVERT.boost]);
+  const goods = goodsForLevel(s.level);
+  const cheaper = goods.reduce((a, id) => a + (refPrice(s, id) - s.prices[id]) / refPrice(s, id), 0) / goods.length;
+  if (Math.abs(cheaper) >= 0.02) parts.push([cheaper > 0 ? 'Your lower prices' : 'Your higher prices', clamp(cheaper * 1.5, -0.3, 0.3)]);
+  const regulars = CUSTOMERS.filter((c) => c.type === 'regular');
+  const loyal = regulars.reduce((a, c) => a + s.customers[c.id].loyalty, 0) / regulars.length - 1;
+  if (loyal > 0.1) parts.push(['Loyal customers', loyal * 0.2]);
+  const asked = Object.values(s.lastAsks || {}).reduce((a, n) => a + n, 0);
+  if (asked >= 3) parts.push(['Goods ran out yesterday', -0.15]);
+  return { factor: clamp(1 + parts.reduce((a, [, v]) => a + v, 0), 0.6, 1.6), parts };
+}
+
+// Today's market: how many customers come to the market, and how many choose your shop.
+function planMarket(s, n, rng) {
+  const size = Math.round(n * (1 + RIVALS.length) + randInt(rng, 0, 2));
+  const att = attraction(s);
+  const mine = Math.max(3, Math.min(size - 2, Math.round(n * att.factor)));
+  const rest = size - mine;
+  const weights = RIVALS.map((r) => 1 / r.price);
+  const total = weights.reduce((a, w) => a + w, 0);
+  let left = rest;
+  const rivals = RIVALS.map((r, i) => {
+    const c = i === RIVALS.length - 1 ? left : Math.round((rest * weights[i]) / total);
+    left -= c;
+    return { id: r.id, name: r.name, customers: c, won: 0 };
+  });
+  return { size, mine, rivals, parts: att.parts };
+}
+
+// A customer who leaves without buying goes to a rival (the cheaper rival a bit more often).
+function pickRival(s) {
+  const w = RIVALS.map((r) => 1 / r.price);
+  let x = Math.random() * w.reduce((a, b) => a + b, 0);
+  for (let i = 0; i < RIVALS.length; i++) { x -= w[i]; if (x < 0) return RIVALS[i]; }
+  return RIVALS[0];
+}
+
+function tagLost(s) {
+  const t = s.today;
+  const o = t.outcome;
+  const r = t.queue[t.idx];
+  if (!o || o.rival || !r || !t.market) return;
+  const rival = pickRival(s);
+  const name = CUST[r.cid].name;
+  o.rival = rival.name;
+  const m = t.market.rivals.find((x) => x.id === rival.id);
+  if (m) m.won++;
+  t.lostTo.push({ cid: r.cid, rival: rival.id });
+  o.text = o.text.includes('another stall') || o.text.includes('next stall') || o.text.includes('somewhere cheaper') || o.text.includes('another shop')
+    ? o.text.replace(/another stall|the next stall|somewhere cheaper|another shop/, rival.name)
+    : `${o.text} ${name} went to ${rival.name}.`;
+}
+
+export function putAdvert(s) {
+  const cost = ADVERT.cost[s.level] || ADVERT.cost[1];
+  if (s.cash < cost) return `An advert costs ${fmt(cost)}. You have ${fmt(s.cash)}.`;
+  if ((s.mods.advertUntil ?? 0) >= s.day) return 'Your advert is already up.';
+  expense(s, cost, 'Advert at the shop front');
+  s.mods.advertUntil = s.day + ADVERT.days - 1;
+  // More customers today: add them to the queue now.
+  const extra = Math.max(1, Math.round(s.today.queue.length * ADVERT.boost));
+  for (let i = 0; i < extra; i++) s.today.queue.push(makeRequest(s, pick(Math.random, CUSTOMERS.filter((c) => c.type === 'regular' || c.type === 'bargainer')).id, Math.random));
+  if (s.today.market) { s.today.market.mine += extra; s.today.market.size += extra; }
+  return null;
+}
+
 function makeQueue(s, rng) {
   let [lo, hi] = RULES.customersPerDay[s.level];
   if (s.mods.rush) { lo = Math.round(lo * 1.6); hi = Math.round(hi * 1.6); }
   let n = randInt(rng, lo, hi);
   if (s.mods.fewer) { n = Math.max(3, n - s.mods.fewer); delete s.mods.fewer; }
+  s.today.market = planMarket(s, n, rng);
+  n = s.today.market.mine;
   const available = (type) => CUSTOMERS.filter((c) => c.type === type && s.customers[c.id].skipUntil <= s.day).map((c) => c.id);
   const ids = [];
   const take = (type, count) => {
@@ -315,6 +387,11 @@ function clockFor(idx, n) {
 
 // action: sell | credit | cashonly | discount | fullprice | refuse | next
 export function serve(s, action) {
+  serveCustomer(s, action);
+  tagLost(s);
+}
+
+function serveCustomer(s, action) {
   const t = s.today;
   const v = currentCustomer(s);
   const name = v.customer.name;
@@ -520,7 +597,12 @@ export function startRun(s) {
 }
 
 // got: { item: caught }. You keep what you caught; if it's not all, the customer has gone.
-export function runDone(s, got, { injured = false, by = 'bicycle' } = {}) {
+export function runDone(s, got, opts = {}) {
+  runFinished(s, got, opts);
+  tagLost(s);
+}
+
+function runFinished(s, got, { injured = false, by = 'bicycle' } = {}) {
   const t = s.today;
   const run = t.run;
   if (!run) return;
@@ -581,6 +663,7 @@ export function chooseHospital(s, rideId) {
     text: `You went to hospital by ${sp.ride.name.toLowerCase()} (${fmt(sp.total)} with the bill). ${name} could not wait and left. Your leg heals in ${sp.ride.heal} days.${sp.debt ? ` You couldn't pay ${fmt(sp.debt)}: it's now a hospital debt, due on Day ${s.day + HOSPITAL.debtDays}.` : ''}`,
     tone: 'bad',
   };
+  tagLost(s);
 }
 
 // Changed your mind: send the boy after all (normal ₦300 transport).

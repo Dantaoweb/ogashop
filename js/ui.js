@@ -1,5 +1,5 @@
 // Screens. Each returns an HTML string; buttons carry data-action (and data-arg) handled in main.js.
-import { GOODS, LEVELS, BADGES, NOTES, EXPLAIN, TYPE_LABEL, CREDITVOICE_URL, RULES, GOALS, ALL_LEVELS, PAYMENTS, HOSPITAL } from './data.js';
+import { GOODS, LEVELS, BADGES, NOTES, EXPLAIN, TYPE_LABEL, CREDITVOICE_URL, RULES, GOALS, ALL_LEVELS, PAYMENTS, HOSPITAL, RIVALS, ADVERT } from './data.js';
 import { CUST, fmt, goodsForLevel, buyPrice, supplierOwed, owedToYou, openDebts, supplierCreditError } from './core.js';
 import { currentCustomer, eventView, scoreParts, suggestMessage, billsDueSoon, billOwed, cashNeededSoon, isStuck, isInjured, hospitalSplit } from './engine.js';
 import { face, good, scene, levelPicture } from './art.js';
@@ -133,6 +133,34 @@ export function startScreen(ui, hasSave, saveInfo) {
 
 // ---------- Morning ----------
 
+// Morning: today's market, your share, and how to win more customers.
+function marketMorning(s) {
+  const m = s.today.market;
+  if (!m) return '';
+  const advertUp = (s.mods.advertUntil ?? 0) >= s.day;
+  const cost = ADVERT.cost[s.level] || ADVERT.cost[1];
+  return `<div class="card"><div class="between"><b>Market today</b><span class="small muted">about ${m.size} customers</span></div>
+    <div class="between small"><span>Your shop</span><b>${m.mine} expected</b></div>
+    ${m.rivals.map((r) => `<div class="between small"><span class="muted">${esc(r.name)}</span><span class="muted">${r.customers}</span></div>`).join('')}
+    ${m.parts.length ? `<span class="small muted">${m.parts.map(([label, v]) => `${esc(label)} ${v > 0 ? '+' : ''}${Math.round(v * 100)}%`).join(' · ')}</span>` : '<span class="small muted">Win more customers: an advert, good prices, loyal customers, full stock.</span>'}
+    ${advertUp ? `<span class="tag green" style="align-self:flex-start">${icon('star', 12)} Your advert is up until Day ${s.mods.advertUntil}</span>`
+      : btn('advert', `Put up an advert at your shop front (${fmt(cost)}, ${ADVERT.days} days)`, 'secondary small block', '', s.cash < cost ? 'disabled' : '')}</div>`;
+}
+
+// Evening: you and the rivals, and who you lost to them.
+function marketEvening(s) {
+  const t = s.today;
+  const m = t.market;
+  if (!m) return '';
+  const ticket = (r) => RIVALS.find((x) => x.id === r.id).ticket[s.level] || 2000;
+  const rows = [
+    `<div class="between small"><b>Your shop</b><b>${t.sales} customer${t.sales === 1 ? '' : 's'} · ${fmt(t.salesValue)}</b></div>`,
+    ...m.rivals.map((r) => { const n = r.customers + r.won; return `<div class="between small"><span>${esc(r.name)}</span><span>${n} customers · about ${fmt(Math.round((n * ticket(r)) / 50) * 50)}</span></div>`; }),
+  ].join('');
+  const lost = t.lostTo.length ? `<span class="small" style="color:var(--red);font-weight:600">You lost ${t.lostTo.length} customer${t.lostTo.length > 1 ? 's' : ''} to rivals: ${t.lostTo.map((l) => `${CUST[l.cid].name} → ${RIVALS.find((x) => x.id === l.rival).name}`).join(', ')}.</span>` : '<span class="small muted">You didn\'t lose any customers to rivals today.</span>';
+  return `<div class="card"><h3>The market today</h3>${rows}${lost}</div>`;
+}
+
 function challengeCard(s) {
   const c = s.today.challenge;
   if (!c) return '';
@@ -221,6 +249,7 @@ export function morningScreen(s, ui) {
         <div class="small muted">${s.supplier.some((d) => d.late) ? 'Late! Pay to get credit again.' : `Due Day ${Math.min(...s.supplier.map((d) => d.due))}`}</div></div>
         ${btn('pay-supplier', 'Pay', 'secondary small')}</div></div>` : ''}
       ${challengeCard(s)}
+      ${marketMorning(s)}
       ${billsCard(s)}
       ${isStuck(s) ? `<div class="card bad"><b>You have no stock and no money to buy any.</b>
         <span class="small">tiTi: "This happens when all the cash goes to stock and bills come. Next time keep some cash aside."</span>
@@ -736,6 +765,7 @@ export function eveningScreen(s, ui = {}) {
       </div>
       ${t.salesValue > 0 ? `<p class="small" style="margin:0;color:var(--ink-2)">You sold goods worth ${fmt(t.salesValue)}, but they cost you ${fmt(t.cogs)}. Busy is not the same as profitable.${t.creditGiven ? ` ${fmt(t.creditGiven)} of today's sales were on credit: profit, but not cash yet.` : ''}</p>` : ''}
       ${t.quick ? quickCard(t.quick, ui) : ''}
+      ${marketEvening(s)}
       ${moneyOut(s)}
       ${happened.length ? `<div class="card"><h3>Today</h3>${happened.map((h) => `<span class="small">${esc(h)}</span>`).join('')}</div>` : ''}
       <div class="card"><h3>Who owes you</h3>${debtRows || '<span class="small muted">Nobody owes you money.</span>'}</div>

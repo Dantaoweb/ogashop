@@ -121,8 +121,8 @@ Shown after the evening results, one per day, tied to the day's lesson.
 
 | Level | Goal to move up | Typical days |
 |---|---|---|
-| 1. The Table | ₦9,000 profit this level and a business score of 68 | 7-day target (about 6 with good habits) |
-| 2. The Shop | ₦6,000 profit this level (after its rent and bills), a score of 70, and no debt more than 7 days late | 7-day target (about 7 with good habits) |
+| 1. The Table | ₦11,000 profit this level and a business score of 68 | 7-day target (about 6 with good habits) |
+| 2. The Shop | ₦8,000 profit this level (after its rent and bills), a score of 70, and no debt more than 7 days late | 7-day target (about 7 with good habits) |
 
 The PRD's example goal (₦100,000 profit and a score of 60) would take more than 30 in-game days from a ₦20,000 table, so the goals above are lower. Check them in playtesting against the 60% target for players finishing Level 1. Day counts come from `node tests/sim.mjs`, which plays 40 games with a bot that records every sale, restocks and reminds. A bot that records only half its sales takes about 19 days for Level 1; one that never records can't finish.
 
@@ -238,6 +238,17 @@ The score moves slowly: at most ±6 points a day, so one bad day never wipes out
   - **Road safety** (25 seconds): dodge bicycles, okadas and everything in the way. Pass: 3 bumps or fewer. Reward: **Fast runner** (Market run +5 seconds, half the accidents).
   - **Change master** (5 rounds, harder each time): "bought ₦3,465, gave ₦4,000": make the change with ₦1,000 down to ₦5. Pass: 4 right. Reward: **Patient customers** (+5 seconds to count change).
 - Each pass earns a badge once. Skill only, always skippable.
+
+## 7n. Rivals and the market *(tune)*
+
+- Two rival shops (computer-run for now): **Emeka Stores** (market prices) and **Iya Basira's Stall** (about 5% cheaper). Real players can replace them once there's a server.
+- Each morning shows **Market today**: about 3× your usual customers come to the market, shared between you and the rivals. Your share goes up or down with:
+  - an **advert at your shop front**: ₦1,000 (Level 1) or ₦2,000 (Level 2) for 2 days, +35% customers (extra customers arrive the same day);
+  - **lower or higher prices** than the market (up to ±30%);
+  - **loyal customers** (up to +20%);
+  - goods that **ran out yesterday** (−15%).
+- A customer who leaves without buying (no stock, too expensive, refused, too slow…) goes to a rival, with a notice: "Ngozi went to Emeka Stores."
+- The evening shows each shop's customers and sales, and who you lost to whom.
 
 ## 8. Open points for review
 

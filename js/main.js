@@ -231,6 +231,7 @@ const actions = {
   'set-voice': (arg) => { Voice.setEnabled(arg); },
   'challenge-play': () => { const c = s.today.challenge; if (c && !c.done) { s.today.challengeGame = Ch.startChallenge(c.type); ui.screen = 'challenge'; } },
   'challenge-skip': () => { E.skipChallenge(s); },
+  advert: () => { ui.error = E.putAdvert(s); },
   'ch-light': () => { const g = s.today.challengeGame; g.rounds[g.round].light = true; },
   'ch-money-pick': (arg) => { Ch.moneyPick(s.today.challengeGame, Number(arg)); },
   'ch-change-tap': (arg) => { Ch.changeTapNote(s.today.challengeGame, Number(arg)); },

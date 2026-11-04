@@ -181,7 +181,7 @@ test('raising a price during the day: buyers complain, bargainers leave', () => 
   assert.equal(s.today.reaction.mood, 'sad');
   E.skipRecord(s);
   E.serve(s, 'sell');
-  assert.match(s.today.outcome.text, /goes to another stall/);
+  assert.match(s.today.outcome.text, /goes to (Emeka Stores|Iya Basira's Stall)/);
   E.serve(s, 'next');
   E.serve(s, 'sell'); // garri price unchanged: no complaint
   assert.doesNotMatch(s.today.reaction.text, /this morning/);
@@ -482,6 +482,33 @@ test('challenge days: every other day, rounds, badge and skill', async () => {
   // day counter
   assert.equal(E.levelDay(s), 2);
   assert.equal(Ch.daysLeft(s), 5);
+});
+
+test('rivals: market size, lost customers go to a rival, advert brings more', () => {
+  const s = E.newGame('business', mulberry32(110));
+  const m = s.today.market;
+  assert.ok(m.size >= m.mine + 2);
+  assert.equal(m.mine, s.today.queue.length);
+  assert.equal(m.rivals.length, 2);
+  s.stock.rice = 0;
+  s.today.queue[0] = { cid: 'musa', items: [{ item: 'rice', qty: 1 }], kind: 'cash', frac: 1, disc: 0.1, walkRoll: 0.99, acceptRoll: 0, moodRoll: 0.99, changeRoll: 1, fakeRoll: 1, payRoll: 0 };
+  s.today.eventAt = 99;
+  E.openShop(s);
+  E.serve(s, 'sell'); // no rice: Musa leaves
+  assert.match(s.today.outcome.text, /Emeka Stores|Iya Basira's Stall/);
+  assert.equal(s.today.lostTo.length, 1);
+  assert.equal(s.today.market.rivals.reduce((a, r) => a + r.won, 0), 1);
+  const before = s.today.queue.length;
+  const cash = s.cash;
+  assert.equal(E.putAdvert(s), null);
+  assert.ok(s.today.queue.length > before);
+  assert.equal(s.cash, cash - 1000);
+  assert.match(E.putAdvert(s), /already up/);
+  // tomorrow the advert still counts, and lower prices help too
+  E.setPrice(s, 'rice', 2200);
+  s.day++;
+  const att = E.attraction(s);
+  assert.ok(att.factor > 1.2, JSON.stringify(att));
 });
 
 test('count the change: right, short, too much, skip', () => {
