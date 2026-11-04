@@ -2,7 +2,7 @@
 import * as E from './engine.js';
 import * as UI from './ui.js';
 import { LEVELS } from './data.js';
-import { CUST, fmt } from './core.js';
+import { CUST, fmt, setCustom, resetCustom } from './core.js';
 import * as Voice from './voice.js';
 import { setGoal, clearGoal } from './goals.js';
 import { startRun } from './run.js';
@@ -48,6 +48,7 @@ function view() {
   if (ui.screen === 'prices') return UI.pricesScreen(s);
   if (ui.screen === 'goals') return UI.goalsScreen(s, ui);
   if (ui.screen === 'records') return UI.recordsScreen(s);
+  if (ui.screen === 'customers') return UI.customersScreen(s, ui);
   if (ui.screen === 'challenge' && s.today.challengeGame) return UI.challengeScreen(s, s.today.challengeGame);
   if (ui.screen === 'levels') return UI.levelsScreen(s);
   if (ui.screen === 'quiz' && s.quiz) return UI.quizScreen(s, ui);
@@ -207,7 +208,7 @@ const actions = {
     ui.buy = {};
   },
   open: (arg) => { if (arg === 'levels') ui.levelsFrom = ui.screen; ui.screen = arg; ui.confirmReset = false; },
-  close: () => { ui.screen = ui.screen === 'levels' && !s ? 'start' : ui.screen === 'levels' && ui.levelsFrom ? ui.levelsFrom : null; ui.levelsFrom = null; },
+  close: () => { ui.editing = null;  ui.screen = ui.screen === 'levels' && !s ? 'start' : ui.screen === 'levels' && ui.levelsFrom ? ui.levelsFrom : null; ui.levelsFrom = null; },
   seen: (arg) => { s.seen[arg] = true; },
 
   pay: (arg) => { E.setPay(s, s.pay + Number(arg)); },
@@ -273,6 +274,8 @@ const actions = {
   'challenge-play': () => { const c = s.today.challenge; if (c && !c.done) { s.today.challengeGame = Ch.startChallenge(c.type); ui.screen = 'challenge'; } },
   'challenge-skip': () => { E.skipChallenge(s); },
   advert: () => { ui.error = E.putAdvert(s); },
+  'edit-customer': (arg) => { ui.editing = arg || null; ui.error = null; },
+  'reset-customer': (arg) => { resetCustom(s, arg); ui.editing = null; },
   'ch-light': () => { const g = s.today.challengeGame; g.rounds[g.round].light = true; },
   'ch-money-pick': (arg) => { Ch.moneyPick(s.today.challengeGame, Number(arg)); },
   'ch-change-tap': (arg) => { Ch.changeTapNote(s.today.challengeGame, Number(arg)); },
@@ -352,6 +355,16 @@ app.addEventListener('input', (e) => {
 });
 
 app.addEventListener('submit', (e) => {
+  const customerForm = e.target.closest('[data-form="customer"]');
+  if (customerForm) {
+    e.preventDefault();
+    const f = customerForm.elements;
+    ui.error = setCustom(s, ui.editing, { name: f.name.value, she: f.she.value === '1', happy: f.happy.value, unhappy: f.unhappy.value });
+    if (!ui.error) ui.editing = null;
+    save();
+    render();
+    return;
+  }
   const goalForm = e.target.closest('[data-form="goal"]');
   if (goalForm) {
     e.preventDefault();

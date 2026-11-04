@@ -1,6 +1,6 @@
 // Screens. Each returns an HTML string; buttons carry data-action (and data-arg) handled in main.js.
 import { GOODS, LEVELS, BADGES, NOTES, EXPLAIN, TYPE_LABEL, CREDITVOICE_URL, RULES, GOALS, ALL_LEVELS, PAYMENTS, HOSPITAL, RIVALS, ADVERT } from './data.js';
-import { CUST, fmt, goodsForLevel, buyPrice, supplierOwed, owedToYou, openDebts, supplierCreditError } from './core.js';
+import { CUST, fmt, goodsForLevel, buyPrice, supplierOwed, owedToYou, openDebts, supplierCreditError, defaultName } from './core.js';
 import { currentCustomer, eventView, scoreParts, suggestMessage, billsDueSoon, billOwed, cashNeededSoon, isStuck, isInjured, hospitalSplit, waiting } from './engine.js';
 import { face, good, scene, levelPicture } from './art.js';
 import { goalStatus, daysToGoal, howLong } from './goals.js';
@@ -932,6 +932,51 @@ export function recordsScreen(s) {
   </main>`;
 }
 
+// ---------- Customize customers ----------
+
+export function customersScreen(s, ui) {
+  if (ui.editing) return customerEdit(s, ui);
+  const rows = Object.keys(CUST).map((id) => {
+    const c = CUST[id];
+    const changed = !!s.custom?.[id];
+    return `<button type="button" class="choice" data-action="edit-customer" data-arg="${id}" style="flex-direction:row;align-items:center;gap:12px">
+      <span class="mini-face" style="width:44px;height:44px">${face(id, { size: 44 })}</span>
+      <span style="display:flex;flex-direction:column;gap:2px;flex:1"><b>${esc(c.name)}</b><span>${TYPE_LABEL[c.type]}${changed ? ` · was ${esc(defaultName(id))}` : ''}</span></span></button>`;
+  }).join('');
+  return `<main class="screen">
+    <header class="top"><div class="row"><button type="button" class="icon-btn" data-action="close" aria-label="Back" style="margin-left:-10px">${icon('back', 22, 2)}</button><h1 class="title display">Customers</h1></div></header>
+    <div class="body">${titi('Give your customers names you know. What they buy and how they pay stays the same: Chidi still won\'t pay, whatever you call him. Saved only on this phone.')}
+      <div style="display:flex;flex-direction:column;gap:8px">${rows}</div></div>
+  </main>`;
+}
+
+function customerEdit(s, ui) {
+  const id = ui.editing;
+  const c = CUST[id];
+  const mine = s.custom?.[id] || {};
+  const field = 'height:44px;border:1px solid var(--line-2);border-radius:12px;padding:0 12px;font-size:16px';
+  return `<main class="screen">
+    <header class="top"><div class="row"><button type="button" class="icon-btn" data-action="edit-customer" data-arg="" aria-label="Back" style="margin-left:-10px">${icon('back', 22, 2)}</button><h1 class="title display">Edit ${esc(c.name)}</h1></div></header>
+    <div class="body">
+      <div class="center"><span class="mini-face lg" style="width:72px;height:72px;margin:0 auto">${face(id, { size: 72 })}</span><div class="small muted">${TYPE_LABEL[c.type]}</div></div>
+      ${ui.error ? `<div class="toast" role="alert">${esc(ui.error)}</div>` : ''}
+      <form data-form="customer" class="card">
+        <label class="small muted" for="c-name">Name</label>
+        <input id="c-name" name="name" maxlength="20" value="${esc(c.name)}" style="${field}">
+        <span class="small muted">Voice</span>
+        <label class="settings-opt" style="padding:4px 0"><input type="radio" name="she" value="1" ${c.she ? 'checked' : ''}><span>Woman</span></label>
+        <label class="settings-opt" style="padding:4px 0"><input type="radio" name="she" value="0" ${c.she ? '' : 'checked'}><span>Man</span></label>
+        <label class="small muted" for="c-happy">When happy (after a good sale)</label>
+        <input id="c-happy" name="happy" maxlength="60" placeholder="e.g. Oga, you too much!" value="${esc(mine.happy || '')}" style="${field}">
+        <label class="small muted" for="c-unhappy">When unhappy (when leaving or complaining)</label>
+        <input id="c-unhappy" name="unhappy" maxlength="60" placeholder="e.g. I no go buy here again!" value="${esc(mine.unhappy || '')}" style="${field}">
+        <button type="submit" class="btn primary small">Save</button>
+      </form>
+      ${s.custom?.[id] ? btn('reset-customer', `Reset to ${esc(defaultName(id))}`, 'secondary small block', id) : ''}
+    </div>
+  </main>`;
+}
+
 // ---------- All levels ----------
 
 export function levelsScreen(s) {
@@ -1113,6 +1158,7 @@ export function settingsScreen(s, ui) {
       ${Voice.supported ? `<div class="card"><h3>Sound</h3>
         <label class="settings-opt"><input type="checkbox" data-action="set-voice" ${Voice.enabled() ? 'checked' : ''}><span><b>Customers speak</b><div class="small muted">Customers say what they want out loud, using your phone's voice. Their words also stay on screen.</div></span></label></div>` : ''}
       ${ui.canInstall ? `<div class="card"><h3>Add to home screen</h3><span class="small muted">Play like an app, even without data.</span>${btn('install', 'Install Oga Shop', 'secondary small')}</div>` : ''}
+      <div class="card"><h3>Customers</h3><span class="small muted">Rename your customers, choose their voice and give them your own lines.</span>${btn('open', 'Edit customers', 'secondary small', 'customers')}</div>
       <div class="card"><h3>Levels</h3><span class="small muted">See all ${ALL_LEVELS.length} levels, what each one teaches, and how far you are.</span>${btn('open', 'See all levels', 'secondary small', 'levels')}</div>
       <div class="card"><h3>About</h3>
         <span class="small">Oga Shop is a free learning game by CreditVoice. There is no real money in the game. Your progress is saved only on this phone; nothing is sent anywhere.</span>

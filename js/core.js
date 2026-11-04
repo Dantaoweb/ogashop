@@ -1,7 +1,39 @@
 // Shared helpers that change game state. Used by engine.js and events.js.
 import { GOODS, CUSTOMERS, RULES, SUPPLIER_CREDIT_LIMIT, SUPPLIER_CREDIT_DAYS } from './data.js';
 
-export const CUST = Object.fromEntries(CUSTOMERS.map((c) => [c.id, c]));
+export const CUST = Object.fromEntries(CUSTOMERS.map((c) => [c.id, { ...c }]));
+const DEFAULT_LOOK = Object.fromEntries(CUSTOMERS.map((c) => [c.id, { name: c.name, she: !!c.she }]));
+
+// The player's own names, voices and lines for customers (saved with the game, on the phone only).
+// Their type never changes, so the lessons still work.
+export function applyCustom(s) {
+  for (const id of Object.keys(CUST)) {
+    const mine = s.custom?.[id] || {};
+    CUST[id].name = mine.name || DEFAULT_LOOK[id].name;
+    CUST[id].she = mine.she ?? DEFAULT_LOOK[id].she;
+    CUST[id].happy = mine.happy || null;
+    CUST[id].unhappy = mine.unhappy || null;
+  }
+}
+
+export function setCustom(s, id, { name, she, happy, unhappy }) {
+  if (!CUST[id]) return 'Unknown customer.';
+  name = String(name || '').trim().replace(/\s+/g, ' ');
+  if (!name || name.length > 20) return 'A name needs 1 to 20 letters.';
+  const taken = Object.keys(CUST).some((other) => other !== id && CUST[other].name.toLowerCase() === name.toLowerCase());
+  if (taken) return `Another customer is already called ${name}.`;
+  const line = (x) => String(x || '').trim().slice(0, 60) || null;
+  s.custom = { ...(s.custom || {}), [id]: { name, she: !!she, happy: line(happy), unhappy: line(unhappy) } };
+  applyCustom(s);
+  return null;
+}
+
+export function resetCustom(s, id) {
+  if (s.custom) delete s.custom[id];
+  applyCustom(s);
+}
+
+export const defaultName = (id) => DEFAULT_LOOK[id]?.name;
 
 export function fmt(n) {
   const r = Math.round(n);

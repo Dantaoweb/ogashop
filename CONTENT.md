@@ -263,6 +263,12 @@ The score moves slowly: at most ±6 points a day, so one bad day never wipes out
 - Too slow: a rival takes it.
 - A rival with cheap rice draws more customers for 2 days (your share −10%, shown on Market today). A rival who took the fake noodles has unhappy customers the next day (your share +10%).
 
+## 7q. Customize customers
+
+- Settings → Customers: rename any of the 12 customers (1–20 letters, no two the same), choose a woman's or man's voice, and give them two lines: **When happy** (mixed into thank-yous after a sale) and **When unhappy** (said when they leave). Reset brings back the original.
+- Their type never changes, so the lessons still work (Chidi still doesn't pay, whatever his name).
+- Saved with the game on the phone only. If real multiplayer comes later, shared custom text needs a rude-word check.
+
 ## 8. Open points for review
 
 1. **Prices:** check every buy and sell price with traders in at least two markets.

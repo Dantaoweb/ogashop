@@ -6,7 +6,7 @@ import {
 import {
   CUST, fmt, clamp, randInt, round50, pick, pickWeighted, goodsForLevel, buyPrice, refPrice, expense, describeItems,
   addStock, buyStock, waste, applySale, debtById, openDebts, owedToYou, debtPaid, debtLost,
-  changeLoyalty, supplierOwed, supplierCreditError,
+  changeLoyalty, supplierOwed, supplierCreditError, applyCustom,
 } from './core.js';
 import { EVENT_BY_ID, drawEvent, morningEffects, rivalGrab } from './events.js';
 import { checkGoal } from './goals.js';
@@ -36,6 +36,8 @@ export function newGame(path, rng = Math.random) {
   }
   for (const [id, qty] of Object.entries(START_STOCK)) addStock(s, id, qty, GOODS[id].buy);
   for (const c of CUSTOMERS) s.customers[c.id] = { loyalty: 1, skipUntil: 0 };
+  s.custom = {};
+  applyCustom(s);
   startDay(s, rng);
   return s;
 }
@@ -103,6 +105,8 @@ export function migrate(s) {
   Object.assign(s.stats, { pocketPays: 0, capitalTakes: 0, overpayStreak: 0, served: 0, unhappy: 0, billsPaid: 0, billsLateDays: 0, changeRight: 0, goodChecks: 0, ...s.stats });
   s.bills ??= [];
   s.goal ??= null;
+  s.custom ??= {};
+  applyCustom(s);
   s.skills ??= {};
   if (s.today) { s.today.lostTo ??= []; s.today.market ??= null; }
   s.challengeLog ??= [];
@@ -251,6 +255,8 @@ function tagLost(s) {
   if (!o || o.rival || !r || !t.market) return;
   const rival = pickRival(s);
   const name = CUST[r.cid].name;
+  // The player's own unhappy line for this customer.
+  if (CUST[r.cid].unhappy && !o.text.startsWith('"')) o.text = `"${CUST[r.cid].unhappy}" ${o.text}`;
   o.rival = rival.name;
   const m = t.market.rivals.find((x) => x.id === rival.id);
   if (m) m.won++;
@@ -812,7 +818,7 @@ function askedAgain(s, missing) {
       const away = CUSTOMERS.filter((c) => c.type === 'regular' && s.customers[c.id].skipUntil <= s.day)
         .slice(0, RULES.wordSpreadRegularsAway);
       for (const c of away) s.customers[c.id].skipUntil = s.day + 2;
-      msg += ` Word is spreading: "that shop never has ${nm}". ${away.map((c) => c.name).join(' and ')} will buy elsewhere for a few days.`;
+      msg += ` Word is spreading: "that shop never has ${nm}". ${away.map((c) => CUST[c.id].name).join(' and ')} will buy elsewhere for a few days.`;
     }
   }
   return msg;
@@ -823,11 +829,14 @@ function reactionFor(v, said, sale, due, note) {
   const type = v.customer.type;
   const key = said === 'credit' && type === 'neverpays' ? 'creditNeverpays' : said === 'sell' && type === 'big' ? 'big' : said;
   const lines = REACTIONS[key] || REACTIONS.sell;
-  const line = lines[(v.number + Math.floor(sale.total / 50)) % lines.length].replace('{due}', due);
+  let line = lines[(v.number + Math.floor(sale.total / 50)) % lines.length].replace('{due}', due);
+  // The player's own happy line, mixed in with the usual ones.
+  if (CUST[v.cid].happy && mood(said) === 'happy' && v.number % 2 === 0) line = CUST[v.cid].happy;
   const text = v.missing.length ? `You don't have enough? OK, I'll take what you have. ${line}` : line;
-  const mood = said === 'fullprice' || said === 'cashonly' ? 'neutral' : 'happy';
-  return { cid: v.cid, text, mood, note };
+  return { cid: v.cid, text, mood: mood(said), note };
 }
+
+const mood = (said) => (said === 'fullprice' || said === 'cashonly' ? 'neutral' : 'happy');
 
 // ---------- Recording with tiTi ----------
 

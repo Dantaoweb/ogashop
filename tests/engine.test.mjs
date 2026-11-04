@@ -596,6 +596,31 @@ test('cheap supplier deal: too slow or thinking lets a rival grab it', () => {
   assert.match(grabbed.today.event.outcome, /Too late!/);
 });
 
+test('custom customer names, voices and lines', async () => {
+  const C = await import('../js/core.js');
+  const s = E.newGame('business', mulberry32(160));
+  assert.match(C.setCustom(s, 'chidi', { name: '' }), /1 to 20/);
+  assert.match(C.setCustom(s, 'chidi', { name: 'mama bola' }), /already called/);
+  assert.equal(C.setCustom(s, 'chidi', { name: 'Tunde', she: false, happy: 'Oga, you too much!', unhappy: 'I no go buy here again!' }), null);
+  assert.equal(C.CUST.chidi.name, 'Tunde');
+  assert.equal(C.CUST.chidi.type, 'neverpays', 'type never changes');
+  // the unhappy line shows when he leaves
+  s.stock.rice = 0;
+  s.today.queue = [{ cid: 'chidi', items: [{ item: 'rice', qty: 1 }], kind: 'cash', frac: 1, disc: 0.1, walkRoll: 0.99, acceptRoll: 0, moodRoll: 0.99, changeRoll: 1, fakeRoll: 1, payRoll: 0 }];
+  s.today.eventAt = 99;
+  E.openShop(s);
+  E.serve(s, 'sell');
+  assert.match(s.today.outcome.text, /^"I no go buy here again!" You have no rice\. Tunde/);
+  // a saved game brings the names back; a new game resets them
+  E.migrate(JSON.parse(JSON.stringify(s)));
+  assert.equal(C.CUST.chidi.name, 'Tunde');
+  C.resetCustom(s, 'chidi');
+  assert.equal(C.CUST.chidi.name, 'Chidi');
+  C.setCustom(s, 'musa', { name: 'Bayo' });
+  E.newGame('business', mulberry32(1));
+  assert.equal(C.CUST.musa.name, 'Musa');
+});
+
 test('out of stock: customers still name a real price (no ₦0 offers)', () => {
   const s = E.newGame('business', mulberry32(130));
   s.stock.rice = 0;
