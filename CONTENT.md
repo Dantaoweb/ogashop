@@ -185,7 +185,7 @@ The score moves slowly: at most ±6 points a day, so one bad day never wipes out
 - At most once a day, a cash customer (35% chance per cash sale) pays with ₦1,000 notes, e.g. ₦2,000 for ₦1,650.
 - The player taps ₦500, ₦200, ₦100 and ₦50 notes to make the change, then **Give change**. Undo is allowed.
 - 15-second patience bar (not on the learning path, which also shows "Change = what they paid − the sale").
-- Right change: counts for Happy customers. Too little: the customer demands the balance ("My balance is ₦50"), the player gives it from the till, and the customer is unhappy. Too much: the extra comes off profit. Too slow: the customer is unhappy.
+- Right change: counts for Happy customers. Too little: the customer demands the balance ("My balance is ₦50"), the player gives it from the till, and the customer is unhappy. Too much: the customer says "Thank you o!" and starts to leave. Ask for the extra back (honest customers return it 85% of the time, Chidi only 25%; otherwise it comes off profit) or let it go (lost, but the customer likes your shop more). The waiting line keeps running meanwhile. Too slow: the customer is unhappy.
 - "Let tiTi count it" skips with no reward and no penalty. Skill only, no luck.
 
 ## 7h. Mini-game: Market run *(tune)*

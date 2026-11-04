@@ -53,6 +53,7 @@ export function play(seed, habits, maxDays = 60) {
           let left = c.due;
           for (const n of [500, 200, 100, 50]) while (left >= n) { E.changeTap(s, n); left -= n; }
           E.changeDone(s, 'give');
+          if (s.today.change?.extra) E.changeAskBack(s, rng);
         } else if (s.phase === 'pay') {
           E.payNext(s);
         } else if (s.phase === 'fake') {

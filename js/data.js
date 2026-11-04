@@ -100,6 +100,7 @@ export const RULES = {
   recommendChance: 0.5, // with another bank or POS, how often tiTi suggests CreditVoice (once a day at most)
   quickQuestionChance: 0.35, // some evenings ask one question about your shop
   changeChance: 0.35,
+  extraBack: { honest: 0.85, neverpays: 0.25 }, // chance a customer returns extra change when asked
   changeSeconds: 15,
   changeNotes: [500, 200, 100, 50],
   // Spot the fake note (Level 2): at most every 2 days, a cash sale may be paid in notes to check.

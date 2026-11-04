@@ -535,6 +535,35 @@ test('waiting line: the last person leaves for a rival; low-stock goods get aske
   assert.equal(E.queueLeave(s), null, 'nobody left to leave');
 });
 
+test('too much change: ask for it back (honest returns it, Chidi often not) or let it go', () => {
+  const setup = (cid) => {
+    const s = E.newGame('business', mulberry32(140));
+    s.today.queue = [{ cid, items: [{ item: 'garri', qty: 3 }], kind: 'cash', frac: 1, disc: 0.1, walkRoll: 0.99, acceptRoll: 0, moodRoll: 0.99, changeRoll: 0, fakeRoll: 1, payRoll: 0 }];
+    s.today.eventAt = 99;
+    E.openShop(s);
+    E.serve(s, 'sell');
+    E.changeTap(s, 500);
+    E.changeDone(s, 'give');
+    assert.equal(s.today.change.extra, 150);
+    return s;
+  };
+  const honest = setup('musa');
+  const p = honest.today.profit;
+  E.changeAskBack(honest, () => 0.1);
+  assert.equal(honest.today.profit, p, 'got it back: no loss');
+  assert.match(honest.today.reaction.text, /Here's your ₦150/);
+  const chidi = setup('chidi');
+  E.changeAskBack(chidi, () => 0.5);
+  assert.equal(chidi.today.profit, p - 150);
+  assert.match(chidi.today.reaction.text, /didn't see any extra/);
+  const kind = setup('ngozi');
+  const loyalty = kind.customers.ngozi.loyalty;
+  E.changeLetGo(kind);
+  assert.equal(kind.today.profit, p - 150);
+  assert.ok(kind.customers.ngozi.loyalty >= loyalty);
+  assert.equal(kind.phase, 'record');
+});
+
 test('out of stock: customers still name a real price (no ₦0 offers)', () => {
   const s = E.newGame('business', mulberry32(130));
   s.stock.rice = 0;
@@ -560,6 +589,11 @@ test('count the change: right, short, too much, skip', () => {
     assert.deepEqual([s.today.change.handed, s.today.change.due], [2000, 350]);
     for (const n of taps) E.changeTap(s, n);
     E.changeDone(s, result);
+    if (s.today.change?.extra) {
+      assert.equal(s.phase, 'change', 'too much: ask back or let go first');
+      s.extra = s.today.change.extra;
+      E.changeLetGo(s);
+    }
     if (s.today.change?.demand) {
       assert.equal(s.phase, 'change', 'customer demands the balance first');
       s.demanded = s.today.change.demand;

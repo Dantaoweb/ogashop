@@ -711,10 +711,40 @@ export function changeDone(s, result) {
     c.demand = c.due - given;
     return;
   } else {
-    expense(s, given - c.due, 'Too much change given');
-    r = { text: 'Thank you o!', mood: 'happy', note: `You gave ${fmt(given)}, but the change was ${fmt(c.due)}. You lost ${fmt(given - c.due)}.` };
+    // Too much: the customer is happy and starts to leave; you can ask for the extra back.
+    c.extra = given - c.due;
+    return;
   }
   t.reaction = { cid: c.cid, ...r };
+  t.change = null;
+  s.phase = 'record';
+}
+
+// Too much change given: ask for the extra back (honest customers usually return it).
+export function changeAskBack(s, rng = Math.random) {
+  const t = s.today;
+  const c = t.change;
+  if (!c?.extra) return;
+  const never = CUST[c.cid].type === 'neverpays';
+  const back = rng() < (never ? RULES.extraBack.neverpays : RULES.extraBack.honest);
+  if (back) {
+    t.reaction = { cid: c.cid, text: `Ah, sorry! Here's your ${fmt(c.extra)}.`, mood: 'happy', note: `You asked politely and got your ${fmt(c.extra)} back.` };
+  } else {
+    expense(s, c.extra, 'Too much change given');
+    t.reaction = { cid: c.cid, text: "I didn't see any extra o!", mood: 'sad', note: `${fmt(c.extra)} lost. Count before you give: getting money back is harder than giving the right change.` };
+  }
+  t.change = null;
+  s.phase = 'record';
+}
+
+// Or let it go: the money is lost, but the customer likes your shop a bit more.
+export function changeLetGo(s) {
+  const t = s.today;
+  const c = t.change;
+  if (!c?.extra) return;
+  expense(s, c.extra, 'Too much change given');
+  changeLoyalty(s, c.cid, 1);
+  t.reaction = { cid: c.cid, text: 'Thank you o! God bless you.', mood: 'happy', note: `You let ${fmt(c.extra)} go. ${CUST[c.cid].name} likes your shop more.` };
   t.change = null;
   s.phase = 'record';
 }

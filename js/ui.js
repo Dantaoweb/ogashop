@@ -671,6 +671,21 @@ export function fakeScreen(s) {
 
 export function changeScreen(s, ui) {
   const c = s.today.change;
+  if (c.extra) {
+    const name = CUST[c.cid].name;
+    return `<main class="screen">
+      <header class="top"><div class="kicker">Day ${s.day} · Count the change</div><div class="title display">Too much change!</div></header>
+      <div class="body">${queueStrip(s)}
+        <div class="reaction" ${sayAttrs('Thank you o!', c.cid)}><span class="mini-face lg">${face(c.cid, { size: 56 })}</span>
+          <div class="grow"><b class="small">${esc(name)}</b><div class="say">“Thank you o!”</div><span class="small muted">${esc(name)} is about to leave.</span></div>${sayBtn()}</div>
+        <div class="card"><div class="between"><span class="muted">Change you should give</span><b>${fmt(c.due)}</b></div>
+          <div class="between"><span class="muted">You gave</span><b>${fmt(c.due + c.extra)}</b></div>
+          <div class="between" style="padding-top:8px;border-top:1px dashed var(--line)"><span>Extra you gave</span><b style="font-size:22px;color:var(--amber-ink)">${fmt(c.extra)}</b></div></div>
+      </div>
+      <div class="foot">${btn('change-askback', `Excuse me, I gave you ${fmt(c.extra)} too much`, 'primary block')}
+        ${btn('change-letgo', 'Let it go', 'secondary block')}</div>
+    </main>`;
+  }
   if (c.demand) {
     const say = `You short-changed me! I paid ${fmt(c.handed)}. My balance is ${fmt(c.demand)}.`;
     return `<main class="screen">
