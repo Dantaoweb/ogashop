@@ -4,6 +4,10 @@ import * as E from '../js/engine.js';
 import { EVENTS, EVENT_BY_ID } from '../js/events.js';
 import { CUST } from '../js/core.js';
 import { play, mulberry32 } from './sim.mjs';
+import { RULES as TEST_RULES } from '../js/data.js';
+
+// Hand-made test customers keep what they ask for (the low-stock rule has its own test).
+TEST_RULES.lowStockAsk = 0;
 
 test('new game starts on Day 1 morning with ₦20,000', () => {
   const s = E.newGame('learning', mulberry32(1));
@@ -509,6 +513,26 @@ test('rivals: market size, lost customers go to a rival, advert brings more', ()
   s.day++;
   const att = E.attraction(s);
   assert.ok(att.factor > 1.2, JSON.stringify(att));
+});
+
+test('waiting line: the last person leaves for a rival; low-stock goods get asked for', async () => {
+  const { RULES } = await import('../js/data.js');
+  const s = E.newGame('business', mulberry32(120));
+  const q = (cid) => ({ cid, items: [{ item: 'garri', qty: 1 }], kind: 'cash', frac: 1, disc: 0.1, walkRoll: 0.99, acceptRoll: 0, moodRoll: 0.99, changeRoll: 1, fakeRoll: 1, payRoll: 0 });
+  s.today.queue = [q('musa'), q('ngozi'), q('mrade')];
+  s.today.eventAt = 99;
+  RULES.lowStockAsk = 1;
+  s.stock.water = 1;
+  E.openShop(s);
+  RULES.lowStockAsk = 0;
+  assert.equal(s.today.queue[0].items[0].item, 'water', 'asks for the low-stock item');
+  assert.equal(E.waiting(s), 2);
+  E.serve(s, 'sell');
+  assert.match(E.queueLeave(s), /Mr Ade got tired of waiting and went to/);
+  assert.equal(E.waiting(s), 1);
+  assert.equal(s.today.lostTo.at(-1).waited, true);
+  E.queueLeave(s);
+  assert.equal(E.queueLeave(s), null, 'nobody left to leave');
 });
 
 test('count the change: right, short, too much, skip', () => {

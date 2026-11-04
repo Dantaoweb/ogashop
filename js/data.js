@@ -92,6 +92,9 @@ export const RULES = {
   // Count the change: chance a cash sale is paid with ₦1,000 notes that need change (once a day at most).
   runSeconds: 20,
   injuryChance: 1 / 3, // hitting a bicycle or okada in Market run
+  // The waiting line: while you're busy, the last person leaves for a rival every so many seconds.
+  queueWaitSeconds: 10, queueWaitSecondsLearning: 20, queueRecordFactor: 2,
+  lowStockAsk: 0.3, // chance an arriving customer asks for something you're running low on (1 or 2 left)
   // Share of customers paying by cash / transfer / POS (the rest).
   payMix: { 1: { cash: 0.6, transfer: 0.3 }, 2: { cash: 0.45, transfer: 0.3 } },
   recommendChance: 0.5, // with another bank or POS, how often tiTi suggests CreditVoice (once a day at most)
@@ -163,7 +166,7 @@ export const FAMILY_NEEDS = [
 export const LEVELS = {
   1: { name: 'The Table', goalProfit: 11000, goalScore: 68,
        blurb: 'A small market table. Learn cash vs profit, and record every sale.' },
-  2: { name: 'The Shop', goalProfit: 8000, goalScore: 70, maxLateDays: 7,
+  2: { name: 'The Shop', goalProfit: 7000, goalScore: 70, maxLateDays: 7,
        blurb: 'A small shop. Restock on time, give credit carefully and get your debts back.' },
 };
 

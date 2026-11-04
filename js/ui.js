@@ -1,7 +1,7 @@
 // Screens. Each returns an HTML string; buttons carry data-action (and data-arg) handled in main.js.
 import { GOODS, LEVELS, BADGES, NOTES, EXPLAIN, TYPE_LABEL, CREDITVOICE_URL, RULES, GOALS, ALL_LEVELS, PAYMENTS, HOSPITAL, RIVALS, ADVERT } from './data.js';
 import { CUST, fmt, goodsForLevel, buyPrice, supplierOwed, owedToYou, openDebts, supplierCreditError } from './core.js';
-import { currentCustomer, eventView, scoreParts, suggestMessage, billsDueSoon, billOwed, cashNeededSoon, isStuck, isInjured, hospitalSplit } from './engine.js';
+import { currentCustomer, eventView, scoreParts, suggestMessage, billsDueSoon, billOwed, cashNeededSoon, isStuck, isInjured, hospitalSplit, waiting } from './engine.js';
 import { face, good, scene, levelPicture } from './art.js';
 import { goalStatus, daysToGoal, howLong } from './goals.js';
 import * as Voice from './voice.js';
@@ -57,6 +57,16 @@ const sayAttrs = (text, cid) => `data-say="${esc(text)}" data-who="${cid}"`;
 const sayBtn = () => (Voice.supported && Voice.enabled()
   ? `<button type="button" class="icon-btn say-btn" data-action="say" aria-label="Hear it again">${icon('sound', 20)}</button>` : '');
 const quoted = (text) => (text.match(/"([^"]+)"/) || [])[1] || '';
+
+// The people waiting behind the current customer, and the last one who gave up.
+function queueStrip(s) {
+  const t = s.today;
+  const n = waiting(s);
+  const faces = t.queue.slice(t.idx + 1, t.idx + 5).map((r) => `<span class="mini-face" style="width:28px;height:28px;margin-left:-6px;border:2px solid var(--ground)">${face(r.cid, { size: 28 })}</span>`).join('');
+  if (!n && !t.queueNote) return '';
+  return `<div class="queue-strip">${n ? `<span class="row" style="gap:0;padding-left:6px">${faces}</span><span class="small" style="font-weight:600">${n} waiting</span>` : ''}
+    ${t.queueNote ? `<span class="small" style="color:var(--red);font-weight:600" data-animate>${esc(t.queueNote)}</span>` : ''}</div>`;
+}
 
 function titi(text, extra = '') {
   return `<div class="titi-tip"${extra}><span class="avatar">tiTi</span><p>${text}</p></div>`;
@@ -377,6 +387,7 @@ export function customerScreen(s) {
     </header>
     <div style="padding:10px 16px 0" class="row"><span class="small muted" style="font-weight:600">Customer ${v.number} of ${v.of}</span>
       <div class="progress grow"><div style="width:${Math.round(((v.number - 1) / v.of) * 100)}%"></div></div></div>
+    ${queueStrip(s)}
     <div class="body">
       ${v.kind === 'credit' ? explain(s, 'credit') : v.kind === 'discount' || c.type === 'bargainer' ? explain(s, 'discount') : ''}
       <div class="center" style="display:flex;flex-direction:column;align-items:center;gap:8px">
@@ -434,7 +445,7 @@ export function recordScreen(s, ui) {
       <div class="grow"><b style="font-size:18px">tiTi</b><div class="small muted">Your shop assistant · records your sales</div></div>
       <span class="small muted" style="font-weight:600">Day ${s.day}</span>
     </header>
-    <div class="body">
+    <div class="body">${queueStrip(s)}
       ${reaction(t.reaction)}
       ${explain(s, 'record')}
       <div class="chat" aria-live="polite">${msgs}</div>
@@ -540,7 +551,7 @@ export function payScreen(s) {
   const isLast = (p.method === 'transfer' && p.step === 2) || (p.method === 'pos' && p.step === 1);
   return `<main class="screen">
     <header class="top"><div class="kicker">Day ${s.day} · ${p.method === 'transfer' ? 'Bank transfer' : 'Card payment (POS)'}</div><div class="title display">${esc(c.name)} is paying</div></header>
-    <div class="body">
+    <div class="body">${queueStrip(s)}
       <div class="reaction" ${sayAttrs(say, p.cid)}><span class="mini-face lg">${face(p.cid, { size: 56 })}</span>
         <div class="grow"><b class="small">${esc(c.name)}</b><div class="say">“${esc(say)}”</div></div>${sayBtn()}</div>
       ${body}
@@ -639,7 +650,7 @@ export function fakeScreen(s) {
   const notes = f.notes.map((n, i) => `<button type="button" class="note-card" data-action="fake-pick" data-arg="${i}" aria-label="Note ${i + 1}: this one is fake">${noteSvg(n, f.light)}</button>`).join('');
   return `<main class="screen">
     <header class="top"><div class="kicker">Day ${s.day} · Check the money</div><div class="title display">Spot the fake note</div></header>
-    <div class="body">
+    <div class="body">${queueStrip(s)}
       <div class="reaction" ${sayAttrs(`Here is ${fmt(f.total)}.`, f.cid)}><span class="mini-face lg">${face(f.cid, { size: 56 })}</span>
         <div class="grow"><b class="small">${esc(CUST[f.cid].name)}</b><div class="say">“Here is ${fmt(f.total)}.”</div></div>${sayBtn()}</div>
       ${timed ? `<div class="progress lg" aria-hidden="true"><div class="patience" style="animation-duration:${RULES.fakeSeconds}s"></div></div>` : ''}
@@ -664,7 +675,7 @@ export function changeScreen(s, ui) {
     const say = `You short-changed me! I paid ${fmt(c.handed)}. My balance is ${fmt(c.demand)}.`;
     return `<main class="screen">
       <header class="top" style="background:var(--red)"><div class="kicker" style="color:#FFE3E0">Day ${s.day} · Count the change</div><div class="title display">Short change!</div></header>
-      <div class="body">
+      <div class="body">${queueStrip(s)}
         <div class="reaction" ${sayAttrs(say, c.cid)}><span class="mini-face lg">${face(c.cid, { size: 56, mood: 'sad' })}</span>
           <div class="grow"><b class="small">${esc(CUST[c.cid].name)}</b><div class="say">“${esc(say)}”</div></div>${sayBtn()}</div>
         <div class="card"><div class="between"><span class="muted">Change you should give</span><b>${fmt(c.due)}</b></div>
@@ -680,7 +691,7 @@ export function changeScreen(s, ui) {
   return `<main class="screen">
     <header class="top" style="flex-direction:row;align-items:center;justify-content:space-between">
       <div><div class="kicker">Day ${s.day} · Count the change</div><div class="title display">Give the right change</div></div></header>
-    <div class="body">
+    <div class="body">${queueStrip(s)}
       <div class="reaction" ${sayAttrs(`Here is ${fmt(c.handed)}.`, c.cid)}><span class="mini-face lg">${face(c.cid, { size: 56 })}</span>
         <div class="grow"><b class="small">${esc(CUST[c.cid].name)}</b><div class="say">“Here is ${fmt(c.handed)}.”</div></div>${sayBtn()}</div>
       ${timed ? `<div class="progress lg" aria-hidden="true"><div class="patience" style="animation-duration:${RULES.changeSeconds}s"></div></div>

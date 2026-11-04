@@ -95,6 +95,28 @@ function watchRoad() {
 }
 
 // The market run plays on its own (no re-render until it ends).
+// While you're busy with a customer, the waiting line gets restless.
+let queueTimer = null;
+let queueKey = '';
+function watchQueue() {
+  const slow = ['record', 'change', 'fake', 'pay'].includes(s?.phase) && !ui.screen;
+  const key = slow ? `${s.day}|${s.today.idx}|${s.phase}` : '';
+  if (key === queueKey) return;
+  queueKey = key;
+  clearInterval(queueTimer);
+  queueTimer = null;
+  if (!slow || E.waiting(s) < 1) return;
+  let secs = s.path === 'learning' ? RULES.queueWaitSecondsLearning : RULES.queueWaitSeconds;
+  if (s.phase === 'record') secs *= RULES.queueRecordFactor;
+  queueTimer = setInterval(() => {
+    if (!E.queueLeave(s)) { clearInterval(queueTimer); queueTimer = null; return; }
+    const input = app.querySelector('#titi-in');
+    ui.msg = input ? input.value : ui.msg;
+    save();
+    render();
+  }, secs * 1000);
+}
+
 function watchRun() {
   if (ui.screen === 'challenge') { watchRoad(); return; }
   if (s?.phase !== 'run' || ui.screen) { stopRun(); return; }
@@ -149,6 +171,7 @@ function render() {
   lastSaid = said;
   watchChangeTimer();
   watchRun();
+  watchQueue();
   if (s?.phase === 'record' && !ui.screen) {
     const chat = app.querySelector('.chat');
     chat?.lastElementChild?.scrollIntoView({ block: 'nearest' });

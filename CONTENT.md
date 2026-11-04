@@ -122,7 +122,7 @@ Shown after the evening results, one per day, tied to the day's lesson.
 | Level | Goal to move up | Typical days |
 |---|---|---|
 | 1. The Table | ₦11,000 profit this level and a business score of 68 | 7-day target (about 6 with good habits) |
-| 2. The Shop | ₦8,000 profit this level (after its rent and bills), a score of 70, and no debt more than 7 days late | 7-day target (about 7 with good habits) |
+| 2. The Shop | ₦7,000 profit this level (after its rent and bills), a score of 70, and no debt more than 7 days late | 7-day target (about 7 with good habits) |
 
 The PRD's example goal (₦100,000 profit and a score of 60) would take more than 30 in-game days from a ₦20,000 table, so the goals above are lower. Check them in playtesting against the 60% target for players finishing Level 1. Day counts come from `node tests/sim.mjs`, which plays 40 games with a bot that records every sale, restocks and reminds. A bot that records only half its sales takes about 19 days for Level 1; one that never records can't finish.
 
@@ -249,6 +249,12 @@ The score moves slowly: at most ±6 points a day, so one bad day never wipes out
   - goods that **ran out yesterday** (−15%).
 - A customer who leaves without buying (no stock, too expensive, refused, too slow…) goes to a rival, with a notice: "Ngozi went to Emeka Stores."
 - The evening shows each shop's customers and sales, and who you lost to whom.
+
+## 7o. The waiting line and low-stock demand *(tune)*
+
+- The selling screen shows who is waiting behind the current customer.
+- While you're busy (counting change, checking notes, transfer or card, recording), every 10 seconds (20 on the learning path) the last person in the line leaves for a rival: "Aisha got tired of waiting and went to Emeka Stores." Recording gets twice as long, so the game never pushes players to skip it.
+- When a customer reaches the front, there's a 30% chance they ask for something you're running low on (1 or 2 left).
 
 ## 8. Open points for review
 

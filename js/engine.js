@@ -896,6 +896,7 @@ function advance(s) {
   t.chat = [];
   t.outcome = null;
   t.reaction = null;
+  t.queueNote = null;
   nextStep(s);
 }
 
@@ -912,7 +913,37 @@ function nextStep(s, rng = Math.random) {
     }
   }
   if (t.idx >= t.queue.length) return endDay(s, rng);
+  arrive(s, rng);
   s.phase = 'selling';
+}
+
+// When a customer reaches the front, they may ask for something you're running low on.
+function arrive(s, rng = Math.random) {
+  const r = s.today.queue[s.today.idx];
+  if (!r || r.arrived) return;
+  r.arrived = true;
+  if (CUST[r.cid].type === 'big') return;
+  const low = goodsForLevel(s.level).filter((id) => s.stock[id] >= 1 && s.stock[id] <= 2 && !r.items.some((it) => it.item === id));
+  if (low.length && rng() < RULES.lowStockAsk) {
+    const item = pick(rng, low);
+    r.items[0] = { item, qty: randInt(rng, ...GOODS[item].qty) };
+  }
+}
+
+// The waiting line: customers behind the one you're serving.
+export const waiting = (s) => Math.max(0, s.today.queue.length - s.today.idx - 1);
+
+// Too slow: the last person in the line leaves for a rival.
+export function queueLeave(s) {
+  const t = s.today;
+  if (!['selling', 'record', 'change', 'fake', 'pay'].includes(s.phase) || waiting(s) < 1) return null;
+  const r = t.queue.pop();
+  const rival = pickRival(s);
+  const m = t.market?.rivals.find((x) => x.id === rival.id);
+  if (m) m.won++;
+  t.lostTo.push({ cid: r.cid, rival: rival.id, waited: true });
+  t.queueNote = `${CUST[r.cid].name} got tired of waiting and went to ${rival.name}.`;
+  return t.queueNote;
 }
 
 export function eventView(s) {
