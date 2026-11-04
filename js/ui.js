@@ -7,6 +7,7 @@ import { goalStatus, daysToGoal, howLong } from './goals.js';
 import * as Voice from './voice.js';
 import { runnerSvg } from './run.js';
 import { result as quizResult } from './quiz.js';
+import { CHALLENGES, CHANGE_NOTES, FLAW_HINT, LEVEL_DAYS, levelDay } from './challenge.js';
 
 export const esc = (v) => String(v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -44,7 +45,7 @@ const PATHS = {
 };
 export const icon = (name, size = 24, sw = 1.8) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" ${P} stroke-width="${sw}" aria-hidden="true">${PATHS[name] || ''}</svg>`;
 
-const BADGE_ICON = { first_sale: 'coin', record_keeper: 'doc', fully_stocked: 'box', never_lost_debt: 'check', debt_free_week: 'calendar', goal_reached: 'star', know_business: 'search' };
+const BADGE_ICON = { first_sale: 'coin', record_keeper: 'doc', fully_stocked: 'box', never_lost_debt: 'check', debt_free_week: 'calendar', goal_reached: 'star', know_business: 'search', money_checker: 'search', fast_runner: 'person', change_master: 'coin' };
 
 const stockChip = (s, id, lowAt) => `<span class="chip${s.stock[id] <= lowAt ? ' low' : ''}">${good(id, 18)}${esc(GOODS[id].short)} ${s.stock[id]}</span>`;
 const items = (list) => list.map((it) => `${it.qty} ${GOODS[it.item].short.toLowerCase()}`).join(' and ');
@@ -68,11 +69,19 @@ function explain(s, key) {
     <button type="button" class="btn small secondary" data-action="seen" data-arg="ex_${key}">Got it</button></div>`;
 }
 
+// "Day 3 of 7 · 4 days left", or "Extra day 2" after the 7-day target.
+function dayCount(s) {
+  const d = levelDay(s);
+  if (d > LEVEL_DAYS) return `Extra day ${d - LEVEL_DAYS}`;
+  const left = LEVEL_DAYS - d;
+  return `Day ${d} of ${LEVEL_DAYS} · ${left ? `${left} day${left > 1 ? 's' : ''} left` : 'last day'}`;
+}
+
 function topBar(s, { title, kicker, tiles = true, dark = false } = {}) {
   const owed = openDebts(s, { recordedOnly: true }).length;
   return `<header class="top${dark ? ' dark' : ''}">
     <div class="between">
-      <div class="grow"><div class="kicker">${esc(kicker || `Level ${s.level} · ${LEVELS[s.level].name}`)}</div>
+      <div class="grow"><div class="kicker">${esc(kicker || `Level ${s.level} · ${dayCount(s)}`)}</div>
         <h1 class="title display">${esc(title)}</h1></div>
       ${healingMark(s)}
       <span class="pill" aria-label="Business score ${s.score}">Score ${s.score}</span>
@@ -123,6 +132,21 @@ export function startScreen(ui, hasSave, saveInfo) {
 }
 
 // ---------- Morning ----------
+
+function challengeCard(s) {
+  const c = s.today.challenge;
+  if (!c) return '';
+  const def = CHALLENGES[c.type];
+  if (c.done) {
+    if (c.skipped) return '';
+    return `<div class="card ${c.ok ? 'soft' : ''}"><b>${esc(def.name)}: ${c.ok ? 'passed!' : 'done'}</b>${c.earned ? `<span class="small">${esc(c.earned)}</span>` : `<span class="small muted">${c.ok ? 'You already have this skill.' : 'Try again on the next challenge day.'}</span>`}</div>`;
+  }
+  const have = s.skills[def.skill];
+  return `<div class="card strong"><span class="tag solid" style="align-self:flex-start">Today's challenge · 2 minutes</span>
+    <b style="font-size:18px">${esc(def.name)}</b><span class="small">${esc(def.about)}</span>
+    <span class="small muted">${have ? 'You already have this skill: play for fun.' : `Reward: ${esc(def.reward)}`}</span>
+    <div class="grid2">${btn('challenge-play', 'Play', 'primary small')}${btn('challenge-skip', 'Skip', 'secondary small')}</div></div>`;
+}
 
 function billsCard(s) {
   const bills = billsDueSoon(s);
@@ -189,13 +213,14 @@ export function morningScreen(s, ui) {
   }).join('');
   const sup = supplierOwed(s);
   return `<main class="screen">
-    ${topBar(s, { title: `Day ${s.day} · Morning` })}
+    ${topBar(s, { title: 'Morning' })}
     <div class="body">
       ${explain(s, s.level === 2 ? 'level2' : 'morning')}
       ${t.notices.map((n) => `<div class="notice">${esc(n)}</div>`).join('')}
       ${sup ? `<div class="card warn"><div class="between"><div><b>You owe your supplier ${fmt(sup)}</b>
         <div class="small muted">${s.supplier.some((d) => d.late) ? 'Late! Pay to get credit again.' : `Due Day ${Math.min(...s.supplier.map((d) => d.due))}`}</div></div>
         ${btn('pay-supplier', 'Pay', 'secondary small')}</div></div>` : ''}
+      ${challengeCard(s)}
       ${billsCard(s)}
       ${isStuck(s) ? `<div class="card bad"><b>You have no stock and no money to buy any.</b>
         <span class="small">tiTi: "This happens when all the cash goes to stock and bills come. Next time keep some cash aside."</span>
@@ -496,21 +521,87 @@ export function payScreen(s) {
   </main>`;
 }
 
+// ---------- Challenge days ----------
+
+export function challengeScreen(s, c) {
+  const def = CHALLENGES[c.type];
+  const header = `<header class="top"><div class="kicker">Challenge day · Level ${s.level} · ${dayCount(s)}</div><h1 class="title display">${esc(def.name)}</h1></header>`;
+  if (c.finished) {
+    const ok = c.type === 'road' ? c.hits <= def.pass : c.correct >= def.pass;
+    const scoreLine = c.type === 'road' ? `${c.hits} bump${c.hits === 1 ? '' : 's'}` : `${c.correct} of ${c.rounds.length}`;
+    return `<main class="screen">${header}<div class="body">
+      <div class="card ${ok ? 'soft' : ''} pop" style="align-items:center;text-align:center">
+        <b class="display" style="font-size:36px">${scoreLine}</b>
+        <b>${ok ? 'Challenge passed!' : 'Good practice. Try again on the next challenge day.'}</b>
+        ${ok && !s.skills[def.skill] ? `<span class="small">${esc(def.reward)}</span>` : ''}</div>
+      </div><div class="foot">${btn('challenge-finish', 'Back to the shop', 'primary block')}</div></main>`;
+  }
+  if (c.type === 'road') {
+    return `<main class="screen">${header}<div class="body" style="gap:10px">
+      <div class="between"><span class="small muted">Dodge everything on the road. ${def.pass} bumps or fewer to pass.</span><b id="run-time" style="font-size:20px">${def.seconds}s</b></div>
+      <div class="between"><span class="small">Bumps</span><b id="run-got">0</b></div>
+      <div id="run-field" class="run-field" role="application" aria-label="Road safety. Tap left or right to change lane."><div class="runner">${runnerSvg()}</div></div>
+      <div class="grid2"><button type="button" id="run-left" class="btn secondary" aria-label="Move left">${icon('back', 22, 2.4)} Left</button>
+        <button type="button" id="run-right" class="btn secondary" aria-label="Move right">Right <span style="display:inline-block;transform:scaleX(-1)">${icon('back', 22, 2.4)}</span></button></div>
+    </div></main>`;
+  }
+  const r = c.rounds[c.round];
+  const progress = `<div class="row"><span class="small muted" style="font-weight:600">Round ${c.round + 1} of ${c.rounds.length} · ${c.correct} right</span>
+    <div class="progress grow"><div style="width:${Math.round((c.round / c.rounds.length) * 100)}%"></div></div></div>`;
+  if (c.type === 'money') {
+    const answered = r.picked != null;
+    const notes = r.notes.map((n, i) => `<button type="button" class="note-card${answered && i === r.fakeIdx ? ' right' : answered && i === r.picked ? ' wrong' : ''}" data-action="ch-money-pick" data-arg="${i}" ${answered ? 'disabled' : ''} aria-label="Note ${i + 1}: this one is fake">${noteSvg(n, r.light || answered)}</button>`).join('');
+    const fake = r.notes[r.fakeIdx];
+    const verdict = answered ? (r.picked === r.fakeIdx
+      ? `<b>Correct!</b> ${r.fakeIdx >= 0 ? `The fake ₦${fake.value}: ${FLAW_HINT[fake.flaw]}.` : 'All the notes were real.'}`
+      : `<b>Not quite.</b> ${r.fakeIdx >= 0 ? `The fake was the ₦${fake.value}: ${FLAW_HINT[fake.flaw]}.` : 'All the notes were real.'}`) : '';
+    return `<main class="screen">${header}<div class="body">${progress}
+      <span class="small muted">Old and new designs are both real. Tap the fake note, or "All are real".</span>
+      <div class="grid2">${notes}</div>
+      ${answered ? titi(verdict) : r.light ? titi('Real notes show a watermark and a security thread against the light.') : btn('ch-light', `${icon('sun', 18)} Hold up to the light`, 'secondary small block')}
+    </div><div class="foot">${answered ? btn('ch-next', c.round < c.rounds.length - 1 ? 'Next round' : 'See result', 'primary block') : btn('ch-money-pick', 'All are real', 'primary block', -1)}</div></main>`;
+  }
+  const given = r.given.reduce((a, n) => a + n, 0);
+  const notes = CHANGE_NOTES.map((n) => `<button type="button" class="note-btn" data-action="ch-change-tap" data-arg="${n}" ${r.done != null ? 'disabled' : ''} aria-label="Add ${fmt(n)}">${fmt(n)}</button>`).join('');
+  return `<main class="screen">${header}<div class="body">${progress}
+    <div class="card"><div class="between"><span class="muted">The buyer bought</span><b>${fmt(r.total)}</b></div>
+      <div class="between"><span class="muted">and gave you</span><b>${fmt(r.paid)}</b></div>
+      <div class="between" style="padding-top:8px;border-top:1px dashed var(--line)"><span>You are giving</span><b style="font-size:22px">${fmt(given)}</b></div>
+      ${r.given.length ? `<div class="wrap">${r.given.map((n) => `<span class="chip">${fmt(n)}</span>`).join('')}</div>` : '<span class="small muted">Tap the notes and coins to make the change.</span>'}</div>
+    ${r.done != null ? titi(r.done ? `<b>Correct!</b> ${fmt(r.paid)} − ${fmt(r.total)} = ${fmt(r.due)}.` : `<b>Not quite.</b> The change was ${fmt(r.paid)} − ${fmt(r.total)} = ${fmt(r.due)}.`) : ''}
+    <div class="grid2" style="grid-template-columns:repeat(4,minmax(0,1fr))">${notes}</div>
+  </div><div class="foot">${r.done != null ? btn('ch-next', c.round < c.rounds.length - 1 ? 'Next round' : 'See result', 'primary block')
+    : `<div class="grid2">${btn('ch-change-undo', 'Undo', 'secondary small', '', r.given.length ? '' : 'disabled')}${btn('ch-change-check', 'Give change', 'primary small', '', r.given.length ? '' : 'disabled')}</div>`}</div></main>`;
+}
+
 // ---------- Spot the fake note ----------
 
-const NOTE_FILL = { 1000: ['#2E7D4F', '#6FA98A'], 500: ['#6A4C93', '#A693C4'] }; // [real, fake colour]
+// Cartoon naira notes (not copies of the real designs): [real colour, wrong colour] per value and design.
+const NOTE_FILL = {
+  100: { old: ['#3E6FB5', '#8FB0DD'], new: ['#2B5C9E', '#86A6D1'] },
+  200: { old: ['#8A5A2B', '#C9A27C'], new: ['#B5762E', '#DDB78A'] },
+  500: { old: ['#6A4C93', '#A693C4'], new: ['#7E3F8F', '#B994C4'] },
+  1000: { old: ['#2E7D4F', '#6FA98A'], new: ['#1F6B5C', '#73A89D'] },
+};
 
-// A cartoon naira note (not a copy of the real design).
 function noteSvg(n, light) {
-  const fill = NOTE_FILL[n.value][n.fake && n.flaw === 'colour' ? 1 : 0];
-  const faded = n.fake && n.flaw === 'print' ? ' opacity="0.45"' : '';
-  const serial = n.fake && n.flaw === 'serial' ? '' : `<text x="12" y="66" font-size="9" fill="#FFFFFFCC" font-family="monospace">${esc(n.serial)}</text>`;
-  const marks = light && !n.fake ? '<circle cx="40" cy="42" r="13" fill="#FFFFFF" opacity=".55"/><rect x="88" y="0" width="3" height="76" fill="#1A1A1A" opacity=".45"/>' : '';
-  return `<svg viewBox="0 0 160 76" width="100%" aria-hidden="true"${light ? ' style="filter:brightness(1.25)"' : ''}>
+  const fills = (NOTE_FILL[n.value] || NOTE_FILL[1000])[n.design || 'old'];
+  const fill = fills[n.fake && n.flaw === 'colour' ? 1 : 0];
+  const flaw = n.fake ? n.flaw : null;
+  const faded = flaw === 'print' ? ' opacity="0.45"' : '';
+  const serial = flaw === 'serial' ? '' : `<text x="12" y="66" font-size="9" fill="#FFFFFFCC" font-family="monospace">${esc(n.serial || '')}</text>`;
+  const watermark = !n.fake || flaw === 'thread';
+  const thread = !n.fake;
+  const marks = light ? `${watermark ? '<circle cx="40" cy="42" r="13" fill="#FFFFFF" opacity=".55"/>' : ''}${thread ? '<rect x="88" y="0" width="3" height="76" fill="#1A1A1A" opacity=".45"/>' : ''}` : '';
+  const style = [light ? 'brightness(1.25)' : '', flaw === 'copy' ? 'grayscale(1)' : ''].filter(Boolean).join(' ');
+  const size = flaw === 'size' ? ' transform="translate(10 5) scale(.86)"' : '';
+  return `<svg viewBox="0 0 160 76" width="100%" aria-hidden="true"${style ? ` style="filter:${style}"` : ''}><g${size}>
     <rect width="160" height="76" rx="6" fill="${fill}"/><rect x="5" y="5" width="150" height="66" rx="4" fill="none" stroke="#FFFFFF" stroke-opacity=".4" stroke-width="2"/>
+    ${n.design === 'new' ? '<path d="M0 54 Q80 30 160 54 V76 H0 Z" fill="#FFFFFF" opacity=".12"/>' : ''}
     <g${faded}><text x="12" y="27" font-size="17" font-weight="800" fill="#FFFFFF" font-family="system-ui,sans-serif">₦${n.value.toLocaleString('en')}</text>
     <circle cx="124" cy="38" r="20" fill="#FFFFFF" opacity=".25"/><text x="124" y="43" text-anchor="middle" font-size="12" font-weight="800" fill="#FFFFFF">NG</text></g>
-    ${serial}${marks}</svg>`;
+    ${flaw === 'movie' ? '<text x="80" y="50" text-anchor="middle" font-size="9" font-weight="800" fill="#FFFFFF" opacity=".9" transform="rotate(-8 80 50)">FOR MOVIE USE ONLY</text>' : ''}
+    ${serial}${marks}</g></svg>`;
 }
 
 export function fakeScreen(s) {

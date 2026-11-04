@@ -215,6 +215,8 @@ h1, h2, h3 { margin: 0; line-height: 1.15; }
 .quiz-opt.right { border: 2px solid var(--green); background: var(--green-soft); opacity: 1; }
 .quiz-opt.wrong { border: 2px solid var(--red); background: var(--red-soft); opacity: 1; }
 .note-card { border: 2px solid transparent; background: none; padding: 0; border-radius: 10px; }
+.note-card.right { border-color: var(--green); }
+.note-card.wrong { border-color: var(--red); }
 .note-card:focus-visible { outline: 3px solid var(--amber); }
 .note-card:active { transform: scale(.97); }
 .note-btn { border: 2px solid #9CC9A8; background: #E7F4EA; color: var(--green); border-radius: 12px; min-height: 64px; font-size: 20px; font-weight: 800; }

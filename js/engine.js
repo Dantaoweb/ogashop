@@ -11,6 +11,7 @@ import {
 import { EVENT_BY_ID, drawEvent, morningEffects } from './events.js';
 import { checkGoal } from './goals.js';
 import { makeQuiz } from './quiz.js';
+import { challengeForDay, levelDay, LEVEL_DAYS } from './challenge.js';
 import { scheduleBills, payDueBills, chargeLateFees, dropFutureBills, payBill, cashNeededSoon, billsDueSoon, billOwed } from './bills.js';
 import { parseSale, checkSale, detectQuery, suggestMessage } from './parser.js';
 
@@ -25,6 +26,7 @@ export function newGame(path, rng = Math.random) {
     stats: { recW: 0, totW: 0, dueAmt: 0, paidOnTime: 0, days: 0, cleanDays: 0, repaid: 0, lost: 0, noLateStreak: 0, pocketPays: 0, capitalTakes: 0, overpayStreak: 0, served: 0, unhappy: 0, billsPaid: 0, billsLateDays: 0, changeRight: 0, goodChecks: 0 },
     badges: [], seen: {}, eventLog: {}, mods: {}, history: [], goal: null, goalsReached: [], sales: [], quizLog: [], quiz: null,
     payments: { account: 'creditvoice', accountNumber: PAYMENTS.defaultAccountNumber, pos: 'creditvoice' },
+    skills: {}, challengeLog: [],
     phase: 'morning', today: null,
   };
   for (const id of Object.keys(GOODS)) {
@@ -81,6 +83,10 @@ export function startDay(s, rng = Math.random) {
     if (n >= RULES.asksWarn) t.notices.push(`Yesterday ${n} customers asked for ${GOODS[item].short.toLowerCase()} and you didn't have enough. Buy more today.`);
   }
   if (s.mods.fewer) t.notices.push('Word spread that your shop runs out of goods. Fewer customers are coming today.');
+  // Every other day starts with a short challenge.
+  const ch = challengeForDay(s);
+  t.challenge = ch ? { type: ch, done: false } : null;
+  if (levelDay(s) > LEVEL_DAYS && !levelGoalMet(s)) t.notices.unshift(`Extra day ${levelDay(s) - LEVEL_DAYS}: reach your Level ${s.level} goal to move up. Check your score card for what's missing.`);
   t.queue = makeQueue(s, rng);
   t.eventAt = Math.max(2, Math.floor(t.queue.length / 2));
   s.phase = 'morning';
@@ -97,6 +103,8 @@ export function migrate(s) {
   Object.assign(s.stats, { pocketPays: 0, capitalTakes: 0, overpayStreak: 0, served: 0, unhappy: 0, billsPaid: 0, billsLateDays: 0, changeRight: 0, goodChecks: 0, ...s.stats });
   s.bills ??= [];
   s.goal ??= null;
+  s.skills ??= {};
+  s.challengeLog ??= [];
   s.payments ??= { account: 'creditvoice', accountNumber: PAYMENTS.defaultAccountNumber, pos: 'creditvoice' };
   s.sales ??= [];
   s.quizLog ??= [];
@@ -143,6 +151,21 @@ export function restartLevel(s, rng = Math.random) {
   s.levelStartDay = s.day + 1;
   startDay(s, rng);
   s.today.notices.unshift(`A fresh start for Level ${s.level}. Keep cash aside for bills this time.`);
+}
+
+export { levelDay, LEVEL_DAYS };
+
+// Skills from challenge days change the mini-games a little.
+export function runSettings(s) {
+  return {
+    seconds: RULES.runSeconds + (s.skills?.fastRunner ? 5 : 0),
+    injuryChance: RULES.injuryChance * (s.skills?.fastRunner ? 0.5 : 1),
+  };
+}
+export const changeSeconds = (s) => RULES.changeSeconds + (s.skills?.patience ? 5 : 0);
+
+export function skipChallenge(s) {
+  if (s.today.challenge) s.today.challenge = { ...s.today.challenge, done: true, skipped: true };
 }
 
 export function setPay(s, amount) {
@@ -417,6 +440,7 @@ export function serve(s, action) {
     t.fakeDone = true;
     s.lastFakeDay = s.day;
     t.fake = { cid: v.cid, total: sale.total, ...makeNotes(sale.total) };
+    if (s.skills?.eagleEye) t.fake.light = true;
     s.phase = 'fake';
   }
 }

@@ -64,7 +64,7 @@ export const TYPE_LABEL = {
 
 // (tune) Behaviour rules — CONTENT.md section 2.
 export const RULES = {
-  customersPerDay: { 1: [6, 8], 2: [8, 10] },
+  customersPerDay: { 1: [5, 6], 2: [6, 8] },
   bigBuyerChance: 0.2,
   creditDueDays: 2,
   forgetUnrecorded: { normal: 0.4, neverpays: 0.9 },
@@ -154,9 +154,9 @@ export const FAMILY_NEEDS = [
 ];
 
 export const LEVELS = {
-  1: { name: 'The Table', goalProfit: 13000, goalScore: 68,
+  1: { name: 'The Table', goalProfit: 9000, goalScore: 68,
        blurb: 'A small market table. Learn cash vs profit, and record every sale.' },
-  2: { name: 'The Shop', goalProfit: 9000, goalScore: 70, maxLateDays: 7,
+  2: { name: 'The Shop', goalProfit: 6000, goalScore: 70, maxLateDays: 7,
        blurb: 'A small shop. Restock on time, give credit carefully and get your debts back.' },
 };
 
@@ -178,6 +178,9 @@ export const BADGES = {
   never_lost_debt: { name: 'Never lost a debt', desc: 'Got 3 debts back and lost none.' },
   debt_free_week:  { name: 'Debt-free week',    desc: '7 days in a row with no late debts.' },
   goal_reached:    { name: 'Goal reached',      desc: 'Saved up and bought your goal.' },
+  money_checker:   { name: 'Eagle eye',         desc: 'Passed the Money check challenge.' },
+  fast_runner:     { name: 'Fast runner',       desc: 'Passed the Road safety challenge.' },
+  change_master:   { name: 'Change master',     desc: 'Passed the Change master challenge.' },
   know_business:   { name: 'Know your business', desc: '4 out of 5 or better in an end-of-level quiz.' },
 };
 

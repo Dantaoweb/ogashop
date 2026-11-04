@@ -43,7 +43,7 @@ Five types. Each customer is a named person who is **remembered across days**: h
 
 | Rule | Value |
 |---|---|
-| Customers per day | Level 1: 6–8 · Level 2: 8–10 |
+| Customers per day | Level 1: 5–6 · Level 2: 6–8 |
 | Mix per day (Level 1) | 3 regular, 1–2 bargainer, 1 credit asker, 0–1 never-pays, big buyer rare (about 1 in 5 days) |
 | Unrecorded credit: chance the customer "forgets" | 40% for regular and credit asker, 90% for never-pays |
 | Recorded credit, no reminder: chance they pay on time | 60% (never-pays: 15%) |
@@ -121,8 +121,8 @@ Shown after the evening results, one per day, tied to the day's lesson.
 
 | Level | Goal to move up | Typical days |
 |---|---|---|
-| 1. The Table | ₦13,000 profit this level and a business score of 68 | about 6 days |
-| 2. The Shop | ₦9,000 profit this level (after its rent and bills), a score of 70, and no debt more than 7 days late | about 7 days |
+| 1. The Table | ₦9,000 profit this level and a business score of 68 | 7-day target (about 6 with good habits) |
+| 2. The Shop | ₦6,000 profit this level (after its rent and bills), a score of 70, and no debt more than 7 days late | 7-day target (about 7 with good habits) |
 
 The PRD's example goal (₦100,000 profit and a score of 60) would take more than 30 in-game days from a ₦20,000 table, so the goals above are lower. Check them in playtesting against the 60% target for players finishing Level 1. Day counts come from `node tests/sim.mjs`, which plays 40 games with a bot that records every sale, restocks and reminds. A bot that records only half its sales takes about 19 days for Level 1; one that never records can't finish.
 
@@ -228,6 +228,16 @@ The score moves slowly: at most ±6 points a day, so one bad day never wipes out
 - Paid from the pocket first (it's personal), then the business cash. What's left becomes a **hospital debt** due in 3 days, with the usual late fees.
 - A bandage mark shows in the top bar while healing; running to the market is not possible until the leg heals, so the player sends the boy.
 - tiTi's tip: running yourself saves ₦300 but an injury costs much more; savings help in emergencies.
+
+## 7m. Level length and challenge days
+
+- Every level has a **7-day target**. The top bar shows "Day 3 of 7 · 4 days left". Reaching the goal earlier moves you up straight away; if it isn't reached by Day 7, extra days follow ("Extra day 1") until it is.
+- Days are shorter: 5–6 customers in Level 1, 6–8 in Level 2.
+- Every other day of a level starts with an optional 2-minute **challenge**, rotating:
+  - **Money check** (6 rounds): 4 notes of ₦100/₦200/₦500/₦1,000, old and new designs; spot the fake (wrong colour, faded print, no serial, no thread, too small, photocopy, "for movie use") or "all are real". Pass: 5 right. Reward: **Eagle eye** (the light check starts on in Spot the fake note).
+  - **Road safety** (25 seconds): dodge bicycles, okadas and everything in the way. Pass: 3 bumps or fewer. Reward: **Fast runner** (Market run +5 seconds, half the accidents).
+  - **Change master** (5 rounds, harder each time): "bought ₦3,465, gave ₦4,000": make the change with ₦1,000 down to ₦5. Pass: 4 right. Reward: **Patient customers** (+5 seconds to count change).
+- Each pass earns a badge once. Skill only, always skippable.
 
 ## 8. Open points for review
 

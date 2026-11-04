@@ -452,6 +452,38 @@ test('broken leg in Market run: hospital ride, pocket first, debt if short, no r
   assert.equal(E.isInjured(s), false);
 });
 
+test('challenge days: every other day, rounds, badge and skill', async () => {
+  const Ch = await import('../js/challenge.js');
+  const s = E.newGame('business', mulberry32(100));
+  assert.equal(s.today.challenge, null, 'day 1: no challenge');
+  E.startDay(s, mulberry32(1));
+  assert.equal(s.today.challenge.type, 'money');
+  const g = Ch.startChallenge('money', mulberry32(2));
+  for (const r of g.rounds) { Ch.moneyPick(g, r.fakeIdx); Ch.nextRound(g); }
+  assert.ok(g.finished);
+  assert.equal(g.correct, 6);
+  const res = Ch.finishChallenge(s, g);
+  assert.ok(res.ok && res.earned);
+  assert.ok(s.skills.eagleEye && s.badges.includes('money_checker'));
+  // Change master: right change counts
+  const c = Ch.startChallenge('change', mulberry32(3));
+  const r0 = c.rounds[0];
+  let left = r0.due;
+  for (const n of Ch.CHANGE_NOTES) while (left >= n) { Ch.changeTapNote(c, n); left -= n; }
+  Ch.changeCheck(c);
+  assert.equal(r0.done, true);
+  assert.ok(c.rounds.every((r) => r.due > 0 && r.due % 5 === 0));
+  // Road safety: few bumps pass, and the skill makes Market run easier
+  const road = Ch.startChallenge('road');
+  Ch.roadResult(road, 1);
+  Ch.finishChallenge(s, road);
+  assert.ok(s.skills.fastRunner);
+  assert.equal(E.runSettings(s).seconds, 25);
+  // day counter
+  assert.equal(E.levelDay(s), 2);
+  assert.equal(Ch.daysLeft(s), 5);
+});
+
 test('count the change: right, short, too much, skip', () => {
   const play = (taps, result = 'give') => {
     const s = E.newGame('business', mulberry32(40));

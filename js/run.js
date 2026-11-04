@@ -19,7 +19,9 @@ export function runnerSvg() { return RUNNER; }
 
 // items: [{ item, qty }]. Calls onEnd({ item: caught }, { injured }) once: everything caught, time up,
 // or the runner is hit by a bicycle or okada and breaks a leg (chance injuryChance).
-export function startRun(field, { items, seconds = 20, injuryChance = 0, onEnd, onTick }) {
+// training: no goods to catch, no injuries; just dodge until time is up and count the bumps.
+export function startRun(field, { items, seconds = 20, injuryChance = 0, training = false, onEnd, onTick }) {
+  let hits = 0;
   const need = Object.fromEntries(items.map((it) => [it.item, it.qty]));
   const got = Object.fromEntries(items.map((it) => [it.item, 0]));
   const slow = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
@@ -51,7 +53,7 @@ export function startRun(field, { items, seconds = 20, injuryChance = 0, onEnd, 
 
   function spawn() {
     const wanted = stillNeeded();
-    const isGood = wanted.length && Math.random() < 0.55;
+    const isGood = !training && wanted.length && Math.random() < 0.55;
     const el = document.createElement('div');
     el.className = 'run-obj';
     let kind;
@@ -92,15 +94,16 @@ export function startRun(field, { items, seconds = 20, injuryChance = 0, onEnd, 
       if (touching) {
         if (o.good && got[o.kind] < need[o.kind]) { got[o.kind]++; flash('got'); }
         if (!o.good) {
-          if ((o.kind === 'bicycle' || o.kind === 'okada') && Math.random() < injuryChance) { o.el.remove(); return end(true, o.kind); }
-          timeLeft -= BUMP_MS;
+          if (training) hits++;
+          if (!training && (o.kind === 'bicycle' || o.kind === 'okada') && Math.random() < injuryChance) { o.el.remove(); return end(true, o.kind); }
+          if (!training) timeLeft -= BUMP_MS;
           flash('hit');
         }
       }
       if (touching || o.y > H) { o.el.remove(); objs.splice(i, 1); }
     }
-    onTick?.({ timeLeft: Math.max(0, timeLeft), got, need });
-    if (!stillNeeded().length || timeLeft <= 0) return end();
+    onTick?.({ timeLeft: Math.max(0, timeLeft), got, need, hits });
+    if ((!training && !stillNeeded().length) || timeLeft <= 0) return end();
     frame = requestAnimationFrame(step);
   }
 
@@ -122,7 +125,7 @@ export function startRun(field, { items, seconds = 20, injuryChance = 0, onEnd, 
   }
   function end(injured = false, by = null) {
     cleanup();
-    onEnd({ ...got }, { injured, by });
+    onEnd({ ...got }, { injured, by, hits });
   }
 
   frame = requestAnimationFrame((t) => { last = t; step(t); });

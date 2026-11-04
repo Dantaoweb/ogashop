@@ -7,6 +7,7 @@ import * as Voice from './voice.js';
 import { setGoal, clearGoal } from './goals.js';
 import { startRun } from './run.js';
 import * as Quiz from './quiz.js';
+import * as Ch from './challenge.js';
 import { GOALS, RULES } from './data.js';
 
 const SAVE_KEY = 'ogashop.save.v1';
@@ -47,6 +48,7 @@ function view() {
   if (ui.screen === 'prices') return UI.pricesScreen(s);
   if (ui.screen === 'goals') return UI.goalsScreen(s, ui);
   if (ui.screen === 'records') return UI.recordsScreen(s);
+  if (ui.screen === 'challenge' && s.today.challengeGame) return UI.challengeScreen(s, s.today.challengeGame);
   if (ui.screen === 'levels') return UI.levelsScreen(s);
   if (ui.screen === 'quiz' && s.quiz) return UI.quizScreen(s, ui);
   if (ui.screen === 'score') return UI.scoreScreen(s);
@@ -77,8 +79,24 @@ function stopRun() {
   runStop = null;
 }
 
+// Road safety: the same run, no goods, just dodging.
+function watchRoad() {
+  const g = s?.today?.challengeGame;
+  if (ui.screen !== 'challenge' || g?.type !== 'road' || g.finished || runStop) return;
+  const field = app.querySelector('#run-field');
+  if (!field) return;
+  const timeEl = app.querySelector('#run-time');
+  const hitsEl = app.querySelector('#run-got');
+  runStop = startRun(field, {
+    items: [], training: true, seconds: Ch.CHALLENGES.road.seconds,
+    onTick: ({ timeLeft, hits }) => { timeEl.textContent = `${Math.ceil(timeLeft / 1000)}s`; hitsEl.textContent = String(hits); },
+    onEnd: (got, info) => { runStop = null; run('ch-road-done', info.hits); },
+  });
+}
+
 // The market run plays on its own (no re-render until it ends).
 function watchRun() {
+  if (ui.screen === 'challenge') { watchRoad(); return; }
   if (s?.phase !== 'run' || ui.screen) { stopRun(); return; }
   const field = app.querySelector('#run-field');
   if (!field || runStop) return;
@@ -87,12 +105,12 @@ function watchRun() {
   const total = s.today.run.items.reduce((a, it) => a + it.qty, 0);
   runStop = startRun(field, {
     items: s.today.run.items,
-    seconds: RULES.runSeconds,
+    seconds: E.runSettings(s).seconds,
     onTick: ({ timeLeft, got }) => {
       timeEl.textContent = `${Math.ceil(timeLeft / 1000)}s`;
       gotEl.textContent = `${Object.values(got).reduce((a, n) => a + n, 0)} / ${total}`;
     },
-    injuryChance: RULES.injuryChance,
+    injuryChance: E.runSettings(s).injuryChance,
     onEnd: (got, info) => { runStop = null; run('run-done', { got, ...info }); },
   });
 }
@@ -106,7 +124,7 @@ function watchChangeTimer() {
   if (changeTimer && (!counting || timerPhase !== phase)) { clearTimeout(changeTimer); changeTimer = null; }
   if (counting && !changeTimer) {
     timerPhase = phase;
-    const secs = phase === 'change' ? RULES.changeSeconds : RULES.fakeSeconds;
+    const secs = phase === 'change' ? E.changeSeconds(s) : RULES.fakeSeconds;
     changeTimer = setTimeout(() => { changeTimer = null; run(phase === 'change' ? 'change-timeout' : 'fake-timeout'); }, secs * 1000);
   }
 }
@@ -211,6 +229,16 @@ const actions = {
   remind: (arg) => { E.remind(s, Number(arg)); },
   'set-path': (arg) => { s.path = arg; },
   'set-voice': (arg) => { Voice.setEnabled(arg); },
+  'challenge-play': () => { const c = s.today.challenge; if (c && !c.done) { s.today.challengeGame = Ch.startChallenge(c.type); ui.screen = 'challenge'; } },
+  'challenge-skip': () => { E.skipChallenge(s); },
+  'ch-light': () => { const g = s.today.challengeGame; g.rounds[g.round].light = true; },
+  'ch-money-pick': (arg) => { Ch.moneyPick(s.today.challengeGame, Number(arg)); },
+  'ch-change-tap': (arg) => { Ch.changeTapNote(s.today.challengeGame, Number(arg)); },
+  'ch-change-undo': () => { Ch.changeUndoNote(s.today.challengeGame); },
+  'ch-change-check': () => { Ch.changeCheck(s.today.challengeGame); },
+  'ch-next': () => { Ch.nextRound(s.today.challengeGame); },
+  'ch-road-done': (hits) => { Ch.roadResult(s.today.challengeGame, hits); },
+  'challenge-finish': () => { Ch.finishChallenge(s, s.today.challengeGame); s.today.challengeGame = null; ui.screen = null; },
   'quiz-answer': (arg) => { Quiz.answer(s.quiz, Number(arg)); ui.quizRecords = false; },
   'quiz-check': () => { ui.quizRecords = true; },
   'quiz-next': () => { Quiz.next(s.quiz); ui.quizRecords = false; if (s.quiz.done) Quiz.finish(s, s.quiz); },
