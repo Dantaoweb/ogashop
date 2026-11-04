@@ -535,6 +535,20 @@ test('waiting line: the last person leaves for a rival; low-stock goods get aske
   assert.equal(E.queueLeave(s), null, 'nobody left to leave');
 });
 
+test('out of stock: customers still name a real price (no ₦0 offers)', () => {
+  const s = E.newGame('business', mulberry32(130));
+  s.stock.rice = 0;
+  const q = (cid, kind, qty) => ({ cid, items: [{ item: 'rice', qty }], kind, frac: 0.5, disc: 0.1, walkRoll: 0.99, acceptRoll: 0, moodRoll: 0.99, changeRoll: 1, fakeRoll: 1, payRoll: 0 });
+  s.today.queue = [q('aisha', 'discount', 1), q('iyatunde', 'credit', 2)];
+  s.today.eventAt = 99;
+  E.openShop(s);
+  assert.equal(E.currentCustomer(s).said.discTotal, 2250);
+  s.today.idx = 1;
+  const v = E.currentCustomer(s);
+  assert.equal(v.said.paysNow, 2500);
+  assert.ok(v.paysNow >= 0);
+});
+
 test('count the change: right, short, too much, skip', () => {
   const play = (taps, result = 'give') => {
     const s = E.newGame('business', mulberry32(40));

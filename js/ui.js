@@ -335,11 +335,11 @@ export function customerScreen(s) {
   const wanted = items(v.items.length ? v.items : t.queue[t.idx].items);
   let speech;
   if (v.kind === 'credit') {
-    speech = v.paysNow > 0
-      ? `Give me ${wanted}. I'll pay ${fmt(v.paysNow)} now and bring the rest on Day ${s.day + 2}.`
+    speech = v.said.paysNow > 0
+      ? `Give me ${wanted}. I'll pay ${fmt(v.said.paysNow)} now and bring the rest on Day ${s.day + 2}.`
       : `Give me ${wanted}. I'll pay you everything on Day ${s.day + 2}, I promise.`;
   } else if (v.kind === 'discount') {
-    speech = `${wanted} for ${fmt(v.discTotal)}? Abeg, reduce it small.`;
+    speech = `${wanted} for ${fmt(v.said.discTotal)}? Abeg, reduce it small.`;
   } else if (c.type === 'big') {
     speech = `I need ${wanted} for a party.`;
   } else {

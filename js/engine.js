@@ -348,10 +348,15 @@ export function currentCustomer(s) {
   for (const it of items) over = Math.max(over, s.prices[it.item] / refPrice(s, it.item) - 1);
   const walkChance = clamp(over * (c.type === 'bargainer' ? 3 : 2), 0, 0.8);
   const walks = over > 0.02 && r.walkRoll < walkChance;
-  const paysNow = r.kind === 'credit' ? Math.min(total - 100, Math.max(0, Math.round((total * r.frac) / 100) * 100)) : total;
-  const discTotal = Math.round((total * (1 - r.disc)) / 50) * 50;
+  const paysOf = (sum) => (r.kind === 'credit' ? Math.max(0, Math.min(sum - 100, Math.round((sum * r.frac) / 100) * 100)) : sum);
+  const discOf = (sum) => Math.round((sum * (1 - r.disc)) / 50) * 50;
+  const paysNow = paysOf(total);
+  const discTotal = discOf(total);
+  // What the customer asks for in words: the goods they want, even if you don't have them all.
+  const wantTotal = r.items.reduce((a, it) => a + it.qty * s.prices[it.item], 0);
+  const said = { total: wantTotal, paysNow: paysOf(wantTotal), discTotal: discOf(wantTotal) };
   return {
-    ...r, customer: c, items, missing, total, walks, paysNow, discTotal, rush: rushOrder(s, wanted),
+    ...r, customer: c, items, missing, total, walks, paysNow, discTotal, said, rush: rushOrder(s, wanted),
     clock: clockFor(t.idx, t.queue.length), hour: hourFor(t.idx, t.queue.length), number: t.idx + 1, of: t.queue.length,
     method: payMethod(s, r),
   };
