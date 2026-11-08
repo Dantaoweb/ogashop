@@ -5,6 +5,7 @@ import { currentCustomer, eventView, scoreParts, suggestMessage, billsDueSoon, b
 import { face, good, scene, levelPicture } from './art.js';
 import { goalStatus, daysToGoal, howLong } from './goals.js';
 import * as Voice from './voice.js';
+import * as Analytics from './analytics.js';
 import { runnerSvg } from './run.js';
 import { EVENT_BY_ID } from './events.js';
 
@@ -112,6 +113,14 @@ function topBar(s, { title, kicker, tiles = true, dark = false } = {}) {
 
 // ---------- Start ----------
 
+// One-time question about counting. Until it's answered, only anonymous totals are counted.
+function consentCard() {
+  if (!Analytics.connected() || Analytics.choice() !== null) return '';
+  return `<div class="card strong"><b>Help improve Oga Shop?</b>
+    <span class="small">We count visits and game progress as anonymous totals. If you say yes, we also link your progress to a random code, so we can see how players get on. Never your name or phone number.</span>
+    <div class="grid2">${btn('consent', 'Yes, share more', 'primary small', 'yes')}${btn('consent', 'No, just totals', 'secondary small', 'no')}</div></div>`;
+}
+
 export function startScreen(ui, hasSave, saveInfo) {
   const choice = (path, ico, bg, color, title, desc) => `
     <button type="button" class="path-btn" data-action="pick-path" data-arg="${path}" aria-pressed="${ui.startPath === path}">
@@ -120,6 +129,7 @@ export function startScreen(ui, hasSave, saveInfo) {
     </button>`;
   return `<main class="screen">
     <div class="body" style="gap:24px;padding-top:40px">
+      ${consentCard()}
       <div class="center" style="display:flex;flex-direction:column;gap:12px">
         <div class="scene-card">${scene(1, { cid: 'mamabola', stock: { rice: 1, garri: 1, water: 1, recharge: 1 } })}</div>
         <h1 class="display" style="font-size:42px">Oga Shop</h1>
@@ -264,6 +274,7 @@ export function morningScreen(s, ui) {
       ${sup ? `<div class="card warn"><div class="between"><div><b>You owe your supplier ${fmt(sup)}</b>
         <div class="small muted">${s.supplier.some((d) => d.late) ? 'Late! Pay to get credit again.' : `Due Day ${Math.min(...s.supplier.map((d) => d.due))}`}</div></div>
         ${btn('pay-supplier', 'Pay', 'secondary small')}</div></div>` : ''}
+      ${consentCard()}
       ${challengeCard(s)}
       ${marketMorning(s)}
       ${billsCard(s)}
@@ -1160,8 +1171,12 @@ export function settingsScreen(s, ui) {
       ${ui.canInstall ? `<div class="card"><h3>Add to home screen</h3><span class="small muted">Play like an app, even without data.</span>${btn('install', 'Install Oga Shop', 'secondary small')}</div>` : ''}
       <div class="card"><h3>Customers</h3><span class="small muted">Rename your customers, choose their voice and give them your own lines.</span>${btn('open', 'Edit customers', 'secondary small', 'customers')}</div>
       <div class="card"><h3>Levels</h3><span class="small muted">See all ${ALL_LEVELS.length} levels, what each one teaches, and how far you are.</span>${btn('open', 'See all levels', 'secondary small', 'levels')}</div>
+      ${!Analytics.connected() ? '' : `<div class="card"><h3>Privacy</h3>
+        <span class="small muted">We count visits and game progress to improve Oga Shop. We never collect your name, phone number, sales or account number, and we don't use cookies.</span>
+        ${[['yes', 'Share more', 'Totals, plus your progress linked to a random code.'], ['no', 'Just totals', 'Anonymous totals only. Nothing identifies you.'], ['off', "Don't count me", 'Nothing is sent.']].map(([id, label, desc]) => `<label class="settings-opt" style="padding:6px 0"><input type="radio" name="counting" value="${id}" data-action="consent" ${(Analytics.choice() ?? 'no') === id ? 'checked' : ''}><span><b>${label}</b><div class="small muted">${desc}</div></span></label>`).join('')}
+      </div>`}
       <div class="card"><h3>About</h3>
-        <span class="small">Oga Shop is a free learning game by CreditVoice. There is no real money in the game. Your progress is saved only on this phone; nothing is sent anywhere.</span>
+        <span class="small">Oga Shop is a free learning game by CreditVoice. There is no real money in the game. Your game is saved on this phone.</span>
         <span class="small">CreditVoice does not lend money. Anything about loans or finance in the game is fiction.</span>
         <a class="small" href="${CREDITVOICE_URL}" target="_blank" rel="noopener">Visit CreditVoice</a></div>
       <div class="card"><h3>Start over</h3>

@@ -1,0 +1,8 @@
+name = "ogashop-counter"
+main = "index.js"
+compatibility_date = "2026-11-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "ogashop"
+database_id = "PUT-YOUR-DATABASE-ID-HERE"

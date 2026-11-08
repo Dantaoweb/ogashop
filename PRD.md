@@ -173,6 +173,7 @@ Rules for every placement:
 - **Works on low-end Android phones** and small screens first; also on computers.
 - **Languages:** English first; Pidgin, Yoruba, Hausa, Igbo later.
 - **Data protection:** follows the Nigeria Data Protection Act. Collect as little as possible; nothing sold or shared.
+- **Player counting (added v1.1):** anonymous totals by default, with no cookies and no stored IP addresses. Players who say yes also share progress linked to a random code. Settings has "Don't count me". Names, phone numbers, sales and account numbers are never collected.
 
 ## 13. Safety and trust
 

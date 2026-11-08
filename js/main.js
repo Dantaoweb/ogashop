@@ -4,6 +4,7 @@ import * as UI from './ui.js';
 import { LEVELS } from './data.js';
 import { CUST, fmt, setCustom, resetCustom } from './core.js';
 import * as Voice from './voice.js';
+import * as Analytics from './analytics.js';
 import { setGoal, clearGoal } from './goals.js';
 import { startRun } from './run.js';
 import * as Quiz from './quiz.js';
@@ -273,6 +274,7 @@ const actions = {
   'set-voice': (arg) => { Voice.setEnabled(arg); },
   'challenge-play': () => { const c = s.today.challenge; if (c && !c.done) { s.today.challengeGame = Ch.startChallenge(c.type); ui.screen = 'challenge'; } },
   'challenge-skip': () => { E.skipChallenge(s); },
+  consent: (arg) => { Analytics.setChoice(arg); },
   advert: () => { ui.error = E.putAdvert(s); },
   'edit-customer': (arg) => { ui.editing = arg || null; ui.error = null; },
   'reset-customer': (arg) => { resetCustom(s, arg); ui.editing = null; },
@@ -327,15 +329,51 @@ const actions = {
   },
 };
 
+const snapshot = () => (s ? { game: s, level: s.level, phase: s.phase, completed: s.completed, quiz: s.quizLog.length, ch: s.challengeLog.length } : null);
+
+// Turn what just happened in the game into counts.
+function countProgress(name, was) {
+  if (!s) return;
+  const detail = { level: s.level, day: s.day, score: s.score };
+  if (name === 'new-game' && was?.game !== s) {
+    Analytics.track('path', { k: s.path, ...detail });
+    Analytics.track('level_start', { k: '1', once: 'level_start_1', ...detail });
+  }
+  if (!was) return;
+  if (was.phase !== 'evening' && s.phase === 'evening') Analytics.track('day_done', { ...detail });
+  if (s.level > was.level) {
+    Analytics.track('level_done', { k: String(was.level), once: `level_done_${was.level}`, ...detail });
+    Analytics.track('level_start', { k: String(s.level), once: `level_start_${s.level}`, ...detail });
+  }
+  if (s.completed && !was.completed) Analytics.track('level_done', { k: String(s.level), once: `level_done_${s.level}`, ...detail });
+  if (s.quizLog.length > was.quiz) {
+    const q = s.quizLog.at(-1);
+    Analytics.track('quiz', { k: q.kind, v: Math.round((q.correct / q.total) * 100), ...detail });
+  }
+  if (s.challengeLog.length > was.ch) {
+    const c = s.challengeLog.at(-1);
+    Analytics.track('challenge', { k: c.type, v: c.ok ? 1 : 0, ...detail });
+  }
+}
+
+let flushTimer = null;
+function flushSoon() {
+  if (!flushTimer) flushTimer = setTimeout(() => { flushTimer = null; Analytics.flush(); }, 5000);
+}
+
 function run(name, arg) {
   const fn = actions[name];
   if (!fn) return;
+  const was = snapshot();
   fn(arg);
+  countProgress(name, was);
+  flushSoon();
   save();
   render();
 }
 
 app.addEventListener('click', (e) => {
+  if (e.target.closest('a[href*="creditvoiceai.com"]')) { Analytics.track('cv_click', { once: 'cv_click' }); Analytics.flush(); }
   const el = e.target.closest('[data-action]');
   if (!el || el.disabled) return;
   if (el.tagName === 'INPUT') return; // radios use "change"
@@ -391,6 +429,16 @@ window.addEventListener('beforeinstallprompt', (e) => {
   ui.canInstall = true;
   if (ui.screen === 'settings') render();
 });
+
+// Counting: this visit, how long it took to load, and send what's waiting when there's data.
+Analytics.startVisit();
+window.addEventListener('load', () => setTimeout(() => {
+  const nav = performance.getEntriesByType?.('navigation')?.[0];
+  if (nav?.loadEventEnd > 0) Analytics.track('load', { v: Math.round(nav.loadEventEnd), once: 'first_load' });
+  Analytics.flush();
+}, 0));
+window.addEventListener('online', () => Analytics.flush());
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') Analytics.flush(); });
 
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
   navigator.serviceWorker.register('./sw.js').catch(() => {});

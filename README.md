@@ -24,6 +24,7 @@ Plain HTML, CSS and JavaScript modules. No build step and no dependencies, so Gi
 | `js/voice.js` | Customers speaking, using the phone's own voice |
 | `js/run.js` | Market run mini-game (browser only) |
 | `js/bills.js`, `js/goals.js` | Big bills; savings goals |
+| `js/analytics.js`, `worker/` | Player counting, and its small server |
 | `js/ui.js` | Screens |
 | `js/main.js` | Saving, screen switching, button handling |
 | `sw.js` | Offline support (caches the game after the first visit) |
@@ -62,9 +63,31 @@ All paths are relative, so the same files also work later on a custom address su
 
 **When you change any file:** bump `VERSION` in `sw.js` (e.g. `ogashop-v2`). Otherwise players who already have the game cached keep the old version.
 
+## Player counting
+
+The game sends nothing until `ANALYTICS_URL` in `js/data.js` is set. Three modes, chosen by the player (`js/analytics.js`):
+
+- **No / not answered:** anonymous totals. No code, no cookies.
+- **Yes:** the same totals, plus a random player code with level, day and score.
+- **Don't count me:** nothing is sent.
+
+Names, phone numbers, sales, account numbers and custom customer text are never sent, and the server never stores IP addresses.
+
+To connect it, from the `worker/` folder with a free Cloudflare account:
+
+```
+npx wrangler login
+npx wrangler d1 create ogashop            # put the database_id in wrangler.toml
+npx wrangler d1 execute ogashop --remote --file=schema.sql
+npx wrangler secret put STATS_KEY         # a long password for the results page
+npx wrangler deploy
+```
+
+Set `ANALYTICS_URL` to `https://<your-worker-address>/e`, bump `VERSION` in `sw.js`, and push. Results: `https://<your-worker-address>/stats?key=<STATS_KEY>`.
+
 ## Before the Stage 1 test
 
 - Check all prices in `js/data.js` with traders (see CONTENT.md section 8).
 - `CREDITVOICE_URL` in `js/data.js` points to the CreditVoice homepage (`https://creditvoiceai.com`). Check that it is the right address.
 - Oga Shop is a separate project. Nothing here changes the CreditVoice app or website: CreditVoice adds its own link to the game from its side, if and when it chooses.
-- The PRD's success measures (finish rate, return rate, click-through) need some analytics. Stage 1 sends nothing anywhere; decide on a privacy-friendly counter that fits the Nigeria Data Protection Act before the test.
+- Connect the player counter (below) so the PRD's success measures can be seen. Have the privacy wording checked against the Nigeria Data Protection Act before a big launch.
