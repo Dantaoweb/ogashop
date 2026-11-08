@@ -162,6 +162,29 @@ Rules for every placement:
 - Follows Nigerian advertising rules (ARCON) and the Nigeria Data Protection Act; no player data is shared with advertisers without consent.
 - Suitable for teenagers (no gambling, loans or betting ads).
 
+## 11c. Children, schools and who pays (decided 8 November 2026)
+
+**Stages.** Each level is split into short stages, one idea each, so players get a win every 2–3 days.
+
+**Junior way to play (ages 8–12).** The same game made gentler: round prices and easy sums, no timers, fewer customers, no injuries or hospital debt, gentler credit lessons, and simpler words from tiTi.
+
+**Children compete through schools.** A teacher creates a class and shares a code. Children join without a username or age and get a fun name such as "Blue Mango 7". The school handles parent consent. Have a lawyer check this before launch.
+
+**Competition for children** scores habits and skills, not money: class against class, team challenges, the top 3 and each child's personal best. No child is shown coming last.
+
+**Free and paid**
+
+| Who | What they get | Who pays |
+|---|---|---|
+| Everyone | Levels 1–3 free | Nobody |
+| Schools and NGOs | Teacher dashboard, class reports, certificates | The school or NGO, per class or per year |
+| Business owners | Levels 4–7 and advanced tools | Paid "Pro", or free with labelled sponsors |
+| Children | Never asked to pay; no ads under 13 | — |
+
+Paying never buys score or advantage. Paid plans are built only after the real-player test shows people enjoy the game.
+
+**Order:** stages, Junior way to play, class codes and class competition, real-player test with a school, then paid plans.
+
 ## 12. Platform and technical requirements
 
 - **Separate project:** its own folder and its own code repository.
