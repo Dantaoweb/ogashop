@@ -280,7 +280,7 @@ function planMarket(s, n, rng) {
   const size = Math.round(n * (1 + list.length) + randInt(rng, 0, 2));
   const att = attraction(s);
   const mine = Math.max(3, Math.min(size - 2, Math.round(n * att.factor)));
-  const rest = size - mine;
+  const rest = Math.max(0, size - mine - list.reduce((a, r) => a + (r.real ? r.lastCustomers || 0 : 0), 0));
   const bots = list.filter((r) => !r.real);
   const weights = bots.map((r) => 1 / r.price);
   const total = weights.reduce((a, w) => a + w, 0);

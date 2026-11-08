@@ -135,6 +135,8 @@ test('joining in the morning refreshes the market, keeping your customers', () =
   assert.ok(s.today.market.rivals.some((r) => r.name === 'Tunde_Shop' && r.real));
   assert.equal(s.today.market.mine, mine);
   assert.equal(s.today.queue.length, mine);
+  const shown = mine + s.today.market.rivals.reduce((a, r) => a + r.customers, 0);
+  assert.ok(shown <= s.today.market.size + 2, 'shops add up to the market');
   E.leaveMarketLocal(s);
   assert.equal(s.today.market.rivals.some((r) => r.real), false);
 });
