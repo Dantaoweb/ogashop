@@ -635,6 +635,25 @@ test('out of stock: customers still name a real price (no ₦0 offers)', () => {
   assert.ok(v.paysNow >= 0);
 });
 
+test('putting part of your pocket into the business', () => {
+  const s = E.newGame('business', mulberry32(170));
+  s.pocket = 3000;
+  const cash = s.cash;
+  const profit = s.today.profit;
+  assert.equal(E.topUp(s, 1000), null);
+  assert.equal(s.pocket, 2000);
+  assert.equal(s.cash, cash + 1000);
+  assert.equal(s.today.profit, profit, 'your own money is not profit');
+  assert.deepEqual(s.today.topUps, [1000]);
+  assert.match(E.topUp(s, 5000), /only have ₦2,000/);
+  assert.match(E.topUp(s, 20), /at least ₦50/);
+  assert.match(E.topUp(s, ''), /at least/);
+  assert.equal(s.pocket, 2000, 'bad amounts change nothing');
+  s.pocket = 30;
+  assert.equal(E.topUp(s, 30), null, 'a small pocket can still all go in');
+  assert.equal(s.pocket, 0);
+});
+
 test('count the change: right, short, too much, skip', () => {
   const play = (taps, result = 'give') => {
     const s = E.newGame('business', mulberry32(40));

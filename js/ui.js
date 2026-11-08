@@ -3,7 +3,7 @@ import { GOODS, LEVELS, BADGES, NOTES, EXPLAIN, TYPE_LABEL, CREDITVOICE_URL, RUL
 import { CUST, fmt, goodsForLevel, buyPrice, supplierOwed, owedToYou, openDebts, supplierCreditError, defaultName } from './core.js';
 import { currentCustomer, eventView, scoreParts, suggestMessage, billsDueSoon, billOwed, cashNeededSoon, isStuck, isInjured, hospitalSplit, waiting } from './engine.js';
 import { face, good, scene, levelPicture } from './art.js';
-import { goalStatus, daysToGoal, howLong } from './goals.js';
+import { goalStatus, daysToGoal, howLong, delayNote } from './goals.js';
 import * as Voice from './voice.js';
 import * as Analytics from './analytics.js';
 import * as Account from './account.js';
@@ -234,6 +234,28 @@ function billsCard(s) {
   return `<div class="card warn"><h3>Bills coming</h3>${rows}<span class="small muted">Bills are paid from the business cash. Keep money aside for them.</span></div>`;
 }
 
+// What's left in the pocket after putting money into the business, and what it does to the goal.
+export function topUpPreview(s, amount) {
+  const a = Math.round(Number(amount)) || 0;
+  if (a <= 0) return `In your pocket: ${fmt(s.pocket)}.`;
+  if (a > s.pocket) return `You only have ${fmt(s.pocket)} in your pocket.`;
+  return `Pocket after: ${fmt(s.pocket - a)}.${delayNote(s, a)}`;
+}
+
+function topUpBox(s, ui) {
+  const amt = ui.topUpAmt ?? '';
+  const quick = [['500', fmt(500), s.pocket >= 500], ['1000', fmt(1000), s.pocket >= 1000], ['half', 'Half', s.pocket >= 100], ['all', 'All', true]]
+    .map(([arg, label, ok]) => btn('topup-set', label, 'secondary small', arg, ok ? '' : 'disabled')).join('');
+  return `<form data-form="topup" style="display:flex;flex-direction:column;gap:8px;padding-top:10px;border-top:1px dashed var(--line)">
+    <label class="small" style="font-weight:600" for="topup-amt">How much from your pocket (${fmt(s.pocket)})?</label>
+    <input id="topup-amt" name="amount" type="number" inputmode="numeric" min="50" step="50" value="${esc(amt)}" placeholder="Amount in ₦" style="height:44px;border:1px solid var(--line-2);border-radius:12px;padding:0 12px;font-size:16px">
+    <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px">${quick}</div>
+    <span class="small muted" id="topup-preview">${esc(topUpPreview(s, amt))}</span>
+    ${ui.topUpError ? `<div class="toast" role="alert">${esc(ui.topUpError)}</div>` : ''}
+    <div class="grid2"><button type="submit" class="btn primary small">Put into business</button>${btn('topup-close', 'Cancel', 'secondary small')}</div>
+  </form>`;
+}
+
 // The savings goal inside the daily pay card.
 function goalBox(s) {
   const g = goalStatus(s);
@@ -302,10 +324,11 @@ export function morningScreen(s, ui) {
         ${btn('restart-level', `Start Level ${s.level} again`, 'primary small block')}</div>` : ''}
       ${explain(s, 'pay')}
       <div class="card"><div class="between"><div><b>Your daily pay</b><div class="small muted">Moves to your pocket each evening · Pocket: <b style="color:var(--ink)">${fmt(s.pocket)}</b></div>
-        ${s.pocket > 0 ? `<button type="button" class="link" data-action="topup" style="padding:6px 0;color:var(--green)">Put ${fmt(s.pocket)} into the business${s.goal ? ' (takes it from your goal)' : ''}</button>` : ''}</div>
+        ${s.pocket > 0 && !ui.topUpOpen ? `<button type="button" class="link" data-action="topup-open" style="padding:6px 0;color:var(--green)">Put money into the business</button>` : ''}</div>
         <div class="stepper"><button type="button" class="step" data-action="pay" data-arg="-500" aria-label="Lower your daily pay" ${s.pay <= 0 ? 'disabled' : ''}>−</button>
           <output>${fmt(s.pay)}</output>
           <button type="button" class="step" data-action="pay" data-arg="500" aria-label="Raise your daily pay">+</button></div></div>
+        ${ui.topUpOpen && s.pocket > 0 ? topUpBox(s, ui) : ''}
         ${goalBox(s)}</div>
       <div class="between"><h2 style="font-size:18px">Your stock</h2><span class="small muted">Set prices, buy stock</span></div>
       <div class="list">${rows}</div>
@@ -812,6 +835,7 @@ export function eveningScreen(s, ui = {}) {
     ...t.lostDebts.map((r) => `${CUST[r.cid].name}'s ${fmt(r.amount)} is lost${r.recorded ? '' : ' (it was never recorded)'}.`),
     ...t.wasted.map((w) => `${w.qty} ${GOODS[w.item].short.toLowerCase()} ${w.label}.`),
     ...(t.billNotes || []),
+    ...(t.topUps || []).map((a) => `You put ${fmt(a)} from your pocket into the business.`),
     ...(t.balances || []).map((b) => `You short-changed ${CUST[b.cid].name} and gave back ${fmt(b.amount)} balance.`),
     ...(t.complaints.length ? [`${t.complaints.length} customer${t.complaints.length > 1 ? 's' : ''} complained about prices you raised during the day.`] : []),
     ...(t.creditWalkouts.length ? [`${t.creditWalkouts.length} trusted customer${t.creditWalkouts.length > 1 ? 's' : ''} left because you refused credit.`] : []),

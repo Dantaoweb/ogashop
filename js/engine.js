@@ -128,11 +128,16 @@ export function migrate(s) {
 }
 
 // Put your own pay back into the business. It's your money, not a loan.
-export function topUp(s) {
-  if (s.pocket <= 0) return;
-  s.cash += s.pocket;
-  s.today.notices.push(`You put ${fmt(s.pocket)} from your pocket into the business.`);
-  s.pocket = 0;
+// Some or all of your own pay goes back into the business. Returns an error message, or null.
+export function topUp(s, amount = s.pocket) {
+  const a = Math.round(Number(amount));
+  if (!Number.isFinite(a) || a <= 0 || (a < 50 && a !== s.pocket)) return `Put in at least ${fmt(50)}.`;
+  if (a > s.pocket) return `You only have ${fmt(s.pocket)} in your pocket.`;
+  s.pocket -= a;
+  s.cash += a;
+  s.today.topUps = [...(s.today.topUps || []), a];
+  s.today.notices.push(`You put ${fmt(a)} from your pocket into the business.`);
+  return null;
 }
 
 // No stock, and not enough money (or supplier credit) to buy even one item.

@@ -145,6 +145,7 @@ The score moves slowly: at most ±6 points a day, so one bad day never wipes out
 
 - The player sets a daily pay in the morning (starts at ₦1,000, steps of ₦500). Each evening it moves from the business cash to **Your pocket**.
 - Family needs can be paid from the pocket. Taking from the business money lowers the Money habits score; paying from the pocket raises it.
+- The player can put some or all of their pocket back into the business (at least ₦50): cash goes up, profit doesn't.
 - If the daily pay is more than the day's profit for 3 days running, tiTi warns that the business is paying out more than it earns.
 - The evening **Money out** list shows business costs (lower profit) apart from personal money and pay (lower cash only).
 

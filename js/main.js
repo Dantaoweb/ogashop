@@ -308,7 +308,12 @@ const actions = {
 
   pay: (arg) => { E.setPay(s, s.pay + Number(arg)); },
   'pay-bill': (arg) => { ui.error = E.payBill(s, Number(arg)); },
-  topup: () => { E.topUp(s); },
+  'topup-open': () => { ui.topUpOpen = true; ui.topUpAmt = ''; ui.topUpError = null; },
+  'topup-close': () => { ui.topUpOpen = false; ui.topUpError = null; },
+  'topup-set': (arg) => {
+    ui.topUpError = null;
+    ui.topUpAmt = arg === 'all' ? s.pocket : arg === 'half' ? Math.floor(s.pocket / 100) * 50 : Number(arg);
+  },
   'set-goal': (arg) => { const g = GOALS.find((x) => x.id === arg); if (g) { setGoal(s, g.name, g.price); ui.screen = null; ui.error = null; } },
   'clear-goal': () => { clearGoal(s); ui.screen = null; },
   'restart-level': () => { E.restartLevel(s); ui.buy = {}; },
@@ -520,6 +525,11 @@ app.addEventListener('change', (e) => {
 
 app.addEventListener('input', (e) => {
   if (e.target.id === 'titi-in') ui.msg = e.target.value;
+  if (e.target.id === 'topup-amt') {
+    ui.topUpAmt = e.target.value;
+    const preview = app.querySelector('#topup-preview');
+    if (preview) preview.textContent = UI.topUpPreview(s, e.target.value);
+  }
 });
 
 app.addEventListener('submit', (e) => {
@@ -551,6 +561,15 @@ app.addEventListener('submit', (e) => {
     const f = customerForm.elements;
     ui.error = setCustom(s, ui.editing, { name: f.name.value, she: f.she.value === '1', happy: f.happy.value, unhappy: f.unhappy.value });
     if (!ui.error) ui.editing = null;
+    save();
+    render();
+    return;
+  }
+  const topUpForm = e.target.closest('[data-form="topup"]');
+  if (topUpForm) {
+    e.preventDefault();
+    ui.topUpError = E.topUp(s, topUpForm.elements.amount.value);
+    if (!ui.topUpError) { ui.topUpOpen = false; ui.topUpAmt = ''; }
     save();
     render();
     return;
