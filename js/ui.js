@@ -3,6 +3,7 @@ import { GOODS, LEVELS, BADGES, NOTES, EXPLAIN, TYPE_LABEL, CREDITVOICE_URL, RUL
 import { CUST, fmt, goodsForLevel, buyPrice, supplierOwed, owedToYou, openDebts, supplierCreditError, defaultName } from './core.js';
 import { currentCustomer, eventView, scoreParts, suggestMessage, billsDueSoon, billOwed, cashNeededSoon, isStuck, isInjured, hospitalSplit, waiting } from './engine.js';
 import { face, good, scene, levelPicture } from './art.js';
+import { currentStage, stageProgress, STAGES } from './stages.js';
 import { goalStatus, daysToGoal, howLong, delayNote } from './goals.js';
 import * as Voice from './voice.js';
 import * as Analytics from './analytics.js';
@@ -97,7 +98,7 @@ function topBar(s, { title, kicker, tiles = true, dark = false } = {}) {
   const owed = openDebts(s, { recordedOnly: true }).length;
   return `<header class="top${dark ? ' dark' : ''}">
     <div class="between">
-      <div class="grow"><div class="kicker">${esc(kicker || `Level ${s.level} · ${dayCount(s)}`)}</div>
+      <div class="grow"><div class="kicker">${esc(kicker || `Level ${s.level}${currentStage(s) ? ` · Stage ${currentStage(s).index + 1} of 3` : ''} · ${dayCount(s)}`)}</div>
         <h1 class="title display">${esc(title)}</h1></div>
       ${healingMark(s)}
       <span class="pill" aria-label="Business score ${s.score}">Score ${s.score}</span>
@@ -174,6 +175,17 @@ export function startScreen(ui, hasSave, saveInfo) {
 }
 
 // ---------- Morning ----------
+
+// This stage's idea and goal.
+function stageCard(s) {
+  const st = currentStage(s);
+  if (!st) return '';
+  const got = stageProgress(s);
+  const money = st.goal.type === 'profit';
+  return `<div class="card"><div class="between"><b>Stage ${st.index + 1}: ${esc(st.name)}</b>${s.stage?.done ? '<span class="tag green">Done</span>' : ''}</div>
+    <div class="between small"><span class="muted">Goal: ${esc(st.goal.text)}</span><b>${money ? `${fmt(got)} of ${fmt(st.goal.n)}` : `${got} of ${st.goal.n}`}</b></div>
+    <div class="progress lg"><div style="width:${Math.min(100, Math.round((got / st.goal.n) * 100))}%"></div></div></div>`;
+}
 
 // Morning: today's market, your share, and how to win more customers.
 function marketMorning(s) {
@@ -317,6 +329,7 @@ export function morningScreen(s, ui) {
         ${btn('pay-supplier', 'Pay', 'secondary small')}</div></div>` : ''}
       ${consentCard()}
       ${challengeCard(s)}
+      ${stageCard(s)}
       ${marketMorning(s)}
       ${billsCard(s)}
       ${isStuck(s) ? `<div class="card bad"><b>You have no stock and no money to buy any.</b>
@@ -1061,6 +1074,25 @@ export function multiScreen(s, ui) {
       <button type="submit" class="btn secondary small" ${busy}>Join this market</button></form>
     ${btn('close', 'Not now, keep single player', 'secondary small block')}
   </div></main>`;
+}
+
+// ---------- Stage finished ----------
+
+export function stageScreen(s) {
+  const d = s.today.stageDone;
+  const money = STAGES[d.level][d.index].goal.type === 'profit';
+  return `<main class="screen hero"><div class="body center">
+      <span class="tag solid" style="align-self:center;text-transform:uppercase;letter-spacing:.08em">Level ${d.level} · Stage ${d.index + 1} of 3</span>
+      <h1 class="display" style="font-size:30px">${esc(d.name)}</h1>
+      <div style="display:flex;justify-content:center">${stars(d.stars)}</div>
+      <div class="card" style="color:var(--ink);text-align:left">
+        <b>${d.met ? 'Goal reached!' : 'Good effort.'}</b>
+        <div class="between small"><span class="muted">${esc(d.goal)}</span><b>${money ? `${fmt(d.progress)} of ${fmt(d.target)}` : `${d.progress} of ${d.target}`}</b></div>
+        <span class="small" style="padding-top:8px;border-top:1px dashed var(--line)"><b>You learned:</b> ${esc(d.learn)}</span>
+      </div>
+      ${d.next ? `<p class="lead">Next: ${esc(d.next)}</p>` : ''}
+    </div>
+    <div class="foot" style="background:none">${btn('stage-continue', 'Continue', 'amber block')}</div></main>`;
 }
 
 // ---------- Customize customers ----------

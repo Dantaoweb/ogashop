@@ -11,6 +11,7 @@ import {
 import { EVENT_BY_ID, drawEvent, morningEffects, rivalGrab } from './events.js';
 import { checkGoal } from './goals.js';
 import { makeQuiz } from './quiz.js';
+import { enterStage, finishStageDay, tiTiRecordsForYou, creditAllowed } from './stages.js';
 import { challengeForDay, levelDay, LEVEL_DAYS } from './challenge.js';
 import { scheduleBills, payDueBills, chargeLateFees, dropFutureBills, payBill, cashNeededSoon, billsDueSoon, billOwed } from './bills.js';
 import { parseSale, checkSale, detectQuery, suggestMessage } from './parser.js';
@@ -26,7 +27,7 @@ export function newGame(path, rng = Math.random) {
     stats: { recW: 0, totW: 0, dueAmt: 0, paidOnTime: 0, days: 0, cleanDays: 0, repaid: 0, lost: 0, noLateStreak: 0, pocketPays: 0, capitalTakes: 0, overpayStreak: 0, served: 0, unhappy: 0, billsPaid: 0, billsLateDays: 0, changeRight: 0, goodChecks: 0 },
     badges: [], seen: {}, eventLog: {}, mods: {}, history: [], goal: null, goalsReached: [], sales: [], quizLog: [], quiz: null,
     payments: { account: 'creditvoice', accountNumber: PAYMENTS.defaultAccountNumber, pos: 'creditvoice' },
-    skills: {}, challengeLog: [], mp: null,
+    skills: {}, challengeLog: [], mp: null, stage: null, stageLog: [],
     phase: 'morning', today: null,
   };
   for (const id of Object.keys(GOODS)) {
@@ -89,6 +90,7 @@ export function startDay(s, rng = Math.random) {
   const ch = challengeForDay(s);
   t.challenge = ch ? { type: ch, done: false } : null;
   if (levelDay(s) > LEVEL_DAYS && !levelGoalMet(s)) t.notices.unshift(`Extra day ${levelDay(s) - LEVEL_DAYS}: reach your Level ${s.level} goal to move up. Check your score card for what's missing.`);
+  enterStage(s);
   t.queue = makeQueue(s, rng);
   t.eventAt = Math.max(2, Math.floor(t.queue.length / 2));
   s.phase = 'morning';
@@ -108,6 +110,8 @@ export function migrate(s) {
   s.custom ??= {};
   applyCustom(s);
   s.mp ??= null;
+  s.stage ??= null;
+  s.stageLog ??= [];
   s.skills ??= {};
   if (s.today) { s.today.lostTo ??= []; s.today.market ??= null; }
   s.challengeLog ??= [];
@@ -157,6 +161,7 @@ export function restartLevel(s, rng = Math.random) {
   for (const [id, qty] of Object.entries(START_STOCK)) addStock(s, id, qty, GOODS[id].buy);
   s.levelProfit = 0;
   s.bills = [];
+  s.stage = null;
   s.billNext = {};
   s.supplier = [];
   s.levelStartDay = s.day + 1;
@@ -409,6 +414,7 @@ function makeRequest(s, cid, rng) {
   if (type === 'neverpays') { kind = 'credit'; frac = rng() * 0.3; }
   if (type === 'big' && s.level >= 2 && rng() < 0.5) { kind = 'credit'; frac = 0.5; }
   if (type === 'bargainer') kind = 'discount';
+  if (kind === 'credit' && !creditAllowed(s)) { kind = 'cash'; frac = 1; }
   return { cid, items, kind, frac, disc: 0.1 + rng() * 0.05, walkRoll: rng(), acceptRoll: rng(), moodRoll: rng(), changeRoll: rng(), fakeRoll: rng(), payRoll: rng() };
 }
 
@@ -592,6 +598,12 @@ function serveCustomer(s, action) {
   }
   // Sometimes a cash customer pays with ₦1,000 notes and you count the change.
   const notes = Math.ceil(sale.total / 1000) * 1000;
+  if (tiTiRecordsForYou(s)) {
+    // First days of the learning path: tiTi records, so the player can watch how it's done.
+    t.chat = [];
+    markRecorded(s, sale, 'tiTi recorded this one for you. From Stage 2, you do it yourself.');
+    return;
+  }
   if (sale.paid === sale.total && notes > sale.total && !t.changeDone && (v.changeRoll ?? 1) < RULES.changeChance) {
     t.changeDone = true;
     t.change = { cid: v.cid, total: sale.total, handed: notes, due: notes - sale.total, given: [] };
@@ -949,6 +961,8 @@ function markRecorded(s, sale, auto = null) {
     s.stats.totW += w;
   }
   t.recordedSales++;
+  if (auto) t.autoRecorded = (t.autoRecorded || 0) + 1;
+  else if (sale.total > sale.paid) t.creditRecorded = (t.creditRecorded || 0) + 1;
   const debt = sale.debtId ? debtById(s, sale.debtId) : null;
   if (debt) debt.recorded = true;
   t.chat.push({ from: 'titi', auto, card: { name, what: sale.items, listTotal: sale.listTotal, discount: sale.discount, total: sale.total, paid: sale.paid, owes: sale.total - sale.paid, due: debt?.due, method: sale.method } });
@@ -967,6 +981,11 @@ export function payNext(s) {
   const sale = t.pending;
   t.payment = null;
   s.phase = 'record';
+  if (tiTiRecordsForYou(s) && p.provider !== 'creditvoice') {
+    t.chat = [];
+    markRecorded(s, sale, 'tiTi recorded this one for you. From Stage 2, you do it yourself.');
+    return;
+  }
   if (p.provider === 'creditvoice') {
     t.chat = [];
     markRecorded(s, sale, p.method === 'transfer' ? 'CreditVoice recorded this transfer for you automatically.' : 'CreditVoice POS recorded this sale for you automatically.');
@@ -1167,6 +1186,7 @@ export function endDay(s, rng = Math.random) {
   t.noteKey = s.path === 'learning' ? (t.event?.note && !s.seen['note_' + t.event.note] ? t.event.note : NOTE_ORDER.find((k) => !s.seen['note_' + k])) : null;
   if (t.noteKey) s.seen['note_' + t.noteKey] = true;
   t.levelUp = !s.completed && levelGoalMet(s);
+  t.stageDone = finishStageDay(s);
   s.lastAsks = { ...t.asks };
   s.history.push({ day: s.day, level: s.level, moneyIn: t.moneyIn, profit: t.profit, stars: t.stars });
   s.phase = 'evening';

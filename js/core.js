@@ -1,6 +1,8 @@
 // Shared helpers that change game state. Used by engine.js and events.js.
 import { GOODS, CUSTOMERS, RULES, SUPPLIER_CREDIT_LIMIT, SUPPLIER_CREDIT_DAYS } from './data.js';
 
+import { supplierCreditOpen } from './stages.js';
+
 export const CUST = Object.fromEntries(CUSTOMERS.map((c) => [c.id, { ...c }]));
 const DEFAULT_LOOK = Object.fromEntries(CUSTOMERS.map((c) => [c.id, { name: c.name, she: !!c.she }]));
 
@@ -160,6 +162,7 @@ export function supplierOwed(s) {
 
 export function supplierCreditError(s, amount) {
   if (s.level < 2) return 'Supplier credit opens at Level 2.';
+  if (!supplierCreditOpen(s)) return 'Supplier credit opens in Stage 3.';
   if (s.supplier.some((d) => d.late)) return 'Your supplier wants the late payment first.';
   if (supplierOwed(s) + amount > SUPPLIER_CREDIT_LIMIT) return `Your supplier only gives up to ${fmt(SUPPLIER_CREDIT_LIMIT)} on credit.`;
   return null;

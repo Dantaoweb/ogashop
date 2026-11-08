@@ -654,6 +654,66 @@ test('putting part of your pocket into the business', () => {
   assert.equal(s.pocket, 0);
 });
 
+test('stages: by day, goal and stars, never block', async () => {
+  const S = await import('../js/stages.js');
+  const s = E.newGame('business', mulberry32(180));
+  assert.equal(S.stageIndex(s), 0);
+  assert.equal(S.currentStage(s).name, 'Sell and count');
+  const shopper = () => ({ cid: 'musa', items: [{ item: 'garri', qty: 1 }], kind: 'cash', frac: 1, disc: 0.1, walkRoll: 0.99, acceptRoll: 0, moodRoll: 0.99, changeRoll: 1, fakeRoll: 1, payRoll: 0 });
+  const play = (n) => {
+    s.stock.garri = 50;
+    s.today.queue = Array.from({ length: n }, shopper);
+    s.today.eventAt = 99;
+    E.openShop(s);
+    for (let i = 0; i < n; i++) { E.serve(s, 'sell'); E.skipRecord(s); }
+    assert.equal(s.phase, 'evening');
+  };
+  play(4);
+  assert.equal(s.today.stageDone, null, 'day 1: stage goes on');
+  assert.equal(S.stageProgress(s), 4);
+  E.startDay(s, mulberry32(1));
+  play(2);
+  const d = s.today.stageDone;
+  assert.deepEqual([d.name, d.progress, d.met, d.stars, d.next], ['Sell and count', 6, true, 3, 'Record every sale']);
+  E.startDay(s, mulberry32(2));
+  assert.equal(S.currentStage(s).name, 'Record every sale');
+  assert.equal(S.stageProgress(s), 0);
+  play(2);
+  E.startDay(s, mulberry32(3));
+  play(1);
+  assert.equal(s.today.stageDone.met, false, 'missed goal: fewer stars, game carries on');
+  assert.equal(s.today.stageDone.stars, 1);
+  E.startDay(s, mulberry32(4));
+  assert.equal(S.currentStage(s).name, 'Cash vs profit');
+});
+
+test('stages on the learning path: tiTi records first, credit and supplier credit wait', async () => {
+  const S = await import('../js/stages.js');
+  const C = await import('../js/core.js');
+  const s = E.newGame('learning', mulberry32(181));
+  s.today.queue = [{ cid: 'musa', items: [{ item: 'garri', qty: 1 }], kind: 'cash', frac: 1, disc: 0.1, walkRoll: 0.99, acceptRoll: 0, moodRoll: 0.99, changeRoll: 0, fakeRoll: 1, payRoll: 0 }];
+  s.today.eventAt = 99;
+  assert.equal(S.tiTiRecordsForYou(s), true);
+  assert.equal(S.creditAllowed(s), false);
+  assert.ok(s.today.queue.every((r) => r.kind !== 'credit'));
+  E.openShop(s);
+  E.serve(s, 'sell');
+  assert.equal(s.phase, 'record');
+  assert.equal(s.today.pending.recorded, true);
+  assert.match(s.today.chat.at(-1).auto, /From Stage 2/);
+  assert.equal(s.stats.totW, 0, "tiTi's records don't count in the recording score");
+  s.day = 3;
+  assert.equal(S.tiTiRecordsForYou(s), false);
+  s.level = 2; s.levelStartDay = 1; s.day = 1;
+  assert.match(C.supplierCreditError(s, 100), /Stage 3/);
+  s.day = 5;
+  assert.equal(C.supplierCreditError(s, 100), null);
+  const biz = E.newGame('business', mulberry32(182));
+  biz.level = 2;
+  assert.equal(S.tiTiRecordsForYou(biz), false);
+  assert.equal(C.supplierCreditError(biz, 100), null, 'business path has everything from Day 1');
+});
+
 test('count the change: right, short, too much, skip', () => {
   const play = (taps, result = 'give') => {
     const s = E.newGame('business', mulberry32(40));

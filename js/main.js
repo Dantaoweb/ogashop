@@ -143,6 +143,7 @@ function view() {
   if (ui.screen === 'goals') return UI.goalsScreen(s, ui);
   if (ui.screen === 'records') return UI.recordsScreen(s);
   if (ui.screen === 'multi' && s) return UI.multiScreen(s, ui);
+  if (ui.screen === 'stage' && s?.today?.stageDone) return UI.stageScreen(s);
   if (ui.screen === 'customers') return UI.customersScreen(s, ui);
   if (ui.screen === 'challenge' && s.today.challengeGame) return UI.challengeScreen(s, s.today.challengeGame);
   if (ui.screen === 'levels') return UI.levelsScreen(s);
@@ -354,7 +355,9 @@ const actions = {
   'event-continue': () => { E.continueAfterEvent(s); },
 
   'evening-next': () => { ui.screen = 'score'; },
+  'stage-continue': () => { s.today.stageShown = true; actions['score-next'](); },
   'score-next': () => {
+    if (s.today.stageDone && !s.today.stageShown) { ui.screen = 'stage'; return; }
     if (s.today.levelUp) {
       // End-of-level quiz first. It never blocks moving up.
       s.quiz = Quiz.makeQuiz(s, 'level');

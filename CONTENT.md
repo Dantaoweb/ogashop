@@ -288,6 +288,17 @@ The score moves slowly: at most ±6 points a day, so one bad day never wipes out
 - Players aged 13–17 appear as "Shop 3", never by username. No chat. Quick-join players move to a new market on levelling up; code markets stay together.
 - Impossible results are ignored, but the game runs on the phone, so results shouldn't be used for prizes. Cheap-deal grabs stay with computer rivals.
 
+## 7t. Stages
+
+Each level has 3 stages: days 1–2, days 3–4, days 5–7. They move on by day and never block; the level goal still decides when you move up.
+
+| Level | Stage 1 goal | Stage 2 goal | Stage 3 goal |
+|---|---|---|---|
+| 1. The Table | Sell and count: serve 6 customers | Record every sale: record 5 yourself | Cash vs profit: make ₦2,000 profit |
+| 2. The Shop | Keep the shelves full: a day with no goods run out | Credit and reminders: give credit and record it 2 times | Rent and bills: pay a bill |
+
+3 stars for reaching the goal, 2 for half, 1 otherwise. On the learning path, ideas arrive by stage: tiTi records for you in Level 1 Stage 1, credit customers start in Stage 2, and supplier credit opens in Level 2 Stage 3. "I run a business" has everything from Day 1.
+
 ## 8. Open points for review
 
 1. **Prices:** check every buy and sell price with traders in at least two markets.
