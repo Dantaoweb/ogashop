@@ -5,4 +5,4 @@ compatibility_date = "2026-11-01"
 [[d1_databases]]
 binding = "DB"
 database_name = "ogashop"
-database_id = "PUT-YOUR-DATABASE-ID-HERE"
+database_id = "15fd7254-9b40-42d4-b06e-60f618489175"

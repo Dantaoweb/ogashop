@@ -146,7 +146,7 @@ export function startScreen(ui, hasSave, saveInfo) {
         <button type="button" class="link" data-action="open" data-arg="levels" style="align-self:center;color:var(--green)">See all ${ALL_LEVELS.length} levels</button>
       </div>
     </div>
-    <div class="foot">
+    <div class="foot" style="position:static;background:none">
       ${ui.confirmNew ? '<div class="toast">This replaces your saved game. Tap again to confirm.</div>' : ''}
       ${btn('new-game', hasSave ? 'Start a new game' : 'Start my first day', hasSave ? 'secondary block' : 'primary block', '', ui.startPath ? '' : 'disabled')}
       <p class="small muted center" style="margin:0">A learning game by CreditVoice. No real money. Your progress is saved on this phone.</p>

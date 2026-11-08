@@ -31,7 +31,7 @@ export const RIVALS = [
 ];
 export const ADVERT = { cost: { 1: 1000, 2: 2000 }, days: 2, boost: 0.35 };
 // Where play counts go (see worker/). Empty = the game sends nothing.
-export const ANALYTICS_URL = '';
+export const ANALYTICS_URL = 'https://ogashop-counter.ogashop.workers.dev/e';
 export const START_PAY = 1000; // daily pay the player gives themselves; they can change it
 export const PAY_STEP = 500;
 export const SUPPLIER_CREDIT_DAYS = 3;
