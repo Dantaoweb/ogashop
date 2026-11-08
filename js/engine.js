@@ -13,7 +13,7 @@ import { EVENT_BY_ID, drawEvent, morningEffects, rivalGrab } from './events.js';
 import { checkGoal } from './goals.js';
 import { makeQuiz } from './quiz.js';
 import { enterStage, finishStageDay, tiTiRecordsForYou, creditAllowed } from './stages.js';
-import { challengeForDay, levelDay, LEVEL_DAYS } from './challenge.js';
+import { challengeForDay, levelDay, LEVEL_DAYS, CHAMPION_TITLES } from './challenge.js';
 import { scheduleBills, payDueBills, chargeLateFees, dropFutureBills, payBill, cashNeededSoon, billsDueSoon, billOwed } from './bills.js';
 import { parseSale, checkSale, detectQuery, suggestMessage } from './parser.js';
 
@@ -92,6 +92,7 @@ export function startDay(s, rng = Math.random) {
   t.challenge = ch ? { type: ch, done: false } : null;
   if (levelDay(s) > LEVEL_DAYS && !levelGoalMet(s)) t.notices.unshift(`Extra day ${levelDay(s) - LEVEL_DAYS}: reach your Level ${s.level} goal to move up. Check your score card for what's missing.`);
   enterStage(s);
+  showChampionNews(s);
   t.queue = makeQueue(s, rng);
   t.eventAt = Math.max(2, Math.floor(t.queue.length / 2));
   s.phase = 'morning';
@@ -270,7 +271,13 @@ export function marketRivals(s) {
 
 // What the server tells us about the market.
 export function applyMarketView(s, v) {
-  s.mp = { size: v.market.size, kind: v.market.kind, code: v.market.code, level: v.market.level, you: v.you, shops: v.shops, pendingWins: [...(s.mp?.pendingWins || []), ...(v.wins || [])] };
+  const news = [...(s.mp?.champNews || []), ...championNews(s.mp?.champions, v.champions)];
+  s.mp = {
+    size: v.market.size, kind: v.market.kind, code: v.market.code, level: v.market.level, you: v.you, shops: v.shops,
+    pendingWins: [...(s.mp?.pendingWins || []), ...(v.wins || [])],
+    champions: v.champions || { money: [], change: [] }, champQueue: s.mp?.champQueue || [], champNews: news,
+  };
+  if (s.phase === 'morning') showChampionNews(s);
   refreshMorningMarket(s);
 }
 
@@ -280,6 +287,33 @@ function refreshMorningMarket(s) {
   if (s.phase !== 'morning' || !t?.market) return;
   const mine = t.market.mine;
   t.market = { ...planMarket(s, mine, Math.random), mine };
+}
+
+// Only news about you: taking a title, or losing one. Nothing when you've just joined.
+function championNews(before, after) {
+  if (!before || !after) return [];
+  const news = [];
+  for (const [type, title] of Object.entries(CHAMPION_TITLES)) {
+    const was = before[type]?.[0];
+    const now = after[type]?.[0];
+    if (now?.you && !was?.you) news.push(`You are now the ${title} in your market!`);
+    else if (was?.you && now && !now.you) news.push(`${now.name} took the ${title} title from you. You can win it back in My market.`);
+  }
+  return news;
+}
+
+function showChampionNews(s) {
+  if (!s.mp?.champNews?.length || !s.today) return;
+  s.today.notices.push(...s.mp.champNews);
+  s.mp.champNews = [];
+}
+
+// Keep a finished game until the server has it; only the best per game needs to go.
+export function queueChampion(s, result) {
+  if (!s.mp || !result || result.score < 1) return;
+  const same = s.mp.champQueue.find((c) => c.type === result.type);
+  const better = !same || result.score > same.score || (result.score === same.score && result.ms < same.ms);
+  if (better) s.mp.champQueue = [...s.mp.champQueue.filter((c) => c !== same), result];
 }
 
 export function leaveMarketLocal(s) {

@@ -8,6 +8,11 @@ export const REMOVE_MS = 7 * DAY; // quick markets free up the place
 const CODE_LETTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
 const reply = (status, json) => ({ status, json });
 
+// Market champions: the two games that show who knows money best.
+export const CHAMPION_ROUNDS = { money: 6, change: 5 };
+const MIN_MS_PER_ROUND = 1000; // nobody can answer a round faster than this
+const MAX_MS = 30 * 60000;
+
 // Players aged 13 to 17 appear to others as "Shop 3", never by username.
 export const shopName = (m) => (m.age === '13-17' ? `Shop ${m.slot}` : m.username);
 
@@ -18,6 +23,13 @@ function newCode() {
 }
 
 const validLevel = (l) => Number.isInteger(l) && l >= 1 && l <= 7;
+
+// Best score first; the faster time wins a tie. Names follow the same rule as shops.
+function board(members, type, user) {
+  return members.filter((m) => m.best?.[type])
+    .map((m) => ({ name: shopName(m), you: m.userKey === user.key, score: m.best[type].score, ms: m.best[type].ms }))
+    .sort((a, b) => b.score - a.score || a.ms - b.ms);
+}
 
 async function view(store, market, user, now, wins = []) {
   const members = await store.membersOf(market.id);
@@ -31,6 +43,7 @@ async function view(store, market, user, now, wins = []) {
       customers: m.customers, sales: m.sales, price: m.price, advert: !!m.advert, level: m.level,
     })),
     wins,
+    champions: { money: board(members, 'money', user), change: board(members, 'change', user) },
   });
 }
 
@@ -103,6 +116,24 @@ function goodResult(r) {
     && validLevel(r.level) && Number.isInteger(r.gameDay) && r.gameDay >= 1;
 }
 
+function goodChallenge(c) {
+  const rounds = CHAMPION_ROUNDS[c?.type];
+  if (!rounds || !Object.hasOwn(CHAMPION_ROUNDS, c.type)) return false;
+  return Number.isInteger(c.score) && c.score >= 1 && c.score <= rounds
+    && Number.isInteger(c.ms) && c.ms >= rounds * MIN_MS_PER_ROUND && c.ms <= MAX_MS;
+}
+
+const beats = (c, best) => !best || c.score > best.score || (c.score === best.score && c.ms < best.ms);
+
+async function saveChallenges(store, me, list) {
+  const best = { ...(me.best || {}) };
+  for (const c of Array.isArray(list) ? list.slice(0, 2) : []) {
+    if (!goodChallenge(c) || !beats(c, best[c.type])) continue;
+    best[c.type] = { score: c.score, ms: c.ms };
+    await store.saveBest(me.userKey, c.type, c.score, c.ms);
+  }
+}
+
 // Called when a day ends (with a result) and when the app opens (without). Hands over any customers won.
 export async function sync(store, user, body, { now }) {
   const me = await store.getMember(user.key);
@@ -120,5 +151,6 @@ export async function sync(store, user, body, { now }) {
       await store.addWin(target.userKey, shopName(me), Math.min(l.count, 5), now);
     }
   }
+  await saveChallenges(store, me, body?.challenges);
   return view(store, market, user, now, await store.takeWins(user.key));
 }

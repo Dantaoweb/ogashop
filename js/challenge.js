@@ -16,6 +16,9 @@ export const CHALLENGES = {
     reward: 'Patient customers: they wait 5 seconds longer while you count change.' },
 };
 
+// Market champions: the titles each multiplayer market competes for.
+export const CHAMPION_TITLES = { money: 'Money Checker', change: 'Change Master' };
+
 const ORDER = ['money', 'road', 'change'];
 export const MONEY_ROUNDS = 6;
 export const CHANGE_ROUNDS = 5;
@@ -77,7 +80,14 @@ export function changeRound(i, rng, roundTo = 0) {
 
 // ---------- Playing a challenge ----------
 
-export function startChallenge(type, rng = Math.random, { roundTo = 0 } = {}) {
+export function startChallenge(type, rng = Math.random, { roundTo = 0, practice = false, now = Date.now() } = {}) {
+  const c = makeChallenge(type, rng, roundTo);
+  c.startedAt = now;
+  if (practice) c.practice = true;
+  return c;
+}
+
+function makeChallenge(type, rng, roundTo) {
   if (type === 'money') return { type, round: 0, correct: 0, rounds: Array.from({ length: MONEY_ROUNDS }, () => moneyRound(rng)) };
   if (type === 'change') return { type, round: 0, correct: 0, rounds: Array.from({ length: CHANGE_ROUNDS }, (_, i) => changeRound(i, rng, roundTo)) };
   return { type, hits: null };
@@ -107,9 +117,16 @@ export function changeCheck(c) {
   if (r.done) c.correct++;
 }
 
-export function nextRound(c) {
-  if (c.round < c.rounds.length - 1) c.round++;
-  else c.finished = true;
+export function nextRound(c, now = Date.now()) {
+  if (c.round < c.rounds.length - 1) { c.round++; return; }
+  c.finished = true;
+  c.ms = now - c.startedAt;
+}
+
+// What goes to the market's board, or null for games that aren't on it.
+export function championResult(c) {
+  if (!c?.finished || !CHAMPION_TITLES[c.type] || !Number.isFinite(c.ms)) return null;
+  return { type: c.type, score: c.correct, ms: Math.round(c.ms) };
 }
 
 export function roadResult(c, hits) {

@@ -15,7 +15,8 @@ function fakeStore() {
   return {
     markets, members,
     async getMember(k) { return members.get(k) || null; },
-    async addMember({ marketId, userKey, username, age, slot, now, level }) { members.set(userKey, { marketId, userKey, username, age, slot, joinedAt: now, lastSeen: now, customers: 0, sales: 0, price: 'normal', advert: 0, level }); },
+    async addMember({ marketId, userKey, username, age, slot, now, level }) { members.set(userKey, { marketId, userKey, username, age, slot, joinedAt: now, lastSeen: now, customers: 0, sales: 0, price: 'normal', advert: 0, level, best: { money: null, change: null } }); },
+    async saveBest(k, type, score, ms) { members.get(k).best[type] = { score, ms }; },
     async removeMember(k) { members.delete(k); },
     async membersOf(id) { return [...members.values()].filter((m) => m.marketId === id).sort((a, b) => a.slot - b.slot); },
     async getMarket(id) { return markets.get(id) || null; },
@@ -97,6 +98,58 @@ test('results and won customers; impossible numbers ignored; away after 3 days',
   const later = await M.sync(s, user('Bola'), {}, ctx(1000 + M.INACTIVE_MS + 1));
   assert.equal(later.json.shops.find((x) => x.name === 'Ada').active, false);
   assert.equal((await M.sync(s, user('Nobody'), {}, ctx())).status, 404);
+});
+
+test('market champions: best score, then fastest; impossible results ignored; teens stay hidden', async () => {
+  const s = fakeStore();
+  const { json } = await M.create(s, user('Ada'), { size: 3, level: 1 }, ctx());
+  await M.join(s, user('TeenName', '13-17'), { code: json.market.code }, ctx());
+  const play = (name, list, age) => M.sync(s, user(name, age), { challenges: list }, ctx());
+  await play('Ada', [{ type: 'money', score: 5, ms: 40000 }]);
+  let v = await play('TeenName', [{ type: 'money', score: 5, ms: 30000 }], '13-17');
+  assert.deepEqual(v.json.champions.money.map((p) => [p.name, p.score, p.you]), [['Shop 2', 5, true], ['Ada', 5, false]], 'level score: faster wins');
+  assert.equal(JSON.stringify(v.json).includes('TeenName'), false);
+  v = await play('Ada', [{ type: 'money', score: 6, ms: 90000 }, { type: 'change', score: 3, ms: 50000 }]);
+  assert.equal(v.json.champions.money[0].name, 'Ada', 'a higher score beats a faster time');
+  assert.equal(v.json.champions.change.length, 1);
+  v = await play('Ada', [{ type: 'money', score: 2, ms: 9000 }]);
+  assert.equal(v.json.champions.money[0].score, 6, 'a worse game never replaces your best');
+  for (const bad of [{ type: 'money', score: 7, ms: 90000 }, { type: 'change', score: 6, ms: 90000 }, { type: 'money', score: 6, ms: 100 }, { type: 'change', score: 5, ms: 99999999 }, { type: 'change', score: 1.5, ms: 90000 }, { type: 'road', score: 3, ms: 90000 }, { type: 'constructor', score: 3, ms: 90000 }, null]) {
+    v = await play('TeenName', [bad], '13-17');
+  }
+  assert.equal(v.json.champions.money.find((p) => p.you).score, 5);
+  assert.equal(v.json.champions.change.some((p) => p.you), false);
+});
+
+test('in the game: replays score but give nothing; news only about you', async () => {
+  const Ch = await import('../js/challenge.js');
+  const g = Ch.startChallenge('money', mulberry32(5), { practice: true, now: 1000 });
+  for (let i = 0; i < g.rounds.length; i++) { Ch.moneyPick(g, g.rounds[g.round].fakeIdx); Ch.nextRound(g, 1000 + (i + 1) * 5000); }
+  assert.deepEqual(Ch.championResult(g), { type: 'money', score: 6, ms: 30000 });
+  assert.equal(Ch.championResult(Ch.startChallenge('road', mulberry32(6))), null);
+
+  const s = E.newGame('business', mulberry32(210));
+  const row = (name, you, score) => ({ name, you, score, ms: 20000 });
+  const send = (money) => E.applyMarketView(s, { ...view([rival(2, 'Tunde_Shop')]), champions: { money, change: [] } });
+  send([row('Tunde_Shop', false, 4)]);
+  assert.deepEqual(s.mp.champNews, [], 'nothing on joining');
+  send([row('Me', true, 6), row('Tunde_Shop', false, 4)]);
+  assert.ok(s.today.notices.some((n) => /You are now the Money Checker/.test(n)), 'morning: shown straight away');
+  send([row('Me', true, 6), row('Tunde_Shop', false, 4)]);
+  assert.equal(s.today.notices.filter((n) => /You are now/.test(n)).length, 1, 'once only');
+  s.phase = 'evening';
+  send([row('Tunde_Shop', false, 6), row('Me', true, 6)]);
+  assert.equal(s.mp.champNews.length, 1, 'kept for the morning');
+  E.startDay(s, mulberry32(1));
+  assert.ok(s.today.notices.some((n) => /Tunde_Shop took the Money Checker title/.test(n)));
+  assert.deepEqual(s.mp.champNews, []);
+
+  E.queueChampion(s, { type: 'money', score: 3, ms: 50000 });
+  E.queueChampion(s, { type: 'money', score: 2, ms: 9000 });
+  E.queueChampion(s, { type: 'change', score: 0, ms: 9000 });
+  assert.deepEqual(s.mp.champQueue, [{ type: 'money', score: 3, ms: 50000 }]);
+  send([]);
+  assert.equal(s.mp.champQueue.length, 1, 'waits until the server has it');
 });
 
 function view(shops, wins = [], size = 4) {

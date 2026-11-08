@@ -319,6 +319,16 @@ A third way to play: "I'm a child (8–12)", on the start screen and in Settings
 
 No CreditVoice promotion, no accounts, no multiplayer, anonymous totals only. A small "by CreditVoice" credit stays.
 
+## 7v. Market champions
+
+Each multiplayer market has two titles: **Money Checker** (Money check, out of 6) and **Change Master** (Change master, out of 5).
+
+- A player's best score counts; the faster time breaks a tie. Scores count from challenge days and from "Play again" on My market.
+- "Play again" gives no badge, skill or money. The title is the whole reward.
+- Computer shops are not on the board. Ages 13–17 show as "Shop 2", as everywhere else.
+- Taking or losing a title shows on the morning screen.
+- Scores start fresh in each new market. The server rejects scores above the maximum, and times under 1 second a round or over 30 minutes.
+
 ## 8. Open points for review
 
 1. **Prices:** check every buy and sell price with traders in at least two markets.

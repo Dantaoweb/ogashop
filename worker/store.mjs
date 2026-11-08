@@ -1,5 +1,6 @@
 // Accounts and saves in the D1 database.
-const toMember = (r) => r && { userKey: r.user_key, marketId: r.market_id, username: r.username, age: r.age, slot: r.slot, lastSeen: r.last_seen, customers: r.customers, sales: r.sales, price: r.price, advert: r.advert, level: r.level };
+const toBest = (score, ms) => (score == null ? null : { score, ms });
+const toMember = (r) => r && { userKey: r.user_key, marketId: r.market_id, username: r.username, age: r.age, slot: r.slot, lastSeen: r.last_seen, customers: r.customers, sales: r.sales, price: r.price, advert: r.advert, level: r.level, best: { money: toBest(r.money_score, r.money_ms), change: toBest(r.change_score, r.change_ms) } };
 const toMarket = (r) => r && { id: r.id, code: r.code, size: r.size, level: r.level, kind: r.kind };
 const toUser = (r) => r && { key: r.key, username: r.username, salt: r.salt, pinHash: r.pin_hash, age: r.age, fails: r.fails, lockedUntil: r.locked_until };
 
@@ -53,6 +54,10 @@ export function d1Store(db) {
     clearInactiveQuick(before) { return db.prepare("DELETE FROM members WHERE last_seen < ? AND market_id IN (SELECT id FROM markets WHERE kind = 'quick')").bind(before).run(); },
     touchMember(key, now) { return db.prepare('UPDATE members SET last_seen = ? WHERE user_key = ?').bind(now, key).run(); },
     saveResult(key, r) { return db.prepare('UPDATE members SET customers = ?, sales = ?, price = ?, advert = ?, level = ? WHERE user_key = ?').bind(r.customers, r.sales, r.price, r.advert ? 1 : 0, r.level, key).run(); },
+    saveBest(key, type, score, ms) {
+      const sql = type === 'money' ? 'UPDATE members SET money_score = ?, money_ms = ? WHERE user_key = ?' : 'UPDATE members SET change_score = ?, change_ms = ? WHERE user_key = ?';
+      return db.prepare(sql).bind(score, ms, key).run();
+    },
     addWin(key, from, count, at) { return db.prepare('INSERT INTO wins (user_key, from_name, count, at) VALUES (?, ?, ?, ?)').bind(key, from, count, at).run(); },
     async takeWins(key) {
       const { results } = await db.prepare('SELECT from_name, count FROM wins WHERE user_key = ?').bind(key).all();

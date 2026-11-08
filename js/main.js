@@ -100,9 +100,13 @@ async function marketCall(fn) {
 // Share today's result, and pick up the latest from the other shops.
 async function marketSync(result) {
   if (!s?.mp || !Account.loggedIn()) return;
-  const r = await Market.sync(result);
+  const sent = s.mp.champQueue || [];
+  const r = await Market.sync(result, sent);
   if (!s?.mp) return;
-  if (r.view) E.applyMarketView(s, r.view);
+  if (r.view) {
+    E.applyMarketView(s, r.view);
+    s.mp.champQueue = s.mp.champQueue.filter((c) => !sent.includes(c));
+  }
   else if (r.status === 404) E.leaveMarketLocal(s);
   else return;
   save();
@@ -436,7 +440,20 @@ const actions = {
   'ch-change-check': () => { Ch.changeCheck(s.today.challengeGame); },
   'ch-next': () => { Ch.nextRound(s.today.challengeGame); },
   'ch-road-done': (hits) => { Ch.roadResult(s.today.challengeGame, hits); },
-  'challenge-finish': () => { Ch.finishChallenge(s, s.today.challengeGame); s.today.challengeGame = null; ui.screen = null; },
+  'challenge-finish': () => {
+    const g = s.today.challengeGame;
+    if (!g.practice) Ch.finishChallenge(s, g);
+    s.today.challengeGame = null;
+    ui.screen = g.practice ? 'multi' : null;
+    if (!s.mp) return;
+    E.queueChampion(s, Ch.championResult(g));
+    marketSync();
+  },
+  'champ-play': (arg) => {
+    if (!s.mp || !Ch.CHAMPION_TITLES[arg]) return;
+    s.today.challengeGame = Ch.startChallenge(arg, Math.random, { practice: true });
+    ui.screen = 'challenge';
+  },
   'quiz-answer': (arg) => { Quiz.answer(s.quiz, Number(arg)); ui.quizRecords = false; },
   'quiz-check': () => { ui.quizRecords = true; },
   'quiz-next': () => { Quiz.next(s.quiz); ui.quizRecords = false; if (s.quiz.done) Quiz.finish(s, s.quiz); },

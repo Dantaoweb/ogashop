@@ -15,7 +15,7 @@ import { EVENT_BY_ID } from './events.js';
 
 export const isTimedEvent = (id) => !!EVENT_BY_ID[id]?.timed;
 import { result as quizResult } from './quiz.js';
-import { CHALLENGES, CHANGE_NOTES, FLAW_HINT, LEVEL_DAYS, levelDay } from './challenge.js';
+import { CHALLENGES, CHANGE_NOTES, CHAMPION_TITLES, FLAW_HINT, LEVEL_DAYS, MONEY_ROUNDS, CHANGE_ROUNDS, levelDay } from './challenge.js';
 
 export const esc = (v) => String(v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -645,7 +645,15 @@ export function payScreen(s) {
 
 export function challengeScreen(s, c) {
   const def = CHALLENGES[c.type];
-  const header = `<header class="top"><div class="kicker">Challenge day · Level ${s.level} · ${dayCount(s)}</div><h1 class="title display">${esc(def.name)}</h1></header>`;
+  const header = `<header class="top"><div class="kicker">${c.practice ? 'Market champions · Beat your best' : `Challenge day · Level ${s.level} · ${dayCount(s)}`}</div><h1 class="title display">${esc(def.name)}</h1></header>`;
+  if (c.finished && c.practice) {
+    return `<main class="screen">${header}<div class="body">
+      <div class="card soft pop" style="align-items:center;text-align:center">
+        <b class="display" style="font-size:36px">${c.correct} of ${c.rounds.length}</b>
+        <b>Time: ${esc(champTime(c.ms))}</b>
+        <span class="small">If this beats your best, it goes on your market's board.</span></div>
+      </div><div class="foot">${btn('challenge-finish', 'Back to my market', 'primary block')}</div></main>`;
+  }
   if (c.finished) {
     const ok = c.type === 'road' ? c.hits <= def.pass : c.correct >= def.pass;
     const scoreLine = c.type === 'road' ? `${c.hits} bump${c.hits === 1 ? '' : 's'}` : `${c.correct} of ${c.rounds.length}`;
@@ -1046,6 +1054,27 @@ export function conflictScreen(c) {
 
 // ---------- Multiplayer ----------
 
+function champTime(ms) {
+  const secs = Math.round(ms / 1000);
+  return secs < 60 ? `${secs}s` : `${Math.floor(secs / 60)}m ${secs % 60}s`;
+}
+
+// Who knows money best in this market. Only real players; computer shops have no scores.
+function championsCard(s) {
+  const rounds = { money: MONEY_ROUNDS, change: CHANGE_ROUNDS };
+  const section = ([type, title]) => {
+    const list = s.mp.champions?.[type] || [];
+    const rows = list.map((p, i) => `<div class="between small"><span>${i === 0 ? `${icon('star', 14)} ` : ''}${esc(p.name)}${p.you ? ' <span class="tag green">You</span>' : ''}</span><b>${p.score} of ${rounds[type]} · ${esc(champTime(p.ms))}</b></div>`).join('');
+    return `<div style="display:flex;flex-direction:column;gap:6px"><b>${esc(title)}</b>
+      <span class="small muted">${esc(CHALLENGES[type].about)}</span>
+      ${rows || '<span class="small muted">No scores yet. Be the first.</span>'}
+      ${btn('champ-play', list.some((p) => p.you) ? 'Play again' : 'Play', 'secondary small block', type)}</div>`;
+  };
+  return `<div class="card"><h3>Market champions</h3>
+    <span class="small muted">Best score wins. If scores are level, the faster time wins. Just for the title: playing here gives no money or skills.</span>
+    ${Object.entries(CHAMPION_TITLES).map(section).join('<hr style="border:0;border-top:1px dashed var(--line);margin:4px 0;width:100%">')}</div>`;
+}
+
 export function multiScreen(s, ui) {
   const header = `<header class="top"><div class="row"><button type="button" class="icon-btn" data-action="close" aria-label="Back" style="margin-left:-10px">${icon('back', 22, 2)}</button><h1 class="title display">Multiplayer</h1></div></header>`;
   const error = ui.mpError ? `<div class="toast" role="alert">${esc(ui.mpError)}</div>` : '';
@@ -1063,6 +1092,7 @@ export function multiScreen(s, ui) {
       ${s.mp.code ? `<div class="card strong" style="align-items:center;text-align:center"><span class="small muted">Share this market code with friends</span><b class="display" style="font-size:34px;letter-spacing:.12em">${esc(s.mp.code)}</b></div>` : ''}
       <div class="card"><h3>Your market: ${s.mp.size} shops</h3>${rows}
         ${empty > 0 ? `<span class="small muted">${empty} place${empty > 1 ? 's are' : ' is'} open. Computer shops fill ${empty > 1 ? 'them' : 'it'} until players join.</span>` : ''}</div>
+      ${championsCard(s)}
       ${titi('Shops are compared day by day, so nobody has to wait. Customers you lose go to these shops.')}
       ${btn('close', 'Back to my shop', 'primary small block')}
       ${btn('mp-leave', 'Leave this market', 'secondary small block', '', ui.mpBusy ? 'disabled' : '')}

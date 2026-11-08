@@ -69,7 +69,11 @@ CREATE TABLE IF NOT EXISTS members (
   sales INTEGER NOT NULL DEFAULT 0,
   price TEXT NOT NULL DEFAULT 'normal',
   advert INTEGER NOT NULL DEFAULT 0,
-  level INTEGER NOT NULL
+  level INTEGER NOT NULL,
+  money_score INTEGER,
+  money_ms INTEGER,
+  change_score INTEGER,
+  change_ms INTEGER
 );
 CREATE INDEX IF NOT EXISTS members_market ON members (market_id);
 

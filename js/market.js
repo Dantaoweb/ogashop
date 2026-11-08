@@ -10,5 +10,5 @@ async function ask(path, body) {
 export const quickJoin = (size, level) => ask('/market/quick', { size, level });
 export const createMarket = (size, level) => ask('/market/create', { size, level });
 export const joinCode = (code) => ask('/market/join', { code });
-export const sync = (result) => ask('/market/sync', result ? { result } : {});
+export const sync = (result, challenges = []) => ask('/market/sync', { ...(result ? { result } : {}), ...(challenges.length ? { challenges } : {}) });
 export const leave = () => ask('/market/leave', {});
