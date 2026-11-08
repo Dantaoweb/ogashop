@@ -1,7 +1,8 @@
 // Screens. Each returns an HTML string; buttons carry data-action (and data-arg) handled in main.js.
 import { GOODS, LEVELS, BADGES, NOTES, EXPLAIN, TYPE_LABEL, CREDITVOICE_URL, RULES, GOALS, ALL_LEVELS, PAYMENTS, HOSPITAL, RIVALS, ADVERT } from './data.js';
-import { CUST, fmt, goodsForLevel, buyPrice, supplierOwed, owedToYou, openDebts, supplierCreditError, defaultName } from './core.js';
-import { currentCustomer, eventView, scoreParts, suggestMessage, billsDueSoon, billOwed, cashNeededSoon, isStuck, isInjured, hospitalSplit, waiting } from './engine.js';
+import { CUST, fmt, goodsForLevel, buyPrice, supplierOwed, owedToYou, openDebts, supplierCreditError, defaultName, priceStep } from './core.js';
+import { isJunior, isGuided, EXPLAIN_JUNIOR, NOTES_JUNIOR } from './junior.js';
+import { currentCustomer, eventView, scoreParts, levelGoal, recordChoices, changeNotes, runSettings, suggestMessage, billsDueSoon, billOwed, cashNeededSoon, isStuck, isInjured, hospitalSplit, waiting } from './engine.js';
 import { face, good, scene, levelPicture } from './art.js';
 import { currentStage, stageProgress, STAGES } from './stages.js';
 import { goalStatus, daysToGoal, howLong, delayNote } from './goals.js';
@@ -80,9 +81,9 @@ function titi(text, extra = '') {
 }
 
 function explain(s, key) {
-  if (s.path !== 'learning' || s.seen['ex_' + key]) return '';
+  if (!isGuided(s) || s.seen['ex_' + key]) return '';
   return `<div class="card explain"><div class="row"><span class="avatar">tiTi</span><b>New idea</b></div>
-    <p style="margin:0;font-size:15px">${esc(EXPLAIN[key])}</p>
+    <p style="margin:0;font-size:15px">${esc((isJunior(s) && EXPLAIN_JUNIOR[key]) || EXPLAIN[key])}</p>
     <button type="button" class="btn small secondary" data-action="seen" data-arg="ex_${key}">Got it</button></div>`;
 }
 
@@ -147,8 +148,7 @@ export function startScreen(ui, hasSave, saveInfo) {
     </button>`;
   return `<main class="screen">
     <div class="body" style="gap:24px;padding-top:40px">
-      ${consentCard()}
-      ${accountStartCard()}
+      ${ui.startPath === 'junior' ? '' : `${consentCard()}${accountStartCard()}`}
       <div class="center" style="display:flex;flex-direction:column;gap:12px">
         <div class="scene-card">${scene(1, { cid: 'mamabola', stock: { rice: 1, garri: 1, water: 1, recharge: 1 } })}</div>
         <h1 class="display" style="font-size:42px">Oga Shop</h1>
@@ -161,8 +161,9 @@ export function startScreen(ui, hasSave, saveInfo) {
       <div style="display:flex;flex-direction:column;gap:12px">
         ${choice('business', 'case', 'var(--green-soft)', 'var(--green)', 'I run a business', 'Real market situations. Fewer explanations, faster days.')}
         ${choice('learning', 'cap', 'var(--amber-soft)', 'var(--amber-ink)', 'I\'m learning business', 'A gentle start. tiTi explains each new idea as you go.')}
-        ${modePicker(ui)}
-        <p class="small muted center" style="margin:0">Same levels and score either way. Switch any time in Settings.</p>
+        ${choice('junior', 'star', 'var(--green-soft)', 'var(--green)', 'I\'m a child (8–12)', 'Simple words, easy sums and no rushing. For home or class.')}
+        ${ui.startPath === 'junior' ? '' : modePicker(ui)}
+        <p class="small muted center" style="margin:0">Same levels for everyone. Switch any time in Settings.</p>
         <button type="button" class="link" data-action="open" data-arg="levels" style="align-self:center;color:var(--green)">See all ${ALL_LEVELS.length} levels</button>
       </div>
     </div>
@@ -308,9 +309,9 @@ export function morningScreen(s, ui) {
       </div>
       <div class="controls">
         <div><div class="ctl-label">Sell price</div><div class="stepper">
-          <button type="button" class="step" data-action="price" data-arg="${id}:-50" aria-label="Lower ${esc(g.name)} price">−</button>
+          <button type="button" class="step" data-action="price" data-arg="${id}:-${priceStep(s)}" aria-label="Lower ${esc(g.name)} price">−</button>
           <output>${fmt(s.prices[id])}</output>
-          <button type="button" class="step" data-action="price" data-arg="${id}:50" aria-label="Raise ${esc(g.name)} price">+</button></div></div>
+          <button type="button" class="step" data-action="price" data-arg="${id}:${priceStep(s)}" aria-label="Raise ${esc(g.name)} price">+</button></div></div>
         <div><div class="ctl-label">Buy more</div><div class="stepper">
           <button type="button" class="step" data-action="buy-qty" data-arg="${id}:-1" aria-label="Buy one less ${esc(g.name)}" ${draft[id] ? '' : 'disabled'}>−</button>
           <output>${draft[id] || 0}</output>
@@ -327,7 +328,7 @@ export function morningScreen(s, ui) {
       ${sup ? `<div class="card warn"><div class="between"><div><b>You owe your supplier ${fmt(sup)}</b>
         <div class="small muted">${s.supplier.some((d) => d.late) ? 'Late! Pay to get credit again.' : `Due Day ${Math.min(...s.supplier.map((d) => d.due))}`}</div></div>
         ${btn('pay-supplier', 'Pay', 'secondary small')}</div></div>` : ''}
-      ${consentCard()}
+      ${isJunior(s) ? '' : consentCard()}
       ${challengeCard(s)}
       ${stageCard(s)}
       ${marketMorning(s)}
@@ -492,6 +493,13 @@ function reaction(r) {
   </div>`;
 }
 
+// Junior records by tapping what really happened.
+function juniorRecord(s) {
+  return `<b class="small">What happened? Tap the right one.</b>
+    ${recordChoices(s).map((c, i) => btn('record-tap', esc(c.text), 'secondary block', String(i))).join('')}
+    <button type="button" class="link" data-action="record-next">Skip recording</button>`;
+}
+
 export function recordScreen(s, ui) {
   const t = s.today;
   const sale = t.pending;
@@ -528,7 +536,7 @@ export function recordScreen(s, ui) {
       </div>
     </div>
     <div class="composer">
-      ${done ? btn('record-next', 'Next customer →', 'primary block') : `
+      ${done ? btn('record-next', 'Next customer →', 'primary block') : isJunior(s) ? juniorRecord(s) : `
         <button type="button" class="suggest" data-action="titi-fill">Type it for me: “${esc(suggestion)}”</button>
         <form data-form="titi"><label for="titi-in" class="sr-only">Tell tiTi what you sold</label>
           <input id="titi-in" name="msg" type="text" autocomplete="off" autocapitalize="off" placeholder="e.g. sold 3 garri 1650 cash" value="${esc(ui.msg)}">
@@ -548,7 +556,7 @@ export function runScreen(s) {
   return `<main class="screen">
     <header class="top" style="flex-direction:row;align-items:center;justify-content:space-between">
       <div><div class="kicker">Market run · ${esc(CUST[r.cid].name)} is waiting</div><div class="title display">Catch ${esc(what)}</div></div>
-      <div style="text-align:right"><div class="kicker">Time</div><b id="run-time" style="font-size:22px">${RULES.runSeconds}s</b></div></header>
+      <div style="text-align:right"><div class="kicker">Time</div><b id="run-time" style="font-size:22px">${runSettings(s).seconds}s</b></div></header>
     <div class="body" style="gap:10px">
       <div class="between"><span class="wrap">${r.items.map((it) => `<span class="chip">${good(it.item, 18)}${esc(GOODS[it.item].short)}</span>`).join('')}</span>
         <b id="run-got">0 / ${total}</b></div>
@@ -674,7 +682,7 @@ export function challengeScreen(s, c) {
     </div><div class="foot">${answered ? btn('ch-next', c.round < c.rounds.length - 1 ? 'Next round' : 'See result', 'primary block') : btn('ch-money-pick', 'All are real', 'primary block', -1)}</div></main>`;
   }
   const given = r.given.reduce((a, n) => a + n, 0);
-  const notes = CHANGE_NOTES.map((n) => `<button type="button" class="note-btn" data-action="ch-change-tap" data-arg="${n}" ${r.done != null ? 'disabled' : ''} aria-label="Add ${fmt(n)}">${fmt(n)}</button>`).join('');
+  const notes = CHANGE_NOTES.filter((n) => !isJunior(s) || n >= 100).map((n) => `<button type="button" class="note-btn" data-action="ch-change-tap" data-arg="${n}" ${r.done != null ? 'disabled' : ''} aria-label="Add ${fmt(n)}">${fmt(n)}</button>`).join('');
   return `<main class="screen">${header}<div class="body">${progress}
     <div class="card"><div class="between"><span class="muted">The buyer bought</span><b>${fmt(r.total)}</b></div>
       <div class="between"><span class="muted">and gave you</span><b>${fmt(r.paid)}</b></div>
@@ -718,7 +726,7 @@ function noteSvg(n, light) {
 
 export function fakeScreen(s) {
   const f = s.today.fake;
-  const timed = s.path !== 'learning';
+  const timed = !isGuided(s);
   const notes = f.notes.map((n, i) => `<button type="button" class="note-card" data-action="fake-pick" data-arg="${i}" aria-label="Note ${i + 1}: this one is fake">${noteSvg(n, f.light)}</button>`).join('');
   return `<main class="screen">
     <header class="top"><div class="kicker">Day ${s.day} · Check the money</div><div class="title display">Spot the fake note</div></header>
@@ -730,7 +738,7 @@ export function fakeScreen(s) {
       <div class="grid2">${notes}</div>
       ${f.light ? titi('Real notes show a <b>watermark</b> (the light circle) and a dark <b>security thread</b>. A note without them is fake.')
         : btn('fake-light', `${icon('sun', 18)} Hold up to the light`, 'secondary small block')}
-      ${s.path === 'learning' && !f.light ? '<span class="small" style="color:var(--green)">Look for: wrong colour, faded print, no serial number. Then check against the light.</span>' : ''}
+      ${isGuided(s) && !f.light ? '<span class="small" style="color:var(--green)">Look for: wrong colour, faded print, no serial number. Then check against the light.</span>' : ''}
     </div>
     <div class="foot">
       ${btn('fake-pick', 'All are real', 'primary block', -1)}
@@ -773,8 +781,8 @@ export function changeScreen(s, ui) {
     </main>`;
   }
   const given = c.given.reduce((a, n) => a + n, 0);
-  const timed = s.path !== 'learning';
-  const notes = RULES.changeNotes.map((n) => `<button type="button" class="note-btn" data-action="change-tap" data-arg="${n}" aria-label="Add ${fmt(n)}">${fmt(n)}</button>`).join('');
+  const timed = !isGuided(s);
+  const notes = changeNotes(s).map((n) => `<button type="button" class="note-btn" data-action="change-tap" data-arg="${n}" aria-label="Add ${fmt(n)}">${fmt(n)}</button>`).join('');
   return `<main class="screen">
     <header class="top" style="flex-direction:row;align-items:center;justify-content:space-between">
       <div><div class="kicker">Day ${s.day} · Count the change</div><div class="title display">Give the right change</div></div></header>
@@ -787,7 +795,7 @@ export function changeScreen(s, ui) {
         <div class="between"><span class="muted">Customer paid</span><b>${fmt(c.handed)}</b></div>
         <div class="between" style="padding-top:8px;border-top:1px dashed var(--line)"><span>You are giving</span><b style="font-size:22px">${fmt(given)}</b></div>
         ${c.given.length ? `<div class="wrap">${c.given.map((n) => `<span class="chip">${fmt(n)}</span>`).join('')}</div>` : '<span class="small muted">Tap the notes below to count the change.</span>'}
-        ${s.path === 'learning' ? `<span class="small" style="color:var(--green)">Change = what they paid − the sale.</span>` : ''}</div>
+        ${isGuided(s) ? `<span class="small" style="color:var(--green)">Change = what they paid − the sale.</span>` : ''}</div>
       <div class="grid2">${notes}</div>
     </div>
     <div class="foot">
@@ -809,7 +817,7 @@ export function eventScreen(s) {
     <div style="display:flex;flex-direction:column;gap:8px"><h1 id="ev-title" class="display" style="font-size:28px">${esc(v.title)}</h1>
       <p style="margin:0;font-size:16px;color:var(--ink-2)">${esc(v.text)}</p></div>
     ${explain(s, 'event')}
-    ${v.timed ? `<div class="progress lg" aria-hidden="true"><div class="patience" style="animation-duration:${s.path === 'learning' ? RULES.dealSecondsLearning : RULES.dealSeconds}s"></div></div>
+    ${v.timed ? `<div class="progress lg" aria-hidden="true"><div class="patience" style="animation-duration:${isGuided(s) ? RULES.dealSecondsLearning : RULES.dealSeconds}s"></div></div>
       <span class="small muted">Decide quickly: a rival is watching this deal.</span>` : ''}
     ${v.outcome ? `${titi(esc(v.outcome))}${btn('event-continue', 'Continue', 'primary block')}` : `<div style="display:flex;flex-direction:column;gap:10px">${choices}</div>`}
   </div></div></main>`;
@@ -876,7 +884,7 @@ export function eveningScreen(s, ui = {}) {
         <span class="small">You saved ${fmt(t.goalReached.price)} from your own pay${t.goalReached.days ? ` in ${t.goalReached.days} days` : ''}, without touching the business money.</span>
         ${btn('open', 'Choose your next goal', 'primary small', 'goals')}</div>` : ''}
       ${titi(`<b>Tip:</b> ${esc(t.tip)}`)}
-      ${t.noteKey ? `<div class="card warn"><b>Did you know?</b><span style="font-size:15px">${esc(NOTES[t.noteKey])}</span></div>` : ''}
+      ${t.noteKey ? `<div class="card warn"><b>Did you know?</b><span style="font-size:15px">${esc((isJunior(s) && NOTES_JUNIOR[t.noteKey]) || NOTES[t.noteKey])}</span></div>` : ''}
     </div>
     <div class="foot">${btn('evening-next', 'See my score', 'primary block')}</div>
   </main>`;
@@ -886,7 +894,7 @@ export function eveningScreen(s, ui = {}) {
 
 export function scoreScreen(s) {
   const t = s.today;
-  const L = LEVELS[s.level];
+  const L = levelGoal(s);
   const p = scoreParts(s);
   const C = 2 * Math.PI * 52;
   const bar = (label, v) => `<div style="display:flex;flex-direction:column;gap:5px"><div class="between small"><span style="font-weight:600">${label}</span><b>${Math.round(v * 100)}</b></div>
@@ -1158,7 +1166,7 @@ export function levelsScreen(s) {
       <div class="between"><b style="font-size:17px">Level ${L.n} · ${esc(L.name)}</b></div>
       <div>${status}</div>
       <span class="small"><b>${esc(L.size)}.</b> ${esc(L.learn)}</span>
-      <span class="small muted">In CreditVoice: ${esc(L.feature)}</span></div>`;
+      ${isJunior(s) ? '' : `<span class="small muted">In CreditVoice: ${esc(L.feature)}</span>`}</div>`;
   }).join('');
   return `<main class="screen">
     <header class="top"><div class="row"><button type="button" class="icon-btn" data-action="close" aria-label="Back" style="margin-left:-10px">${icon('back', 22, 2)}</button>
@@ -1210,9 +1218,9 @@ export function pricesScreen(s) {
     return `<div class="stock-row"><div class="between"><span class="good-ico">${good(id, 32)}</span>
       <div class="grow"><b>${esc(g.name)}</b><div class="small muted">This morning ${fmt(was)} · buy ${fmt(buyPrice(s, id))}</div>
         ${up ? '<div class="small" style="color:var(--red);font-weight:700">Raised: customers will notice</div>' : ''}</div>
-      <div class="stepper"><button type="button" class="step" data-action="price" data-arg="${id}:-50" aria-label="Lower ${esc(g.name)} price">−</button>
+      <div class="stepper"><button type="button" class="step" data-action="price" data-arg="${id}:-${priceStep(s)}" aria-label="Lower ${esc(g.name)} price">−</button>
         <output>${fmt(s.prices[id])}</output>
-        <button type="button" class="step" data-action="price" data-arg="${id}:50" aria-label="Raise ${esc(g.name)} price">+</button></div></div></div>`;
+        <button type="button" class="step" data-action="price" data-arg="${id}:${priceStep(s)}" aria-label="Raise ${esc(g.name)} price">+</button></div></div></div>`;
   }).join('');
   return `<main class="screen">
     <header class="top"><div class="row"><button type="button" class="icon-btn" data-action="close" aria-label="Back" style="margin-left:-10px">${icon('back', 22, 2)}</button><h1 class="title display">Prices</h1></div></header>
@@ -1288,11 +1296,14 @@ export function doneScreen(s) {
         <div class="tile" style="align-items:center"><span>Sales recorded</span><span class="display" style="font-size:22px">${st.totW ? Math.round((st.recW / st.totW) * 100) : 0}%</span></div>
         <div class="tile" style="align-items:center"><span>Badges</span><span class="display" style="font-size:22px">${s.badges.length}</span></div>
       </div>
-      <div class="card" style="color:var(--ink);text-align:left">
+      ${isJunior(s) ? `<div class="card" style="color:var(--ink);text-align:left">
+        <b style="font-size:17px">Try this in real life</b>
+        <span>Write down the money you get and the money you spend. Save some before you spend the rest.</span>
+      </div>` : `<div class="card" style="color:var(--ink);text-align:left">
         <span class="small muted" style="font-weight:700;text-transform:uppercase;letter-spacing:.06em">Do this with your real shop</span>
         <b style="font-size:17px">Record sales, track who owes you and send reminders with tiTi in CreditVoice.</b>
         <a class="btn amber" href="${CREDITVOICE_URL}" target="_blank" rel="noopener" data-action="cv-click">Start free on CreditVoice</a>
-      </div>
+      </div>`}
     </div>
     <div class="foot" style="background:none">${btn('done-continue', 'Keep playing', 'ghost-light block')}
       <p class="small center" style="margin:0;color:var(--green-text-on)">Level 3 · Bigger Shop (staff and expenses) is coming soon.</p></div></main>`;
@@ -1325,8 +1336,9 @@ export function settingsScreen(s, ui) {
     <div class="body">
       <div class="card"><h3>How you play</h3>
         ${opt('business', 'I run a business', 'Fewer explanations.')}
-        ${opt('learning', 'I\'m learning business', 'tiTi explains new ideas and adds "Did you know?" notes.')}</div>
-      <div class="card"><h3>Payments</h3>
+        ${opt('learning', 'I\'m learning business', 'tiTi explains new ideas and adds "Did you know?" notes.')}
+        ${opt('junior', 'I\'m a child (8–12)', 'Simple words, easy sums and no rushing. Prices change to round numbers.')}</div>
+      ${isJunior(s) ? '' : `<div class="card"><h3>Payments</h3>
         <span class="small muted">How customers pay you by transfer and card. With CreditVoice, tiTi records those sales automatically.</span>
         <b class="small">Account for transfers</b>
         ${Object.entries(PAYMENTS.accounts).map(([id, label]) => `<label class="settings-opt" style="padding:6px 0"><input type="radio" name="acct" value="${id}" data-action="set-account" ${s.payments.account === id ? 'checked' : ''}><span>${esc(label)}${id === 'creditvoice' ? ' <span class="tag green">Records automatically</span>' : ''}</span></label>`).join('')}
@@ -1335,22 +1347,22 @@ export function settingsScreen(s, ui) {
         ${ui.error ? `<div class="toast" role="alert">${esc(ui.error)}</div>` : ''}
         <b class="small">POS machine</b>
         ${Object.entries(PAYMENTS.pos).map(([id, label]) => `<label class="settings-opt" style="padding:6px 0"><input type="radio" name="pos" value="${id}" data-action="set-pos" ${s.payments.pos === id ? 'checked' : ''}><span>${esc(label)}${id === 'creditvoice' ? ' <span class="tag green">Records automatically</span>' : ''}</span></label>`).join('')}
-      </div>
-      ${accountSettings(s, ui)}
+      </div>`}
+      ${isJunior(s) && !Account.current() ? '' : accountSettings(s, ui)}
       ${Voice.supported ? `<div class="card"><h3>Sound</h3>
         <label class="settings-opt"><input type="checkbox" data-action="set-voice" ${Voice.enabled() ? 'checked' : ''}><span><b>Customers speak</b><div class="small muted">Customers say what they want out loud, using your phone's voice. Their words also stay on screen.</div></span></label></div>` : ''}
       ${ui.canInstall ? `<div class="card"><h3>Add to home screen</h3><span class="small muted">Play like an app, even without data.</span>${btn('install', 'Install Oga Shop', 'secondary small')}</div>` : ''}
-      <div class="card"><h3>Multiplayer</h3><span class="small muted">${s.mp ? `You are in a market of ${s.mp.size} shops.` : 'Compete with real players, or with friends using a market code.'}</span>${btn('open', s.mp ? 'See my market' : 'Play with others', 'secondary small', 'multi')}</div>
+      ${isJunior(s) ? '' : `<div class="card"><h3>Multiplayer</h3><span class="small muted">${s.mp ? `You are in a market of ${s.mp.size} shops.` : 'Compete with real players, or with friends using a market code.'}</span>${btn('open', s.mp ? 'See my market' : 'Play with others', 'secondary small', 'multi')}</div>`}
       <div class="card"><h3>Customers</h3><span class="small muted">Rename your customers, choose their voice and give them your own lines.</span>${btn('open', 'Edit customers', 'secondary small', 'customers')}</div>
       <div class="card"><h3>Levels</h3><span class="small muted">See all ${ALL_LEVELS.length} levels, what each one teaches, and how far you are.</span>${btn('open', 'See all levels', 'secondary small', 'levels')}</div>
       ${!Analytics.connected() ? '' : `<div class="card"><h3>Privacy</h3>
         <span class="small muted">We count visits and game progress to improve Oga Shop. We never collect your real name, phone number or account number, and we don't use cookies. If you create an account, we keep your username, age group and saved game until you delete them.</span>
-        ${[['yes', 'Share more', 'Totals, plus your progress linked to a random code.'], ['no', 'Just totals', 'Anonymous totals only. Nothing identifies you.'], ['off', "Don't count me", 'Nothing is sent.']].map(([id, label, desc]) => `<label class="settings-opt" style="padding:6px 0"><input type="radio" name="counting" value="${id}" data-action="consent" ${(Analytics.choice() ?? 'no') === id ? 'checked' : ''}><span><b>${label}</b><div class="small muted">${desc}</div></span></label>`).join('')}
+        ${[['yes', 'Share more', 'Totals, plus your progress linked to a random code.'], ['no', 'Just totals', 'Anonymous totals only. Nothing identifies you.'], ['off', "Don't count me", 'Nothing is sent.']].filter(([id]) => id !== 'yes' || !isJunior(s)).map(([id, label, desc]) => `<label class="settings-opt" style="padding:6px 0"><input type="radio" name="counting" value="${id}" data-action="consent" ${(Analytics.choice() ?? 'no') === id ? 'checked' : ''}><span><b>${label}</b><div class="small muted">${desc}</div></span></label>`).join('')}
       </div>`}
       <div class="card"><h3>About</h3>
         <span class="small">Oga Shop is a free learning game by CreditVoice. There is no real money in the game. Your game is saved on this phone, and to your account if you have one.</span>
         <span class="small">CreditVoice does not lend money. Anything about loans or finance in the game is fiction.</span>
-        <a class="small" href="${CREDITVOICE_URL}" target="_blank" rel="noopener">Visit CreditVoice</a></div>
+        ${isJunior(s) ? '' : `<a class="small" href="${CREDITVOICE_URL}" target="_blank" rel="noopener">Visit CreditVoice</a>`}</div>
       <div class="card"><h3>Start over</h3>
         ${ui.confirmReset ? '<div class="toast">This deletes your saved game. Tap again to confirm.</div>' : ''}
         ${btn('reset', 'Delete my game and start again', 'secondary small')}</div>

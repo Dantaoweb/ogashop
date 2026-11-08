@@ -1,6 +1,8 @@
 // Each level is split into 3 short stages, one idea each. Stages move on by day and never block the player.
 // On the learning path new ideas arrive stage by stage; "I run a business" has everything from Day 1.
 
+import { isGuided, isJunior, JUNIOR_STAGE_GOALS } from './junior.js';
+
 export const STAGE_ENDS = [2, 4, 7]; // last day of each stage in a level
 
 export const STAGES = {
@@ -25,11 +27,16 @@ export function stageIndex(s) {
 
 export function currentStage(s) {
   const def = STAGES[s.level]?.[stageIndex(s)];
-  return def ? { ...def, index: stageIndex(s) } : null;
+  return def ? { ...def, goal: goalFor(s, s.level, stageIndex(s)), index: stageIndex(s) } : null;
+}
+
+function goalFor(s, level, index) {
+  const goal = STAGES[level][index].goal;
+  return isJunior(s) ? { ...goal, ...(JUNIOR_STAGE_GOALS[level]?.[index] || {}) } : goal;
 }
 
 // Learning path only: which ideas are held back until a later stage.
-const learning = (s) => s.path === 'learning' && !!STAGES[s.level];
+const learning = (s) => isGuided(s) && !!STAGES[s.level];
 export const tiTiRecordsForYou = (s) => learning(s) && s.level === 1 && stageIndex(s) === 0;
 export const creditAllowed = (s) => !learning(s) || stageIndex(s) >= 1;
 export const supplierCreditOpen = (s) => !learning(s) || s.level !== 2 || stageIndex(s) >= 2;
@@ -57,16 +64,17 @@ function todaysProgress(s) {
 export function finishStageDay(s) {
   if (!s.stage || !STAGES[s.level] || s.stage.done) return null;
   const def = STAGES[s.level][s.stage.index];
+  const goal = goalFor(s, s.level, s.stage.index);
   s.stage.progress += todaysProgress(s);
-  const progress = def.goal.type === 'bills' ? s.stats.billsPaid - s.stage.billsBase : s.stage.progress;
+  const progress = goal.type === 'bills' ? s.stats.billsPaid - s.stage.billsBase : s.stage.progress;
   const ended = s.today.levelUp || dayInLevel(s) === STAGE_ENDS[s.stage.index];
   if (!ended) return null;
   s.stage.done = true;
-  const met = progress >= def.goal.n;
-  const stars = met ? 3 : progress >= def.goal.n / 2 ? 2 : 1;
+  const met = progress >= goal.n;
+  const stars = met ? 3 : progress >= goal.n / 2 ? 2 : 1;
   s.stageLog.push({ level: s.level, index: s.stage.index, stars, met });
   const next = STAGES[s.level][s.stage.index + 1];
-  return { level: s.level, index: s.stage.index, name: def.name, learn: def.learn, goal: def.goal.text, progress: Math.max(0, progress), target: def.goal.n, met, stars, next: s.today.levelUp ? null : next?.name || null };
+  return { level: s.level, index: s.stage.index, name: def.name, learn: def.learn, goal: goal.text, progress: Math.max(0, progress), target: goal.n, met, stars, next: s.today.levelUp ? null : next?.name || null };
 }
 
 // Progress so far today's morning shows (bills are counted from the stage's start).

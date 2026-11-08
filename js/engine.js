@@ -6,8 +6,9 @@ import {
 import {
   CUST, fmt, clamp, randInt, round50, pick, pickWeighted, goodsForLevel, buyPrice, refPrice, expense, describeItems,
   addStock, buyStock, waste, applySale, debtById, openDebts, owedToYou, debtPaid, debtLost,
-  changeLoyalty, supplierOwed, supplierCreditError, applyCustom,
+  changeLoyalty, supplierOwed, supplierCreditError, applyCustom, baseBuy, baseSell, priceStep,
 } from './core.js';
+import { isJunior, isGuided, JUNIOR_CUSTOMERS, JUNIOR_GOALS, JUNIOR_PAY, JUNIOR_RUN_SECONDS } from './junior.js';
 import { EVENT_BY_ID, drawEvent, morningEffects, rivalGrab } from './events.js';
 import { checkGoal } from './goals.js';
 import { makeQuiz } from './quiz.js';
@@ -21,7 +22,7 @@ export const SAVE_VERSION = 1;
 export function newGame(path, rng = Math.random) {
   const s = {
     v: SAVE_VERSION, path, level: 1, day: 0, levelStartDay: 1, completed: false,
-    cash: START_CASH, pay: START_PAY, pocket: 0, stock: {}, cost: {}, prices: {}, batches: [], market: {},
+    cash: START_CASH, pay: path === 'junior' ? JUNIOR_PAY : START_PAY, pocket: 0, stock: {}, cost: {}, prices: {}, batches: [], market: {},
     customers: {}, debts: [], nextDebtId: 1, supplier: [], bills: [], nextBillId: 1, billNext: {},
     levelProfit: 0, totalProfit: 0, score: 50,
     stats: { recW: 0, totW: 0, dueAmt: 0, paidOnTime: 0, days: 0, cleanDays: 0, repaid: 0, lost: 0, noLateStreak: 0, pocketPays: 0, capitalTakes: 0, overpayStreak: 0, served: 0, unhappy: 0, billsPaid: 0, billsLateDays: 0, changeRight: 0, goodChecks: 0 },
@@ -32,10 +33,10 @@ export function newGame(path, rng = Math.random) {
   };
   for (const id of Object.keys(GOODS)) {
     s.stock[id] = 0;
-    s.cost[id] = GOODS[id].buy;
-    s.prices[id] = GOODS[id].sell;
+    s.cost[id] = baseBuy(s, id);
+    s.prices[id] = baseSell(s, id);
   }
-  for (const [id, qty] of Object.entries(START_STOCK)) addStock(s, id, qty, GOODS[id].buy);
+  for (const [id, qty] of Object.entries(START_STOCK)) addStock(s, id, qty, baseBuy(s, id));
   for (const c of CUSTOMERS) s.customers[c.id] = { loyalty: 1, skipUntil: 0 };
   s.custom = {};
   applyCustom(s);
@@ -53,7 +54,7 @@ export function startDay(s, rng = Math.random) {
     if (m.days <= 0) {
       // A temporary change is over: undo it.
       delete s.market[item];
-      if (item === 'drinks' || item === 'garri') s.prices[item] = Math.max(s.prices[item], GOODS[item].sell);
+      if (item === 'drinks' || item === 'garri') s.prices[item] = Math.max(s.prices[item], baseSell(s, item));
     }
   }
   s.today = {
@@ -158,7 +159,7 @@ export function restartLevel(s, rng = Math.random) {
   s.cash = START_CASH;
   for (const id of Object.keys(GOODS)) s.stock[id] = 0;
   s.batches = [];
-  for (const [id, qty] of Object.entries(START_STOCK)) addStock(s, id, qty, GOODS[id].buy);
+  for (const [id, qty] of Object.entries(START_STOCK)) addStock(s, id, qty, baseBuy(s, id));
   s.levelProfit = 0;
   s.bills = [];
   s.stage = null;
@@ -173,6 +174,7 @@ export { levelDay, LEVEL_DAYS };
 
 // Skills from challenge days change the mini-games a little.
 export function runSettings(s) {
+  if (isJunior(s)) return { seconds: JUNIOR_RUN_SECONDS, injuryChance: 0 };
   return {
     seconds: RULES.runSeconds + (s.skills?.fastRunner ? 5 : 0),
     injuryChance: RULES.injuryChance * (s.skills?.fastRunner ? 0.5 : 1),
@@ -189,7 +191,21 @@ export function setPay(s, amount) {
 }
 
 export function setPrice(s, item, price) {
-  s.prices[item] = clamp(round50(price), 50, 100000);
+  const step = priceStep(s);
+  s.prices[item] = clamp(Math.round(price / step) * step, step, 100000);
+}
+
+// Changing how you play. Moving to or from Junior changes to that way's prices.
+export function setPath(s, path) {
+  const was = isJunior(s);
+  s.path = path;
+  if (was === isJunior(s)) return;
+  for (const id of Object.keys(GOODS)) {
+    s.cost[id] = baseBuy(s, id);
+    s.prices[id] = baseSell(s, id);
+  }
+  if (isJunior(s)) s.pay = Math.min(s.pay, JUNIOR_PAY);
+  if (s.today?.morningPrices) s.today.morningPrices = { ...s.prices };
 }
 
 export function paySupplier(s) {
@@ -289,7 +305,8 @@ function planMarket(s, n, rng) {
   const list = marketRivals(s);
   const size = Math.round(n * (1 + list.length) + randInt(rng, 0, 2));
   const att = attraction(s);
-  const mine = Math.max(3, Math.min(size - 2, Math.round(n * att.factor)));
+  const most = isJunior(s) ? JUNIOR_CUSTOMERS[1] : Infinity;
+  const mine = Math.min(most, Math.max(3, Math.min(size - 2, Math.round(n * att.factor))));
   const rest = Math.max(0, size - mine - list.reduce((a, r) => a + (r.real ? r.lastCustomers || 0 : 0), 0));
   const bots = list.filter((r) => !r.real);
   const weights = bots.map((r) => 1 / r.price);
@@ -349,7 +366,7 @@ export function putAdvert(s) {
 }
 
 function makeQueue(s, rng) {
-  let [lo, hi] = RULES.customersPerDay[s.level];
+  let [lo, hi] = isJunior(s) ? JUNIOR_CUSTOMERS : RULES.customersPerDay[s.level];
   if (s.mods.rush) { lo = Math.round(lo * 1.6); hi = Math.round(hi * 1.6); }
   let n = randInt(rng, lo, hi);
   if (s.mods.fewer) { n = Math.max(3, n - s.mods.fewer); delete s.mods.fewer; }
@@ -368,10 +385,11 @@ function makeQueue(s, rng) {
     const pool = available(type).filter((id) => !ids.includes(id));
     for (let i = 0; i < count && pool.length; i++) ids.push(pool.splice(Math.floor(rng() * pool.length), 1)[0]);
   };
-  if (rng() < (s.mods.rush ? 0.6 : RULES.bigBuyerChance)) take('big', 1);
+  const junior = isJunior(s);
+  if (rng() < (s.mods.rush ? 0.6 : RULES.bigBuyerChance) && !junior) take('big', 1);
   take('credit', 1);
-  take('bargainer', randInt(rng, 1, 2));
-  if (rng() < 0.5) take('neverpays', 1);
+  take('bargainer', junior ? 1 : randInt(rng, 1, 2));
+  if (rng() < 0.5 && !junior) take('neverpays', 1);
   take('regular', n - ids.length);
   // Regulars come back more than once on busy days.
   while (ids.length < n) {
@@ -436,7 +454,10 @@ export function currentCustomer(s) {
   const walkChance = clamp(over * (c.type === 'bargainer' ? 3 : 2), 0, 0.8);
   const walks = over > 0.02 && r.walkRoll < walkChance;
   const paysOf = (sum) => (r.kind === 'credit' ? Math.max(0, Math.min(sum - 100, Math.round((sum * r.frac) / 100) * 100)) : sum);
-  const discOf = (sum) => Math.round((sum * (1 - r.disc)) / 50) * 50;
+  const discOf = (sum) => {
+    if (!isJunior(s)) return Math.round((sum * (1 - r.disc)) / 50) * 50;
+    return Math.max(100, Math.min(sum - 100, Math.round((sum * (1 - r.disc)) / 100) * 100));
+  };
   const paysNow = paysOf(total);
   const discTotal = discOf(total);
   // What the customer asks for in words: the goods they want, even if you don't have them all.
@@ -460,6 +481,7 @@ function rushOrder(s, wanted) {
 
 // How this customer pays: cash, transfer or POS (old saves: cash).
 function payMethod(s, r) {
+  if (isJunior(s)) return 'cash';
   const mix = RULES.payMix[s.level] || RULES.payMix[1];
   const roll = r.payRoll ?? 0;
   if (r.kind === 'discount' || roll < mix.cash) return 'cash';
@@ -725,8 +747,10 @@ function runFinished(s, got, { injured = false, by = 'bicycle' } = {}) {
     t.flash = `You ran to the market and back with ${describeItems(bought)}. No transport fee! ${name} waited.`;
     return;
   }
-  changeLoyalty(s, run.cid, -1);
-  unhappy(s);
+  if (!isJunior(s)) {
+    changeLoyalty(s, run.cid, -1);
+    unhappy(s);
+  }
   t.outcome = { text: `You came back with ${bought.length ? describeItems(bought) : 'nothing'}, not enough. ${name} got tired of waiting and left.`, tone: 'bad' };
 }
 
@@ -773,9 +797,12 @@ export function runSendBoy(s) {
 
 // ---------- Count the change ----------
 
+// Junior prices are in hundreds, so no small notes are needed.
+export const changeNotes = (s) => (isJunior(s) ? RULES.changeNotes.filter((n) => n >= 100) : RULES.changeNotes);
+
 export function changeTap(s, note) {
   const c = s.today.change;
-  if (c && RULES.changeNotes.includes(note) && c.given.length < 20) c.given.push(note);
+  if (c && changeNotes(s).includes(note) && c.given.length < 20) c.given.push(note);
 }
 
 export function changeUndo(s) {
@@ -949,6 +976,34 @@ export function titiMessage(s, text) {
 }
 
 // The sale goes into the records (typed to tiTi, or automatically with CreditVoice).
+// Junior records by tapping: the right line plus two that are wrong.
+export function recordChoices(s) {
+  const t = s.today;
+  const sale = t.pending;
+  if (!sale) return [];
+  const name = sale.cid ? CUST[sale.cid].name : null;
+  const owes = sale.total - sale.paid;
+  const line = (items, paid, due) => `Sold ${describeItems(items)}${name ? ` to ${name}` : ''}. Paid ${fmt(paid)}.${due > 0 ? ` Owes ${fmt(due)}.` : ''}`;
+  const oneMore = sale.items.map((it, i) => (i === 0 ? { ...it, qty: it.qty + 1 } : it));
+  const wrong = owes > 0
+    ? [line(sale.items, sale.total, 0), line(oneMore, sale.paid, owes)]
+    : [line(sale.items, sale.paid + 200, 0), line(oneMore, sale.paid, 0)];
+  const at = (s.day * 7 + t.idx) % 3;
+  const texts = [...wrong];
+  texts.splice(at, 0, line(sale.items, sale.paid, owes));
+  return texts.map((text, i) => ({ text, right: i === at }));
+}
+
+export function recordTap(s, index) {
+  const t = s.today;
+  const sale = t.pending;
+  if (!sale || sale.recorded) return;
+  const choice = recordChoices(s)[index];
+  if (!choice) return;
+  if (choice.right) markRecorded(s, sale);
+  else t.chat.push({ from: 'titi', text: 'Not quite. Look again at what was sold and what was paid.' });
+}
+
 function markRecorded(s, sale, auto = null) {
   const t = s.today;
   const name = sale.cid ? CUST[sale.cid].name : null;
@@ -1097,7 +1152,7 @@ export function eventView(s) {
   const def = EVENT_BY_ID[ev.id];
   return {
     id: ev.id, icon: def.icon, title: def.title(s, ev.ctx), text: def.text(s, ev.ctx),
-    choices: ev.outcome ? [] : def.choices(s, ev.ctx), outcome: ev.outcome, timed: !!def.timed && !ev.outcome,
+    choices: ev.outcome ? [] : def.choices(s, ev.ctx), outcome: ev.outcome, timed: !!def.timed && !ev.outcome && !isJunior(s),
   };
 }
 
@@ -1135,6 +1190,12 @@ export function endDay(s, rng = Math.random) {
     const onDue = s.day === d.due;
     const reminded = d.remindedDay === s.day;
     if (onDue) s.stats.dueAmt += d.amount;
+    if (isJunior(s)) {
+      // The lesson, kept simple: written down gets paid, not written down gets forgotten.
+      if (d.recorded) debtPaid(s, d, { onTime: onDue });
+      else debtLost(s, d);
+      continue;
+    }
     if (!d.recorded) {
       const forget = onDue ? (never ? RULES.forgetUnrecorded.neverpays : RULES.forgetUnrecorded.normal) : RULES.forgetUnrecordedLate;
       if (rng() < forget) { debtLost(s, d); continue; }
@@ -1183,7 +1244,7 @@ export function endDay(s, rng = Math.random) {
   t.quick = !t.levelUp && levelDays >= 2 && rng() < RULES.quickQuestionChance ? makeQuiz(s, 'quick', rng) : null;
 
   t.tip = pickTip(s);
-  t.noteKey = s.path === 'learning' ? (t.event?.note && !s.seen['note_' + t.event.note] ? t.event.note : NOTE_ORDER.find((k) => !s.seen['note_' + k])) : null;
+  t.noteKey = isGuided(s) ? (t.event?.note && !s.seen['note_' + t.event.note] ? t.event.note : NOTE_ORDER.find((k) => !s.seen['note_' + k])) : null;
   if (t.noteKey) s.seen['note_' + t.noteKey] = true;
   t.levelUp = !s.completed && levelGoalMet(s);
   t.stageDone = finishStageDay(s);
@@ -1198,7 +1259,7 @@ export function scoreParts(s) {
     recording: st.totW ? st.recW / st.totW : 0.5,
     debts: st.dueAmt ? Math.min(1, st.paidOnTime / st.dueAmt) : 0.6,
     stock: st.days ? st.cleanDays / st.days : 0.6,
-    profit: clamp(s.levelProfit / LEVELS[s.level].goalProfit, 0, 1),
+    profit: clamp(s.levelProfit / levelGoal(s).goalProfit, 0, 1),
     // Family needs paid from your own pay count for you; taking from the business counts against.
     money: (st.pocketPays + st.billsPaid + 1.2) / (st.pocketPays + st.billsPaid + st.capitalTakes + st.billsLateDays + 2),
     // Complaints, refused trusted customers and refusals count against; good sales for.
@@ -1212,8 +1273,14 @@ function targetScore(s) {
   return Math.round(100 * Object.keys(w).reduce((a, k) => a + w[k] * p[k], 0));
 }
 
-export function levelGoalMet(s) {
+// What this level asks for. Junior asks for less, because there are fewer customers.
+export function levelGoal(s) {
   const L = LEVELS[s.level];
+  return isJunior(s) ? { ...L, ...(JUNIOR_GOALS[s.level] || {}) } : L;
+}
+
+export function levelGoalMet(s) {
+  const L = levelGoal(s);
   if (s.levelProfit < L.goalProfit || s.score < L.goalScore) return false;
   if (L.maxLateDays && openDebts(s).some((d) => s.day - d.due > L.maxLateDays)) return false;
   return true;

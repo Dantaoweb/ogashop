@@ -3,6 +3,7 @@
 // choices(s, ctx) returns buttons; run(s, ctx, rng) applies the choice and returns tiTi's outcome text.
 import { GOODS, FAMILY_NEEDS, RIVALS, RULES } from './data.js';
 import { delayNote } from './goals.js';
+import { isJunior, JUNIOR_FAMILY, JUNIOR_NO_EVENTS } from './junior.js';
 import {
   CUST, fmt, pick, randInt, buyPrice, refPrice, setMarket, expense, waste, buyStock,
   supplierCreditError, applySale, openDebts, debtPaid, debtLost, changeLoyalty, personal,
@@ -94,7 +95,8 @@ export const EVENTS = [
       // Not on Day 1: the player's pocket only fills after the first evening.
       if (s.day < 2 || s.today.moneyIn < 1000) return null;
       const seen = s.eventLog.family;
-      return { need: seen ? Math.floor((s.day * 7 + s.today.idx) % FAMILY_NEEDS.length) : 0 };
+      const list = isJunior(s) ? JUNIOR_FAMILY : FAMILY_NEEDS.map((_, i) => i);
+      return { need: seen ? list[(s.day * 7 + s.today.idx) % list.length] : 0 };
     },
     title: (s, ctx) => `${FAMILY_NEEDS[ctx.need].who} needs money`,
     text: (s, ctx) => { const n = FAMILY_NEEDS[ctx.need]; return `${n.who} asks you for ${fmt(n.amount)} for ${n.what}.`; },
@@ -341,7 +343,7 @@ export const MUST_SEE = { 1: ['family', 'paid_already'] };
 
 export function drawEvent(s, rng) {
   const recent = (id) => s.eventLog[id] && s.day - s.eventLog[id] < 3;
-  const ok = (e) => e.levels.includes(s.level) && !recent(e.id) && !(e.once && s.eventLog[e.id]);
+  const ok = (e) => e.levels.includes(s.level) && !recent(e.id) && !(e.once && s.eventLog[e.id]) && !(isJunior(s) && JUNIOR_NO_EVENTS.has(e.id));
   for (const id of MUST_SEE[s.level] || []) {
     const e = EVENT_BY_ID[id];
     if (ok(e)) { const ctx = e.eligible(s); if (ctx) return { id, ctx }; }

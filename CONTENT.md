@@ -299,6 +299,26 @@ Each level has 3 stages: days 1–2, days 3–4, days 5–7. They move on by day
 
 3 stars for reaching the goal, 2 for half, 1 otherwise. On the learning path, ideas arrive by stage: tiTi records for you in Level 1 Stage 1, credit customers start in Stage 2, and supplier credit opens in Level 2 Stage 3. "I run a business" has everything from Day 1.
 
+## 7u. Junior (ages 8–12)
+
+A third way to play: "I'm a child (8–12)", on the start screen and in Settings. Same levels and stages, made gentler.
+
+| Part | Junior |
+|---|---|
+| Prices | Round hundreds. Rice 2,000→2,500, garri 400→600, water 300→500, recharge 400→500, noodles 200→300, bread 800→1,000, drinks 300→400, palm oil 1,200→1,600. Price step ₦100. |
+| Customers | 3 or 4 a day. No big buyers, no never-pays, one bargainer at most. |
+| Timers | None: no patience bars, no deal timers, the waiting line stays. |
+| Recording | Tap the right line out of 3. A wrong tap lets you try again. |
+| Credit | Written down: paid on the due day. Not written down: forgotten and lost. |
+| Bills | One small bill a level (table fee ₦1,000, rent ₦2,000). No late fees. |
+| Events left out | Missing goods, fake noodles, NEPA, relocation, big party, bulk offer, the neighbour's price cut, hospital and rent family needs. |
+| Market run | 40 seconds, no injuries, nobody leaves unhappy. |
+| Payments | Cash only. |
+| Daily pay | Starts at ₦500. |
+| Level goals | L1 ₦8,000 profit and score 60; L2 ₦5,500 profit and score 62. |
+
+No CreditVoice promotion, no accounts, no multiplayer, anonymous totals only. A small "by CreditVoice" credit stays.
+
 ## 8. Open points for review
 
 1. **Prices:** check every buy and sell price with traders in at least two markets.

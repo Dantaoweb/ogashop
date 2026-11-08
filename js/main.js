@@ -9,6 +9,7 @@ import * as Account from './account.js';
 import * as Market from './market.js';
 import { setGoal, clearGoal } from './goals.js';
 import { startRun } from './run.js';
+import { isJunior, isGuided } from './junior.js';
 import * as Quiz from './quiz.js';
 import * as Ch from './challenge.js';
 import { GOALS, RULES } from './data.js';
@@ -197,14 +198,14 @@ let dealTimer = null;
 let dealKey = '';
 function watchDeal() {
   const ev = s?.today?.event;
-  const timed = s?.phase === 'event' && !ui.screen && ev && !ev.outcome && UI.isTimedEvent(ev.id);
+  const timed = s?.phase === 'event' && !ui.screen && ev && !ev.outcome && UI.isTimedEvent(ev.id) && !isJunior(s);
   const key = timed ? `${s.day}|${s.today.idx}|${ev.id}|${!!ev.ctx?.thought}` : '';
   if (key === dealKey) return;
   dealKey = key;
   clearTimeout(dealTimer);
   dealTimer = null;
   if (!timed) return;
-  const secs = s.path === 'learning' ? RULES.dealSecondsLearning : RULES.dealSeconds;
+  const secs = isGuided(s) ? RULES.dealSecondsLearning : RULES.dealSeconds;
   dealTimer = setTimeout(() => { dealTimer = null; run('event-timeout'); }, secs * 1000);
 }
 
@@ -212,14 +213,14 @@ function watchDeal() {
 let queueTimer = null;
 let queueKey = '';
 function watchQueue() {
-  const slow = ['record', 'change', 'fake', 'pay'].includes(s?.phase) && !ui.screen;
+  const slow = ['record', 'change', 'fake', 'pay'].includes(s?.phase) && !ui.screen && !isJunior(s);
   const key = slow ? `${s.day}|${s.today.idx}|${s.phase}` : '';
   if (key === queueKey) return;
   queueKey = key;
   clearInterval(queueTimer);
   queueTimer = null;
   if (!slow || E.waiting(s) < 1) return;
-  let secs = s.path === 'learning' ? RULES.queueWaitSecondsLearning : RULES.queueWaitSeconds;
+  let secs = isGuided(s) ? RULES.queueWaitSecondsLearning : RULES.queueWaitSeconds;
   if (s.phase === 'record') secs *= RULES.queueRecordFactor;
   queueTimer = setInterval(() => {
     if (!E.queueLeave(s)) { clearInterval(queueTimer); queueTimer = null; return; }
@@ -255,7 +256,7 @@ function watchRun() {
 let timerPhase = null;
 function watchChangeTimer() {
   const phase = s?.phase;
-  const counting = (phase === 'change' || phase === 'fake') && !ui.screen && s.path !== 'learning' && !s.today.change?.demand && !s.today.change?.extra;
+  const counting = (phase === 'change' || phase === 'fake') && !ui.screen && !isGuided(s) && !s.today.change?.demand && !s.today.change?.extra;
   if (changeTimer && (!counting || timerPhase !== phase)) { clearTimeout(changeTimer); changeTimer = null; }
   if (counting && !changeTimer) {
     timerPhase = phase;
@@ -292,14 +293,23 @@ function render() {
   }
 }
 
+// Children are only ever counted in anonymous totals.
+function juniorCounting() {
+  if (Analytics.choice() !== 'off') Analytics.setChoice('no');
+}
+
 const actions = {
-  'pick-path': (arg) => { ui.startPath = arg; ui.confirmNew = false; },
+  'pick-path': (arg) => {
+    ui.startPath = arg;
+    ui.confirmNew = false;
+    if (arg === 'junior') juniorCounting();
+  },
   continue: () => { ui.screen = null; },
   'new-game': () => {
     if (!ui.startPath) return;
     if (s && !ui.confirmNew) { ui.confirmNew = true; return; }
     s = E.newGame(ui.startPath);
-    ui.screen = ui.startMode === 'multi' ? 'multi' : null;
+    ui.screen = ui.startMode === 'multi' && ui.startPath !== 'junior' ? 'multi' : null;
     ui.confirmNew = false;
     ui.buy = {};
   },
@@ -372,9 +382,16 @@ const actions = {
   'cv-click': () => { /* link opens in a new tab; nothing to track without a backend */ },
 
   remind: (arg) => { E.remind(s, Number(arg)); },
-  'set-path': (arg) => { s.path = arg; },
+  'set-path': (arg) => {
+    E.setPath(s, arg);
+    ui.buy = {};
+    if (arg !== 'junior') return;
+    juniorCounting();
+    if (s.mp) Market.leave().catch(() => {}).finally(() => { E.leaveMarketLocal(s); save(); render(); });
+  },
+  'record-tap': (arg) => { E.recordTap(s, Number(arg)); },
   'set-voice': (arg) => { Voice.setEnabled(arg); },
-  'challenge-play': () => { const c = s.today.challenge; if (c && !c.done) { s.today.challengeGame = Ch.startChallenge(c.type); ui.screen = 'challenge'; } },
+  'challenge-play': () => { const c = s.today.challenge; if (c && !c.done) { s.today.challengeGame = Ch.startChallenge(c.type, Math.random, { roundTo: isJunior(s) ? 100 : 0 }); ui.screen = 'challenge'; } },
   'challenge-skip': () => { E.skipChallenge(s); },
   'pick-mode': (arg) => { ui.startMode = arg; },
   'mp-size': (arg) => { ui.mpSize = Number(arg); },

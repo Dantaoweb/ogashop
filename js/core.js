@@ -2,6 +2,7 @@
 import { GOODS, CUSTOMERS, RULES, SUPPLIER_CREDIT_LIMIT, SUPPLIER_CREDIT_DAYS } from './data.js';
 
 import { supplierCreditOpen } from './stages.js';
+import { isJunior, JUNIOR_PRICES, JUNIOR_PRICE_STEP } from './junior.js';
 
 export const CUST = Object.fromEntries(CUSTOMERS.map((c) => [c.id, { ...c }]));
 const DEFAULT_LOOK = Object.fromEntries(CUSTOMERS.map((c) => [c.id, { name: c.name, she: !!c.she }]));
@@ -62,13 +63,19 @@ export function goodsForLevel(level) {
   return Object.keys(GOODS).filter((id) => GOODS[id].level <= level);
 }
 
+// Junior prices are round, so the sums are easy.
+export const priceStep = (s) => (isJunior(s) ? JUNIOR_PRICE_STEP : 50);
+export const baseBuy = (s, item) => (isJunior(s) ? JUNIOR_PRICES[item].buy : GOODS[item].buy);
+export const baseSell = (s, item) => (isJunior(s) ? JUNIOR_PRICES[item].sell : GOODS[item].sell);
+const tidy = (s, n) => (isJunior(s) ? Math.round(n / JUNIOR_PRICE_STEP) * JUNIOR_PRICE_STEP : n);
+
 export function buyPrice(s, item) {
-  return GOODS[item].buy + (s.market[item]?.buy || 0);
+  return tidy(s, baseBuy(s, item) + (s.market[item]?.buy || 0));
 }
 
 // The price customers expect to pay. Selling far above it makes some walk away.
 export function refPrice(s, item) {
-  return GOODS[item].sell + (s.market[item]?.sell || 0);
+  return tidy(s, baseSell(s, item) + (s.market[item]?.sell || 0));
 }
 
 // Changes to the market. days = null means permanent.

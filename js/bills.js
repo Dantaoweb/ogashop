@@ -2,6 +2,7 @@
 // They are business costs, paid from the business cash. Unpaid bills get a late fee each day.
 import { BILLS, RULES } from './data.js';
 import { fmt, expense } from './core.js';
+import { isJunior, JUNIOR_BILLS } from './junior.js';
 
 export const billOwed = (b) => b.amount + b.late * RULES.billLateFee;
 export const billsDueSoon = (s) => s.bills.filter((b) => b.due - s.day <= RULES.billNoticeDays).sort((a, b) => a.due - b.due);
@@ -9,7 +10,7 @@ export const cashNeededSoon = (s) => billsDueSoon(s).reduce((a, b) => a + billOw
 
 // Put this level's bills on the list once they are close enough to announce.
 export function scheduleBills(s) {
-  const plan = BILLS[s.level];
+  const plan = (isJunior(s) ? JUNIOR_BILLS : BILLS)[s.level];
   if (!plan) return;
   const announce = (kind, label, amount, due) => s.bills.push({ id: s.nextBillId++, kind, label, amount, due, late: 0 });
   for (const r of plan.recurring) {
@@ -56,6 +57,7 @@ export function payDueBills(s, { lateOnly = false } = {}) {
 // Each morning a bill is still unpaid after its day, the late fee grows.
 export function chargeLateFees(s) {
   const notes = [];
+  if (isJunior(s)) return notes;
   for (const b of s.bills.filter((x) => x.due < s.day)) {
     b.late++;
     s.stats.billsLateDays++;

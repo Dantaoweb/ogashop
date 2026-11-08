@@ -67,8 +67,8 @@ export function moneyRound(rng) {
 // ---------- Change master ----------
 
 // Rounds get harder: from round prices and one note, to odd amounts paid with several notes.
-export function changeRound(i, rng) {
-  const step = i < 2 ? 50 : i < 4 ? 10 : 5;
+export function changeRound(i, rng, roundTo = 0) {
+  const step = roundTo || (i < 2 ? 50 : i < 4 ? 10 : 5);
   const max = 600 + i * 900;
   const total = Math.max(step, Math.round((150 + rng() * max) / step) * step);
   const paid = Math.ceil((total + 1) / 1000) * 1000;
@@ -77,9 +77,9 @@ export function changeRound(i, rng) {
 
 // ---------- Playing a challenge ----------
 
-export function startChallenge(type, rng = Math.random) {
+export function startChallenge(type, rng = Math.random, { roundTo = 0 } = {}) {
   if (type === 'money') return { type, round: 0, correct: 0, rounds: Array.from({ length: MONEY_ROUNDS }, () => moneyRound(rng)) };
-  if (type === 'change') return { type, round: 0, correct: 0, rounds: Array.from({ length: CHANGE_ROUNDS }, (_, i) => changeRound(i, rng)) };
+  if (type === 'change') return { type, round: 0, correct: 0, rounds: Array.from({ length: CHANGE_ROUNDS }, (_, i) => changeRound(i, rng, roundTo)) };
   return { type, hits: null };
 }
 

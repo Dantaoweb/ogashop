@@ -714,6 +714,92 @@ test('stages on the learning path: tiTi records first, credit and supplier credi
   assert.equal(C.supplierCreditError(biz, 100), null, 'business path has everything from Day 1');
 });
 
+test('junior: round prices, few customers, no harsh customers', async () => {
+  const C = await import('../js/core.js');
+  for (let seed = 200; seed < 230; seed++) {
+    const s = E.newGame('junior', mulberry32(seed));
+    assert.equal(s.prices.rice, 2500);
+    assert.equal(C.buyPrice(s, 'garri'), 400);
+    assert.ok(s.today.queue.length >= 3 && s.today.queue.length <= 4, `queue of ${s.today.queue.length}`);
+    for (const r of s.today.queue) assert.ok(!['big', 'neverpays'].includes(C.CUST[r.cid].type));
+  }
+  const s = E.newGame('junior', mulberry32(231));
+  E.setPrice(s, 'garri', 640);
+  assert.equal(s.prices.garri, 600);
+  assert.equal(s.pay, 500);
+  assert.equal(E.runSettings(s).injuryChance, 0);
+});
+
+test('junior: tap the right record; a wrong tap lets you try again', () => {
+  const s = E.newGame('junior', mulberry32(240));
+  s.day = 3; // past the stage where tiTi records for you
+  s.stock.garri = 5;
+  s.today.queue = [{ cid: 'musa', items: [{ item: 'garri', qty: 1 }], kind: 'cash', frac: 1, disc: 0.1, walkRoll: 0.99, acceptRoll: 0, moodRoll: 0.99, changeRoll: 1, fakeRoll: 1, payRoll: 0.99 }];
+  s.today.eventAt = 99;
+  E.openShop(s);
+  E.serve(s, 'sell');
+  assert.equal(s.phase, 'record');
+  const options = E.recordChoices(s);
+  assert.equal(options.length, 3);
+  assert.equal(new Set(options.map((o) => o.text)).size, 3);
+  assert.equal(options.filter((o) => o.right).length, 1);
+  E.recordTap(s, options.findIndex((o) => !o.right));
+  assert.equal(s.today.pending.recorded, false);
+  assert.match(s.today.chat.at(-1).text, /Not quite/);
+  E.recordTap(s, options.findIndex((o) => o.right));
+  assert.equal(s.today.pending.recorded, true);
+  assert.equal(s.stats.totW, 1, 'tapping is the player recording');
+});
+
+test('junior: written-down credit is paid, unwritten is forgotten', () => {
+  const s = E.newGame('junior', mulberry32(250));
+  const debt = (id, recorded) => ({ id, cid: 'musa', amount: 600, due: s.day, created: s.day, recorded, remindedDay: 0, status: 'open', what: '1 garri' });
+  s.debts.push(debt(901, true), debt(902, false));
+  s.today.queue = [];
+  s.today.eventAt = 99;
+  E.endDay(s, () => 0.99);
+  assert.equal(s.debts.find((d) => d.id === 901).status, 'paid');
+  assert.equal(s.debts.find((d) => d.id === 902).status, 'lost');
+});
+
+test('junior: no timed or scary events, small bills with no late fees', async () => {
+  const { drawEvent, EVENT_BY_ID } = await import('../js/events.js');
+  const { JUNIOR_NO_EVENTS } = await import('../js/junior.js');
+  const { chargeLateFees, scheduleBills } = await import('../js/bills.js');
+  for (let seed = 0; seed < 300; seed++) {
+    const s = E.newGame('junior', mulberry32(seed));
+    s.level = 2; s.day = 6; s.today.moneyIn = 5000; s.eventLog.family = 1;
+    const rng = mulberry32(seed + 1);
+    const e = drawEvent(s, rng);
+    if (!e) continue;
+    assert.ok(!JUNIOR_NO_EVENTS.has(e.id), e.id);
+    assert.ok(!EVENT_BY_ID[e.id].timed, e.id);
+    if (e.id === 'family') assert.ok(![1, 4].includes(e.ctx.need));
+  }
+  const s = E.newGame('junior', mulberry32(260));
+  s.day = 5;
+  s.bills = []; s.billNext = {};
+  scheduleBills(s);
+  assert.deepEqual(s.bills.map((b) => b.amount), [1000]);
+  s.bills[0].due = 2;
+  assert.deepEqual(chargeLateFees(s), []);
+  assert.equal(s.bills[0].late, 0);
+});
+
+test('junior: moving to and from it changes the prices; the other paths stay the same', () => {
+  const s = E.newGame('business', mulberry32(270));
+  const rice = s.prices.rice;
+  E.setPath(s, 'learning');
+  assert.equal(s.prices.rice, rice);
+  E.setPath(s, 'junior');
+  assert.equal(s.prices.garri, 600);
+  assert.equal(s.cost.garri, 400);
+  assert.ok(s.pay <= 500);
+  E.setPath(s, 'business');
+  assert.equal(s.prices.rice, rice);
+  assert.equal(E.levelGoal(s).goalProfit, 11000);
+});
+
 test('count the change: right, short, too much, skip', () => {
   const play = (taps, result = 'give') => {
     const s = E.newGame('business', mulberry32(40));
