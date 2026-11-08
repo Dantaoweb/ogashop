@@ -135,7 +135,7 @@ Both paths use the same levels and the same score, so friends can compare. The p
 ## 10. Accounts and saving
 
 - **Play without an account.** Progress is saved on the device.
-- **Optional sign-up** to save progress across phones and join a leaderboard or class.
+- **Optional sign-up** to save progress across phones and join a leaderboard or class. Built in v1.1: username, age group (no birth date) and a 4-number PIN for new phones. Under-13s play as guests. Players can delete their account.
 - The game's accounts are **separate from CreditVoice accounts** in Stage 1. Linking the two (one login) can come later, only if it does not touch the live app's data.
 
 ## 11. Link with CreditVoice

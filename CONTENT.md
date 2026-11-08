@@ -269,6 +269,14 @@ The score moves slowly: at most ±6 points a day, so one bad day never wipes out
 - Their type never changes, so the lessons still work (Chidi still doesn't pay, whatever his name).
 - Saved with the game on the phone only. If real multiplayer comes later, shared custom text needs a rude-word check.
 
+## 7r. Accounts and cloud save
+
+- Optional: "Create account" or "Log in" on the start screen and in Settings; anyone can play as a guest.
+- Sign-up: username (3–20 letters or numbers, unique, checked against a basic list of rude words), age group (Under 13, 13 to 17, 18 or older) and a 4-number PIN. Under-13s play as guests.
+- The phone stays logged in; the PIN is only for a new phone. Five wrong PINs lock the account for 15 minutes.
+- The game saves to the account automatically. If this phone and the account have different games, the player chooses which to keep.
+- Settings has Log out and Delete my account (removes the account and cloud save).
+
 ## 8. Open points for review
 
 1. **Prices:** check every buy and sell price with traders in at least two markets.

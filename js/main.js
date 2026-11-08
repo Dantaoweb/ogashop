@@ -5,6 +5,7 @@ import { LEVELS } from './data.js';
 import { CUST, fmt, setCustom, resetCustom } from './core.js';
 import * as Voice from './voice.js';
 import * as Analytics from './analytics.js';
+import * as Account from './account.js';
 import { setGoal, clearGoal } from './goals.js';
 import { startRun } from './run.js';
 import * as Quiz from './quiz.js';
@@ -32,6 +33,69 @@ function load() {
 function save() {
   if (!s) return;
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(s)); } catch { /* storage full or blocked: keep playing */ }
+  if (Account.loggedIn()) { Account.markDirty(); pushSoon(); }
+}
+
+// ---------- Cloud save ----------
+
+let pushTimer = null;
+function pushSoon() {
+  if (!pushTimer) pushTimer = setTimeout(() => { pushTimer = null; pushNow(); }, 8000);
+}
+
+const summary = (g) => g && { level: g.level, day: g.day, score: g.score };
+
+async function pushNow({ force = false } = {}) {
+  if (!s || !Account.loggedIn()) return 'failed';
+  if (!force && !Account.current().dirty) return 'ok';
+  const result = await Account.push(JSON.stringify(s), { force });
+  if (result === 'conflict') await offerChoice();
+  return result;
+}
+
+function useCloud(cloud) {
+  const data = JSON.parse(cloud.data);
+  s = data.v === E.SAVE_VERSION ? E.migrate(data) : s;
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(s)); } catch { /* keep playing */ }
+  Account.adopted(cloud.version);
+  ui.buy = {};
+  ui.screen = s?.quiz ? 'quiz' : null;
+}
+
+async function offerChoice() {
+  const cloud = await Account.pull();
+  if (!cloud?.data) return;
+  ui.conflict = { cloud, cloudGame: summary(JSON.parse(cloud.data)), local: summary(s) };
+  ui.screen = 'conflict';
+  render();
+}
+
+// After logging in, or on opening the app: bring this phone and the account together.
+async function syncNow() {
+  const me = Account.current();
+  if (!me) return;
+  const cloud = await Account.pull();
+  if (!cloud) return;
+  if (!cloud.data) { if (s) await pushNow({ force: true }); return; }
+  if (cloud.version === Account.current()?.base) { if (Account.current()?.dirty) await pushNow(); return; }
+  if (!s || (!Account.current().dirty && Account.current().base > 0)) { useCloud(cloud); render(); return; }
+  await offerChoice();
+}
+
+async function accountForm(mode, f) {
+  ui.accountError = null;
+  if (mode === 'signup' && !f.age.value) { ui.accountError = 'Please choose your age group.'; render(); return; }
+  if (mode === 'signup' && f.age.value === 'under13') { ui.accountError = 'Players under 13 can play as guests.'; render(); return; }
+  ui.accountBusy = true;
+  render();
+  const err = mode === 'signup' ? await Account.signup(f.username.value, f.age.value, f.pin.value) : await Account.login(f.username.value, f.pin.value);
+  ui.accountBusy = false;
+  ui.accountError = err;
+  if (!err) {
+    ui.screen = s ? null : 'start';
+    await syncNow();
+  }
+  render();
 }
 
 function clearSave() {
@@ -40,6 +104,8 @@ function clearSave() {
 
 function view() {
   if (ui.screen === 'levels') return UI.levelsScreen(s);
+  if (ui.screen === 'account') return UI.accountScreen(ui);
+  if (ui.screen === 'conflict' && ui.conflict) return UI.conflictScreen({ cloud: ui.conflict.cloudGame, local: ui.conflict.local });
   if (ui.screen === 'start' || !s) {
     const info = s ? `Level ${s.level} · ${LEVELS[s.level].name} · Day ${s.day} · Score ${s.score}` : '';
     return UI.startScreen(ui, !!s, info);
@@ -274,6 +340,25 @@ const actions = {
   'set-voice': (arg) => { Voice.setEnabled(arg); },
   'challenge-play': () => { const c = s.today.challenge; if (c && !c.done) { s.today.challengeGame = Ch.startChallenge(c.type); ui.screen = 'challenge'; } },
   'challenge-skip': () => { E.skipChallenge(s); },
+  'account-open': (arg) => { ui.accountFrom = ui.screen === 'account' ? ui.accountFrom : ui.screen; ui.accountMode = arg; ui.accountError = null; ui.screen = 'account'; },
+  'account-back': () => { ui.accountError = null; ui.screen = ui.accountFrom ?? (s ? null : 'start'); ui.accountFrom = undefined; },
+  conflict: (arg) => {
+    const c = ui.conflict;
+    ui.conflict = null;
+    ui.screen = null;
+    if (arg === 'cloud') useCloud(c.cloud);
+    else pushNow({ force: true });
+  },
+  'account-logout': async () => {
+    ui.accountError = null;
+    if (s && Account.current().dirty && (await pushNow()) !== 'ok') { ui.accountError = "Couldn't save your game. Connect to data, then log out."; render(); return; }
+    await Account.logout();
+    clearSave();
+    s = null;
+    Object.assign(ui, { screen: 'start', startPath: null, confirmDelete: false, buy: {} });
+    render();
+  },
+  'account-delete': () => { ui.confirmDelete = true; ui.accountError = null; },
   consent: (arg) => { Analytics.setChoice(arg); },
   advert: () => { ui.error = E.putAdvert(s); },
   'edit-customer': (arg) => { ui.editing = arg || null; ui.error = null; },
@@ -393,6 +478,22 @@ app.addEventListener('input', (e) => {
 });
 
 app.addEventListener('submit', (e) => {
+  const accountFormEl = e.target.closest('[data-form="signup"], [data-form="login"]');
+  if (accountFormEl) {
+    e.preventDefault();
+    accountForm(accountFormEl.dataset.form, accountFormEl.elements);
+    return;
+  }
+  const deleteForm = e.target.closest('[data-form="delete-account"]');
+  if (deleteForm) {
+    e.preventDefault();
+    Account.remove(deleteForm.elements.pin.value).then((err) => {
+      ui.accountError = err;
+      if (!err) ui.confirmDelete = false;
+      render();
+    });
+    return;
+  }
   const customerForm = e.target.closest('[data-form="customer"]');
   if (customerForm) {
     e.preventDefault();
@@ -432,6 +533,9 @@ window.addEventListener('beforeinstallprompt', (e) => {
 
 // Counting: this visit, how long it took to load, and send what's waiting when there's data.
 Analytics.startVisit();
+syncNow();
+window.addEventListener('online', () => pushNow());
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') pushNow(); });
 window.addEventListener('load', () => setTimeout(() => {
   const nav = performance.getEntriesByType?.('navigation')?.[0];
   if (nav?.loadEventEnd > 0) Analytics.track('load', { v: Math.round(nav.loadEventEnd), once: 'first_load' });

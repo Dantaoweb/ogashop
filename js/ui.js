@@ -6,6 +6,8 @@ import { face, good, scene, levelPicture } from './art.js';
 import { goalStatus, daysToGoal, howLong } from './goals.js';
 import * as Voice from './voice.js';
 import * as Analytics from './analytics.js';
+import * as Account from './account.js';
+import { AGE_GROUPS } from './username.js';
 import { runnerSvg } from './run.js';
 import { EVENT_BY_ID } from './events.js';
 
@@ -121,6 +123,13 @@ function consentCard() {
     <div class="grid2">${btn('consent', 'Yes, share more', 'primary small', 'yes')}${btn('consent', 'No, just totals', 'secondary small', 'no')}</div></div>`;
 }
 
+function accountStartCard() {
+  const me = Account.current();
+  if (me) return `<div class="card soft" style="flex-direction:row;align-items:center;gap:10px">${icon('person', 20)}<span>Hello, <b>${esc(me.username)}</b>. Your game is saved to your account.</span></div>`;
+  return `<div class="card"><b>Save your game to an account</b><span class="small muted">Play on any phone. Or play as a guest below.</span>
+    <div class="grid2">${btn('account-open', 'Create account', 'primary small', 'signup')}${btn('account-open', 'Log in', 'secondary small', 'login')}</div></div>`;
+}
+
 export function startScreen(ui, hasSave, saveInfo) {
   const choice = (path, ico, bg, color, title, desc) => `
     <button type="button" class="path-btn" data-action="pick-path" data-arg="${path}" aria-pressed="${ui.startPath === path}">
@@ -130,6 +139,7 @@ export function startScreen(ui, hasSave, saveInfo) {
   return `<main class="screen">
     <div class="body" style="gap:24px;padding-top:40px">
       ${consentCard()}
+      ${accountStartCard()}
       <div class="center" style="display:flex;flex-direction:column;gap:12px">
         <div class="scene-card">${scene(1, { cid: 'mamabola', stock: { rice: 1, garri: 1, water: 1, recharge: 1 } })}</div>
         <h1 class="display" style="font-size:42px">Oga Shop</h1>
@@ -943,6 +953,43 @@ export function recordsScreen(s) {
   </main>`;
 }
 
+// ---------- Accounts ----------
+
+export function accountScreen(ui) {
+  const signup = ui.accountMode === 'signup';
+  const field = 'height:44px;border:1px solid var(--line-2);border-radius:12px;padding:0 12px;font-size:16px';
+  return `<main class="screen">
+    <header class="top"><div class="row"><button type="button" class="icon-btn" data-action="account-back" aria-label="Back" style="margin-left:-10px">${icon('back', 22, 2)}</button><h1 class="title display">${signup ? 'Create account' : 'Log in'}</h1></div></header>
+    <div class="body">
+      ${ui.accountError ? `<div class="toast" role="alert">${esc(ui.accountError)}</div>` : ''}
+      <form data-form="${signup ? 'signup' : 'login'}" class="card">
+        <label class="small muted" for="acc-name">Username</label>
+        <input id="acc-name" name="username" maxlength="20" autocomplete="username" autocapitalize="off" placeholder="e.g. Tunde_Shop" style="${field}">
+        ${signup ? `<span class="small muted">Don't use your real name. Other players may see this one day.</span>
+          <span class="small muted" style="margin-top:6px">How old are you?</span>
+          ${Object.entries(AGE_GROUPS).map(([id, label]) => `<label class="settings-opt" style="padding:4px 0"><input type="radio" name="age" value="${id}"><span>${esc(label)}</span></label>`).join('')}` : ''}
+        <label class="small muted" for="acc-pin">${signup ? 'Choose a 4-number PIN' : 'Your 4-number PIN'}</label>
+        <input id="acc-pin" name="pin" type="password" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="••••" style="${field}">
+        ${signup ? '<span class="small muted">You only need it on a new phone. Please remember it.</span>' : ''}
+        <button type="submit" class="btn primary small" ${ui.accountBusy ? 'disabled' : ''}>${ui.accountBusy ? 'Please wait…' : signup ? 'Create account' : 'Log in'}</button>
+      </form>
+      <button type="button" class="link" data-action="account-open" data-arg="${signup ? 'login' : 'signup'}" style="align-self:center;color:var(--green)">${signup ? 'I already have an account' : 'Create a new account'}</button>
+      ${btn('account-back', 'Play as a guest', 'secondary small block')}
+    </div></main>`;
+}
+
+// Two different games for the same account: the player chooses which to keep.
+export function conflictScreen(c) {
+  const line = (g) => (g ? `Level ${g.level} · Day ${g.day} · Score ${g.score}` : 'No game');
+  return `<main class="screen">
+    <header class="top"><h1 class="title display">Which game do you want?</h1></header>
+    <div class="body">
+      ${titi('This phone and your account have different games. The one you don\'t choose will be replaced.')}
+      <button type="button" class="choice primary" data-action="conflict" data-arg="cloud"><b>Game saved in your account</b><span>${esc(line(c.cloud))}</span></button>
+      <button type="button" class="choice" data-action="conflict" data-arg="local"><b>Game on this phone</b><span>${esc(line(c.local))}</span></button>
+    </div></main>`;
+}
+
 // ---------- Customize customers ----------
 
 export function customersScreen(s, ui) {
@@ -956,7 +1003,7 @@ export function customersScreen(s, ui) {
   }).join('');
   return `<main class="screen">
     <header class="top"><div class="row"><button type="button" class="icon-btn" data-action="close" aria-label="Back" style="margin-left:-10px">${icon('back', 22, 2)}</button><h1 class="title display">Customers</h1></div></header>
-    <div class="body">${titi('Give your customers names you know. What they buy and how they pay stays the same: Chidi still won\'t pay, whatever you call him. Saved only on this phone.')}
+    <div class="body">${titi('Give your customers names you know. What they buy and how they pay stays the same: Chidi still won\'t pay, whatever you call him. Saved with your game.')}
       <div style="display:flex;flex-direction:column;gap:8px">${rows}</div></div>
   </main>`;
 }
@@ -1148,6 +1195,24 @@ export function doneScreen(s) {
 
 // ---------- Settings ----------
 
+function accountSettings(s, ui) {
+  const me = Account.current();
+  if (!me) return `<div class="card"><h3>Account</h3><span class="small muted">You are playing as a guest. Your game is only on this phone.</span>
+    <div class="grid2">${btn('account-open', 'Create account', 'primary small', 'signup')}${btn('account-open', 'Log in', 'secondary small', 'login')}</div></div>`;
+  return `<div class="card"><h3>Account</h3>
+    <div class="between small"><span class="muted">Username</span><b>${esc(me.username)}</b></div>
+    <div class="between small"><span class="muted">Age group</span><b>${esc(AGE_GROUPS[me.age] || me.age)}</b></div>
+    <span class="small muted">${me.dirty ? 'Waiting to save when you have data.' : 'Your game is saved to your account.'}</span>
+    ${ui.accountError ? `<div class="toast" role="alert">${esc(ui.accountError)}</div>` : ''}
+    ${btn('account-logout', 'Log out', 'secondary small')}
+    ${ui.confirmDelete ? `<form data-form="delete-account" style="display:flex;flex-direction:column;gap:8px">
+        <span class="small" style="color:var(--red);font-weight:600">This deletes your account and cloud save for good. Enter your PIN to confirm.</span>
+        <label class="sr-only" for="del-pin">Your PIN</label><input id="del-pin" name="pin" type="password" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="4-number PIN" style="height:44px;border:1px solid var(--line-2);border-radius:12px;padding:0 12px;font-size:16px">
+        <button type="submit" class="btn small" style="background:var(--red);color:#fff">Delete my account</button></form>`
+      : btn('account-delete', 'Delete my account', 'secondary small')}
+  </div>`;
+}
+
 export function settingsScreen(s, ui) {
   const opt = (path, label, desc) => `<label class="settings-opt"><input type="radio" name="path" value="${path}" data-action="set-path" ${s.path === path ? 'checked' : ''}><span><b>${label}</b><div class="small muted">${desc}</div></span></label>`;
   return `<main class="screen">
@@ -1166,17 +1231,18 @@ export function settingsScreen(s, ui) {
         <b class="small">POS machine</b>
         ${Object.entries(PAYMENTS.pos).map(([id, label]) => `<label class="settings-opt" style="padding:6px 0"><input type="radio" name="pos" value="${id}" data-action="set-pos" ${s.payments.pos === id ? 'checked' : ''}><span>${esc(label)}${id === 'creditvoice' ? ' <span class="tag green">Records automatically</span>' : ''}</span></label>`).join('')}
       </div>
+      ${accountSettings(s, ui)}
       ${Voice.supported ? `<div class="card"><h3>Sound</h3>
         <label class="settings-opt"><input type="checkbox" data-action="set-voice" ${Voice.enabled() ? 'checked' : ''}><span><b>Customers speak</b><div class="small muted">Customers say what they want out loud, using your phone's voice. Their words also stay on screen.</div></span></label></div>` : ''}
       ${ui.canInstall ? `<div class="card"><h3>Add to home screen</h3><span class="small muted">Play like an app, even without data.</span>${btn('install', 'Install Oga Shop', 'secondary small')}</div>` : ''}
       <div class="card"><h3>Customers</h3><span class="small muted">Rename your customers, choose their voice and give them your own lines.</span>${btn('open', 'Edit customers', 'secondary small', 'customers')}</div>
       <div class="card"><h3>Levels</h3><span class="small muted">See all ${ALL_LEVELS.length} levels, what each one teaches, and how far you are.</span>${btn('open', 'See all levels', 'secondary small', 'levels')}</div>
       ${!Analytics.connected() ? '' : `<div class="card"><h3>Privacy</h3>
-        <span class="small muted">We count visits and game progress to improve Oga Shop. We never collect your name, phone number, sales or account number, and we don't use cookies.</span>
+        <span class="small muted">We count visits and game progress to improve Oga Shop. We never collect your real name, phone number or account number, and we don't use cookies. If you create an account, we keep your username, age group and saved game until you delete them.</span>
         ${[['yes', 'Share more', 'Totals, plus your progress linked to a random code.'], ['no', 'Just totals', 'Anonymous totals only. Nothing identifies you.'], ['off', "Don't count me", 'Nothing is sent.']].map(([id, label, desc]) => `<label class="settings-opt" style="padding:6px 0"><input type="radio" name="counting" value="${id}" data-action="consent" ${(Analytics.choice() ?? 'no') === id ? 'checked' : ''}><span><b>${label}</b><div class="small muted">${desc}</div></span></label>`).join('')}
       </div>`}
       <div class="card"><h3>About</h3>
-        <span class="small">Oga Shop is a free learning game by CreditVoice. There is no real money in the game. Your game is saved on this phone.</span>
+        <span class="small">Oga Shop is a free learning game by CreditVoice. There is no real money in the game. Your game is saved on this phone, and to your account if you have one.</span>
         <span class="small">CreditVoice does not lend money. Anything about loans or finance in the game is fiction.</span>
         <a class="small" href="${CREDITVOICE_URL}" target="_blank" rel="noopener">Visit CreditVoice</a></div>
       <div class="card"><h3>Start over</h3>

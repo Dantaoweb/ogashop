@@ -2,6 +2,8 @@
 // POST /e    receives counts from the game. IP addresses are never stored.
 // GET /stats?key=...    the private results page.
 import { normalize, summarize, statsPage } from './logic.mjs';
+import * as Accounts from './accounts.mjs';
+import { d1Store } from './store.mjs';
 
 const ORIGINS = ['https://dantaoweb.github.io', 'http://127.0.0.1:8765', 'http://localhost:8080'];
 
@@ -9,8 +11,8 @@ function cors(request) {
   const origin = request.headers.get('Origin');
   return {
     'Access-Control-Allow-Origin': ORIGINS.includes(origin) ? origin : ORIGINS[0],
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     Vary: 'Origin',
   };
 }
@@ -45,9 +47,33 @@ async function stats(url, env) {
   return new Response(statsPage(summarize(results)), { headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' } });
 }
 
+// Accounts and cloud saves.
+async function account(request, url, env) {
+  const store = d1Store(env.DB);
+  const ctx = { pepper: env.PIN_PEPPER, now: Date.now() };
+  const token = (request.headers.get('Authorization') || '').replace(/^Bearer /, '');
+  const text = request.method === 'POST' ? await request.text() : '';
+  if (text.length > Accounts.MAX_SAVE + 2000) return { status: 413, json: { error: 'Too large.' } };
+  let body = {};
+  if (text) { try { body = JSON.parse(text); } catch { return { status: 400, json: { error: 'Bad request.' } }; } }
+  if (url.pathname === '/account/signup') return Accounts.signup(store, body, ctx);
+  if (url.pathname === '/account/login') return Accounts.login(store, body, ctx);
+  const user = await Accounts.userFromToken(store, token);
+  if (!user) return { status: 401, json: { error: 'Please log in again.' } };
+  if (url.pathname === '/account/logout') return Accounts.logout(store, token);
+  if (url.pathname === '/account/delete') return Accounts.deleteAccount(store, user, body, ctx);
+  if (url.pathname === '/save' && request.method === 'GET') return Accounts.getSave(store, user);
+  if (url.pathname === '/save' && request.method === 'POST') return Accounts.putSave(store, user, body, ctx);
+  return { status: 404, json: { error: 'Not found.' } };
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    if (request.method !== 'OPTIONS' && (url.pathname.startsWith('/account/') || url.pathname === '/save')) {
+      const { status, json } = await account(request, url, env);
+      return new Response(JSON.stringify(json), { status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...cors(request) } });
+    }
     if (request.method === 'OPTIONS') return new Response(null, { headers: cors(request) });
     if (request.method === 'POST' && url.pathname === '/e') return receive(request, env);
     if (request.method === 'GET' && url.pathname === '/stats') return stats(url, env);

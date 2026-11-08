@@ -24,7 +24,7 @@ Plain HTML, CSS and JavaScript modules. No build step and no dependencies, so Gi
 | `js/voice.js` | Customers speaking, using the phone's own voice |
 | `js/run.js` | Market run mini-game (browser only) |
 | `js/bills.js`, `js/goals.js` | Big bills; savings goals |
-| `js/analytics.js`, `worker/` | Player counting, and its small server |
+| `js/analytics.js`, `js/account.js`, `js/username.js`, `worker/` | Player counting, accounts and cloud save, and the small server |
 | `js/ui.js` | Screens |
 | `js/main.js` | Saving, screen switching, button handling |
 | `sw.js` | Offline support (caches the game after the first visit) |
