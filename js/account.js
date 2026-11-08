@@ -33,7 +33,7 @@ function write() {
 export const current = () => read();
 export const loggedIn = () => !!read()?.token;
 
-async function call(path, { method = 'POST', body, auth = false } = {}) {
+export async function call(path, { method = 'POST', body, auth = false } = {}) {
   const headers = { 'Content-Type': 'application/json' };
   if (auth) headers.Authorization = `Bearer ${read()?.token}`;
   try {

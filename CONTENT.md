@@ -277,6 +277,16 @@ The score moves slowly: at most ±6 points a day, so one bad day never wipes out
 - The game saves to the account automatically. If this phone and the account have different games, the player chooses which to keep.
 - Settings has Log out and Delete my account (removes the account and cloud save).
 
+## 7s. Multiplayer markets *(tune)*
+
+- New games choose **Single player** (computer rivals) or **Multiplayer** (needs an account). Settings can switch later and keeps the game.
+- Multiplayer: choose 2–6 players, then **Quick join** (same size and level), **Create a market** (6-letter code) or **enter a code**.
+- Day by day: when a shop finishes a day it shares customers, sales, whether its prices are low or high, and any advert. Nobody waits for anyone.
+- Real rivals' low prices and adverts lower your share by at most 20%. Customers you lose go to real shops, and that player gets up to 2 extra customers the next day.
+- Computer shops fill empty places. A player away for 3 days is replaced by a computer shop; quick markets free the place after 7 days.
+- Players aged 13–17 appear as "Shop 3", never by username. No chat. Quick-join players move to a new market on levelling up; code markets stay together.
+- Impossible results are ignored, but the game runs on the phone, so results shouldn't be used for prizes. Cheap-deal grabs stay with computer rivals.
+
 ## 8. Open points for review
 
 1. **Prices:** check every buy and sell price with traders in at least two markets.

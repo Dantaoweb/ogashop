@@ -6,6 +6,7 @@ import { CUST, fmt, setCustom, resetCustom } from './core.js';
 import * as Voice from './voice.js';
 import * as Analytics from './analytics.js';
 import * as Account from './account.js';
+import * as Market from './market.js';
 import { setGoal, clearGoal } from './goals.js';
 import { startRun } from './run.js';
 import * as Quiz from './quiz.js';
@@ -82,6 +83,31 @@ async function syncNow() {
   await offerChoice();
 }
 
+// ---------- Multiplayer ----------
+
+async function marketCall(fn) {
+  ui.mpBusy = true;
+  ui.mpError = null;
+  render();
+  const r = await fn();
+  ui.mpBusy = false;
+  if (r.error) ui.mpError = r.error;
+  else if (s) { E.applyMarketView(s, r.view); save(); }
+  render();
+}
+
+// Share today's result, and pick up the latest from the other shops.
+async function marketSync(result) {
+  if (!s?.mp || !Account.loggedIn()) return;
+  const r = await Market.sync(result);
+  if (!s?.mp) return;
+  if (r.view) E.applyMarketView(s, r.view);
+  else if (r.status === 404) E.leaveMarketLocal(s);
+  else return;
+  save();
+  if (s.phase === 'morning' || ui.screen === 'multi') render();
+}
+
 async function accountForm(mode, f) {
   ui.accountError = null;
   if (mode === 'signup' && !f.age.value) { ui.accountError = 'Please choose your age group.'; render(); return; }
@@ -92,8 +118,9 @@ async function accountForm(mode, f) {
   ui.accountBusy = false;
   ui.accountError = err;
   if (!err) {
-    ui.screen = s ? null : 'start';
+    ui.screen = ui.accountFrom === 'multi' ? 'multi' : s ? null : 'start';
     await syncNow();
+    await marketSync();
   }
   render();
 }
@@ -115,6 +142,7 @@ function view() {
   if (ui.screen === 'prices') return UI.pricesScreen(s);
   if (ui.screen === 'goals') return UI.goalsScreen(s, ui);
   if (ui.screen === 'records') return UI.recordsScreen(s);
+  if (ui.screen === 'multi' && s) return UI.multiScreen(s, ui);
   if (ui.screen === 'customers') return UI.customersScreen(s, ui);
   if (ui.screen === 'challenge' && s.today.challengeGame) return UI.challengeScreen(s, s.today.challengeGame);
   if (ui.screen === 'levels') return UI.levelsScreen(s);
@@ -270,7 +298,7 @@ const actions = {
     if (!ui.startPath) return;
     if (s && !ui.confirmNew) { ui.confirmNew = true; return; }
     s = E.newGame(ui.startPath);
-    ui.screen = null;
+    ui.screen = ui.startMode === 'multi' ? 'multi' : null;
     ui.confirmNew = false;
     ui.buy = {};
   },
@@ -340,6 +368,19 @@ const actions = {
   'set-voice': (arg) => { Voice.setEnabled(arg); },
   'challenge-play': () => { const c = s.today.challenge; if (c && !c.done) { s.today.challengeGame = Ch.startChallenge(c.type); ui.screen = 'challenge'; } },
   'challenge-skip': () => { E.skipChallenge(s); },
+  'pick-mode': (arg) => { ui.startMode = arg; },
+  'mp-size': (arg) => { ui.mpSize = Number(arg); },
+  'mp-quick': () => { marketCall(() => Market.quickJoin(ui.mpSize || 4, s.level)); },
+  'mp-create': () => { marketCall(() => Market.createMarket(ui.mpSize || 4, s.level)); },
+  'mp-leave': async () => {
+    ui.mpBusy = true;
+    render();
+    const r = await Market.leave();
+    ui.mpBusy = false;
+    if (r.error) ui.mpError = r.error;
+    else { E.leaveMarketLocal(s); save(); }
+    render();
+  },
   'account-open': (arg) => { ui.accountFrom = ui.screen === 'account' ? ui.accountFrom : ui.screen; ui.accountMode = arg; ui.accountError = null; ui.screen = 'account'; },
   'account-back': () => { ui.accountError = null; ui.screen = ui.accountFrom ?? (s ? null : 'start'); ui.accountFrom = undefined; },
   conflict: (arg) => {
@@ -425,8 +466,12 @@ function countProgress(name, was) {
     Analytics.track('level_start', { k: '1', once: 'level_start_1', ...detail });
   }
   if (!was) return;
-  if (was.phase !== 'evening' && s.phase === 'evening') Analytics.track('day_done', { ...detail });
+  if (was.phase !== 'evening' && s.phase === 'evening') {
+    Analytics.track('day_done', { ...detail });
+    marketSync(E.dayResult(s));
+  }
   if (s.level > was.level) {
+    if (s.mp?.kind === 'quick') marketCall(() => Market.quickJoin(s.mp.size, s.level));
     Analytics.track('level_done', { k: String(was.level), once: `level_done_${was.level}`, ...detail });
     Analytics.track('level_start', { k: String(s.level), once: `level_start_${s.level}`, ...detail });
   }
@@ -494,6 +539,12 @@ app.addEventListener('submit', (e) => {
     });
     return;
   }
+  const codeForm = e.target.closest('[data-form="mp-code"]');
+  if (codeForm) {
+    e.preventDefault();
+    marketCall(() => Market.joinCode(codeForm.elements.code.value));
+    return;
+  }
   const customerForm = e.target.closest('[data-form="customer"]');
   if (customerForm) {
     e.preventDefault();
@@ -533,7 +584,7 @@ window.addEventListener('beforeinstallprompt', (e) => {
 
 // Counting: this visit, how long it took to load, and send what's waiting when there's data.
 Analytics.startVisit();
-syncNow();
+syncNow().then(() => marketSync());
 window.addEventListener('online', () => pushNow());
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') pushNow(); });
 window.addEventListener('load', () => setTimeout(() => {

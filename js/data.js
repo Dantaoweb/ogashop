@@ -29,6 +29,13 @@ export const RIVALS = [
   { id: 'emeka', name: 'Emeka Stores', price: 1.0, ticket: { 1: 2200, 2: 2800 } },
   { id: 'basira', name: "Iya Basira's Stall", price: 0.95, ticket: { 1: 1800, 2: 2400 } },
 ];
+// Computer shops that fill empty places in a market.
+export const RIVAL_POOL = [
+  ...RIVALS,
+  { id: 'nkechi', name: "Nkechi's Provisions", price: 1.02, ticket: { 1: 2000, 2: 2600 } },
+  { id: 'bello', name: 'Alhaji Bello Ventures', price: 0.98, ticket: { 1: 2100, 2: 2700 } },
+  { id: 'chioma', name: 'Chioma Mini Mart', price: 1.0, ticket: { 1: 1900, 2: 2500 } },
+];
 export const ADVERT = { cost: { 1: 1000, 2: 2000 }, days: 2, boost: 0.35 };
 // Where play counts go (see worker/). Empty = the game sends nothing.
 export const API_BASE = 'https://ogashop-counter.ogashop.workers.dev'; // accounts and cloud save

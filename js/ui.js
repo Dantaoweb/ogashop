@@ -123,6 +123,14 @@ function consentCard() {
     <div class="grid2">${btn('consent', 'Yes, share more', 'primary small', 'yes')}${btn('consent', 'No, just totals', 'secondary small', 'no')}</div></div>`;
 }
 
+// Single player or multiplayer, chosen when starting a game.
+function modePicker(ui) {
+  const mode = ui.startMode || 'single';
+  const opt = (id, title, desc) => `<button type="button" class="path-btn" data-action="pick-mode" data-arg="${id}" aria-pressed="${mode === id}" style="padding:12px 16px"><span><b style="font-size:16px">${title}</b><span class="d">${desc}</span></span></button>`;
+  return `<h2 class="small muted" style="text-transform:uppercase;letter-spacing:.06em;margin-top:8px">Who do you want to play with?</h2>
+    <div class="grid2">${opt('single', 'Single player', 'Computer rival shops.')}${opt('multi', 'Multiplayer', 'Real players. Needs an account.')}</div>`;
+}
+
 function accountStartCard() {
   const me = Account.current();
   if (me) return `<div class="card soft" style="flex-direction:row;align-items:center;gap:10px">${icon('person', 20)}<span>Hello, <b>${esc(me.username)}</b>. Your game is saved to your account.</span></div>`;
@@ -152,6 +160,7 @@ export function startScreen(ui, hasSave, saveInfo) {
       <div style="display:flex;flex-direction:column;gap:12px">
         ${choice('business', 'case', 'var(--green-soft)', 'var(--green)', 'I run a business', 'Real market situations. Fewer explanations, faster days.')}
         ${choice('learning', 'cap', 'var(--amber-soft)', 'var(--amber-ink)', 'I\'m learning business', 'A gentle start. tiTi explains each new idea as you go.')}
+        ${modePicker(ui)}
         <p class="small muted center" style="margin:0">Same levels and score either way. Switch any time in Settings.</p>
         <button type="button" class="link" data-action="open" data-arg="levels" style="align-self:center;color:var(--green)">See all ${ALL_LEVELS.length} levels</button>
       </div>
@@ -176,7 +185,7 @@ function marketMorning(s) {
     <div class="between small"><span>Your shop</span><b>${m.mine} expected</b></div>
     ${m.rivals.map((r) => {
       const deal = (s.mods.rivalDeals || []).find((d) => d.rival === r.id && !d.fake && d.until >= s.day);
-      return `<div class="between small"><span class="muted">${esc(r.name)}${deal ? ` <span class="tag amber">${esc(deal.what)} until Day ${deal.until}</span>` : ''}</span><span class="muted">${r.customers}</span></div>`;
+      return `<div class="between small"><span class="muted">${esc(r.name)}${r.real ? ' <span class="tag green">Player</span>' : ''}${deal ? ` <span class="tag amber">${esc(deal.what)} until Day ${deal.until}</span>` : ''}</span><span class="muted">${r.customers}${r.real ? ' yesterday' : ''}</span></div>`;
     }).join('')}
     ${m.parts.length ? `<span class="small muted">${m.parts.map(([label, v]) => `${esc(label)} ${v > 0 ? '+' : ''}${Math.round(v * 100)}%`).join(' · ')}</span>` : '<span class="small muted">Win more customers: an advert, good prices, loyal customers, full stock.</span>'}
     ${advertUp ? `<span class="tag green" style="align-self:flex-start">${icon('star', 12)} Your advert is up until Day ${s.mods.advertUntil}</span>`
@@ -188,12 +197,12 @@ function marketEvening(s) {
   const t = s.today;
   const m = t.market;
   if (!m) return '';
-  const ticket = (r) => RIVALS.find((x) => x.id === r.id).ticket[s.level] || 2000;
+  const ticket = (r) => r.ticket?.[s.level] || RIVALS.find((x) => x.id === r.id)?.ticket[s.level] || 2000;
   const rows = [
     `<div class="between small"><b>Your shop</b><b>${t.sales} customer${t.sales === 1 ? '' : 's'} · ${fmt(t.salesValue)}</b></div>`,
-    ...m.rivals.map((r) => { const n = r.customers + r.won; return `<div class="between small"><span>${esc(r.name)}</span><span>${n} customers · about ${fmt(Math.round((n * ticket(r)) / 50) * 50)}</span></div>`; }),
+    ...m.rivals.map((r) => { if (r.real) return `<div class="between small"><span>${esc(r.name)} <span class="tag green">Player</span></span><span>${r.customers} customers · ${fmt(r.sales || 0)}${r.won ? ` · +${r.won} from you` : ''}</span></div>`; const n = r.customers + r.won; return `<div class="between small"><span>${esc(r.name)}</span><span>${n} customers · about ${fmt(Math.round((n * ticket(r)) / 50) * 50)}</span></div>`; }),
   ].join('');
-  const lost = t.lostTo.length ? `<span class="small" style="color:var(--red);font-weight:600">You lost ${t.lostTo.length} customer${t.lostTo.length > 1 ? 's' : ''} to rivals: ${t.lostTo.map((l) => `${CUST[l.cid].name} → ${RIVALS.find((x) => x.id === l.rival).name}`).join(', ')}.</span>` : '<span class="small muted">You didn\'t lose any customers to rivals today.</span>';
+  const lost = t.lostTo.length ? `<span class="small" style="color:var(--red);font-weight:600">You lost ${t.lostTo.length} customer${t.lostTo.length > 1 ? 's' : ''} to rivals: ${t.lostTo.map((l) => `${CUST[l.cid].name} → ${(m.rivals.find((x) => x.id === l.rival)?.name || 'a rival')}`).join(', ')}.</span>` : '<span class="small muted">You didn\'t lose any customers to rivals today.</span>';
   return `<div class="card"><h3>The market today</h3>${rows}${lost}</div>`;
 }
 
@@ -990,6 +999,46 @@ export function conflictScreen(c) {
     </div></main>`;
 }
 
+// ---------- Multiplayer ----------
+
+export function multiScreen(s, ui) {
+  const header = `<header class="top"><div class="row"><button type="button" class="icon-btn" data-action="close" aria-label="Back" style="margin-left:-10px">${icon('back', 22, 2)}</button><h1 class="title display">Multiplayer</h1></div></header>`;
+  const error = ui.mpError ? `<div class="toast" role="alert">${esc(ui.mpError)}</div>` : '';
+  if (!Account.loggedIn()) {
+    return `<main class="screen">${header}<div class="body">
+      ${titi('To play against real shops you need an account, so other players can find your market.')}
+      <div class="grid2">${btn('account-open', 'Create account', 'primary small', 'signup')}${btn('account-open', 'Log in', 'secondary small', 'login')}</div>
+      ${btn('close', 'Play single player instead', 'secondary small block')}
+    </div></main>`;
+  }
+  if (s.mp) {
+    const rows = s.mp.shops.map((x) => `<div class="between small"><span>${esc(x.name)}${x.you ? ' <span class="tag green">You</span>' : ''}${x.active ? '' : ' <span class="muted">(away)</span>'}</span><span class="muted">${x.customers} customers · ${fmt(x.sales)}</span></div>`).join('');
+    const empty = s.mp.size - s.mp.shops.length;
+    return `<main class="screen">${header}<div class="body">${error}
+      ${s.mp.code ? `<div class="card strong" style="align-items:center;text-align:center"><span class="small muted">Share this market code with friends</span><b class="display" style="font-size:34px;letter-spacing:.12em">${esc(s.mp.code)}</b></div>` : ''}
+      <div class="card"><h3>Your market: ${s.mp.size} shops</h3>${rows}
+        ${empty > 0 ? `<span class="small muted">${empty} place${empty > 1 ? 's are' : ' is'} open. Computer shops fill ${empty > 1 ? 'them' : 'it'} until players join.</span>` : ''}</div>
+      ${titi('Shops are compared day by day, so nobody has to wait. Customers you lose go to these shops.')}
+      ${btn('close', 'Back to my shop', 'primary small block')}
+      ${btn('mp-leave', 'Leave this market', 'secondary small block', '', ui.mpBusy ? 'disabled' : '')}
+    </div></main>`;
+  }
+  const size = ui.mpSize || 4;
+  const sizes = [2, 3, 4, 5, 6].map((n) => `<button type="button" class="note-btn" style="min-height:52px;${n === size ? 'background:var(--green);color:#fff;border-color:var(--green)' : ''}" data-action="mp-size" data-arg="${n}" aria-pressed="${n === size}">${n}</button>`).join('');
+  const busy = ui.mpBusy ? 'disabled' : '';
+  return `<main class="screen">${header}<div class="body">${error}
+    <div class="card"><h3>How many players?</h3><span class="small muted">Including you.</span>
+      <div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px">${sizes}</div></div>
+    ${btn('mp-quick', `Quick join: find a market of ${size}`, 'primary block', '', busy)}
+    ${btn('mp-create', `Create a market of ${size} and get a code`, 'secondary block', '', busy)}
+    <form data-form="mp-code" class="card"><h3>Have a market code?</h3>
+      <label class="sr-only" for="mp-code">Market code</label>
+      <input id="mp-code" name="code" maxlength="6" autocomplete="off" autocapitalize="characters" placeholder="ABCDEF" style="height:44px;border:1px solid var(--line-2);border-radius:12px;padding:0 12px;font-size:18px;letter-spacing:.12em;text-transform:uppercase">
+      <button type="submit" class="btn secondary small" ${busy}>Join this market</button></form>
+    ${btn('close', 'Not now, keep single player', 'secondary small block')}
+  </div></main>`;
+}
+
 // ---------- Customize customers ----------
 
 export function customersScreen(s, ui) {
@@ -1235,6 +1284,7 @@ export function settingsScreen(s, ui) {
       ${Voice.supported ? `<div class="card"><h3>Sound</h3>
         <label class="settings-opt"><input type="checkbox" data-action="set-voice" ${Voice.enabled() ? 'checked' : ''}><span><b>Customers speak</b><div class="small muted">Customers say what they want out loud, using your phone's voice. Their words also stay on screen.</div></span></label></div>` : ''}
       ${ui.canInstall ? `<div class="card"><h3>Add to home screen</h3><span class="small muted">Play like an app, even without data.</span>${btn('install', 'Install Oga Shop', 'secondary small')}</div>` : ''}
+      <div class="card"><h3>Multiplayer</h3><span class="small muted">${s.mp ? `You are in a market of ${s.mp.size} shops.` : 'Compete with real players, or with friends using a market code.'}</span>${btn('open', s.mp ? 'See my market' : 'Play with others', 'secondary small', 'multi')}</div>
       <div class="card"><h3>Customers</h3><span class="small muted">Rename your customers, choose their voice and give them your own lines.</span>${btn('open', 'Edit customers', 'secondary small', 'customers')}</div>
       <div class="card"><h3>Levels</h3><span class="small muted">See all ${ALL_LEVELS.length} levels, what each one teaches, and how far you are.</span>${btn('open', 'See all levels', 'secondary small', 'levels')}</div>
       ${!Analytics.connected() ? '' : `<div class="card"><h3>Privacy</h3>

@@ -1,7 +1,7 @@
 // The game rules: one day = morning → customers (+ one event) → evening → score.
 // Pure state changes, no DOM, so it can be tested in Node.
 import {
-  GOODS, START_CASH, START_STOCK, START_PAY, PAY_STEP, PAYMENTS, HOSPITAL, RIVALS, ADVERT, RULES, LEVELS, BADGES, NOTE_ORDER, CUSTOMERS, REACTIONS,
+  GOODS, START_CASH, START_STOCK, START_PAY, PAY_STEP, PAYMENTS, HOSPITAL, RIVALS, RIVAL_POOL, ADVERT, RULES, LEVELS, BADGES, NOTE_ORDER, CUSTOMERS, REACTIONS,
 } from './data.js';
 import {
   CUST, fmt, clamp, randInt, round50, pick, pickWeighted, goodsForLevel, buyPrice, refPrice, expense, describeItems,
@@ -26,7 +26,7 @@ export function newGame(path, rng = Math.random) {
     stats: { recW: 0, totW: 0, dueAmt: 0, paidOnTime: 0, days: 0, cleanDays: 0, repaid: 0, lost: 0, noLateStreak: 0, pocketPays: 0, capitalTakes: 0, overpayStreak: 0, served: 0, unhappy: 0, billsPaid: 0, billsLateDays: 0, changeRight: 0, goodChecks: 0 },
     badges: [], seen: {}, eventLog: {}, mods: {}, history: [], goal: null, goalsReached: [], sales: [], quizLog: [], quiz: null,
     payments: { account: 'creditvoice', accountNumber: PAYMENTS.defaultAccountNumber, pos: 'creditvoice' },
-    skills: {}, challengeLog: [],
+    skills: {}, challengeLog: [], mp: null,
     phase: 'morning', today: null,
   };
   for (const id of Object.keys(GOODS)) {
@@ -107,6 +107,7 @@ export function migrate(s) {
   s.goal ??= null;
   s.custom ??= {};
   applyCustom(s);
+  s.mp ??= null;
   s.skills ??= {};
   if (s.today) { s.today.lostTo ??= []; s.today.market ??= null; }
   s.challengeLog ??= [];
@@ -216,6 +217,12 @@ export function attraction(s) {
   if (loyal > 0.1) parts.push(['Loyal customers', loyal * 0.2]);
   const asked = Object.values(s.lastAsks || {}).reduce((a, n) => a + n, 0);
   if (asked >= 3) parts.push(['Goods ran out yesterday', -0.15]);
+  // Real rival shops: their low prices and adverts pull customers away, up to a limit.
+  const real = marketRivals(s).filter((r) => r.real);
+  if (real.length) {
+    const effect = clamp(real.reduce((a, r) => a + (r.priceWord === 'low' ? -0.07 : r.priceWord === 'high' ? 0.05 : 0) + (r.advert ? -0.05 : 0), 0), -0.2, 0.2);
+    if (effect) parts.push(['Rival shops', effect]);
+  }
   for (const d of s.mods.rivalDeals || []) {
     if (d.fake && d.from === s.day - 1) parts.push([`${d.name} sold fake goods`, 0.1]);
     else if (!d.fake && d.until >= s.day) parts.push([`${d.name} has ${d.what}`, -0.1]);
@@ -224,28 +231,80 @@ export function attraction(s) {
 }
 
 // Today's market: how many customers come to the market, and how many choose your shop.
+// The other shops in your market: real players first, computer shops in any empty place.
+export function marketRivals(s) {
+  if (!s.mp?.shops) return RIVALS.map((r) => ({ ...r, real: false }));
+  const real = s.mp.shops.filter((x) => !x.you && x.active).map((x) => ({
+    id: `slot${x.slot}`, slot: x.slot, name: x.name, real: true, priceWord: x.price, advert: x.advert,
+    price: x.price === 'low' ? 0.92 : x.price === 'high' ? 1.08 : 1, lastCustomers: x.customers, lastSales: x.sales,
+  }));
+  const bots = RIVAL_POOL.slice(0, Math.max(0, s.mp.size - 1 - real.length)).map((r) => ({ ...r, real: false }));
+  return [...real, ...bots];
+}
+
+// What the server tells us about the market.
+export function applyMarketView(s, v) {
+  s.mp = { size: v.market.size, kind: v.market.kind, code: v.market.code, level: v.market.level, you: v.you, shops: v.shops, pendingWins: [...(s.mp?.pendingWins || []), ...(v.wins || [])] };
+  refreshMorningMarket(s);
+}
+
+// Before the shop opens, show the current shops; your customer count for today stays the same.
+function refreshMorningMarket(s) {
+  const t = s.today;
+  if (s.phase !== 'morning' || !t?.market) return;
+  const mine = t.market.mine;
+  t.market = { ...planMarket(s, mine, Math.random), mine };
+}
+
+export function leaveMarketLocal(s) {
+  s.mp = null;
+  refreshMorningMarket(s);
+}
+
+// Today's result to share with the market.
+export function dayResult(s) {
+  const t = s.today;
+  const goods = goodsForLevel(s.level);
+  const cheaper = goods.reduce((a, id) => a + (refPrice(s, id) - s.prices[id]) / refPrice(s, id), 0) / goods.length;
+  const lost = {};
+  for (const l of t.lostTo) if (String(l.rival).startsWith('slot')) { const slot = Number(String(l.rival).slice(4)); lost[slot] = (lost[slot] || 0) + 1; }
+  return {
+    customers: t.sales, sales: Math.round(t.salesValue), price: cheaper >= 0.02 ? 'low' : cheaper <= -0.02 ? 'high' : 'normal',
+    advert: (s.mods.advertUntil ?? 0) >= s.day, level: s.level, gameDay: s.day,
+    lost: Object.entries(lost).map(([slot, count]) => ({ slot: Number(slot), count })),
+  };
+}
+
 function planMarket(s, n, rng) {
-  const size = Math.round(n * (1 + RIVALS.length) + randInt(rng, 0, 2));
+  const list = marketRivals(s);
+  const size = Math.round(n * (1 + list.length) + randInt(rng, 0, 2));
   const att = attraction(s);
   const mine = Math.max(3, Math.min(size - 2, Math.round(n * att.factor)));
   const rest = size - mine;
-  const weights = RIVALS.map((r) => 1 / r.price);
+  const bots = list.filter((r) => !r.real);
+  const weights = bots.map((r) => 1 / r.price);
   const total = weights.reduce((a, w) => a + w, 0);
   let left = rest;
-  const rivals = RIVALS.map((r, i) => {
-    const c = i === RIVALS.length - 1 ? left : Math.round((rest * weights[i]) / total);
+  const shares = new Map(bots.map((r, i) => {
+    const c = i === bots.length - 1 ? left : Math.round((rest * weights[i]) / total);
     left -= c;
-    return { id: r.id, name: r.name, customers: c, won: 0 };
-  });
+    return [r.id, c];
+  }));
+  // Real shops show their latest day; computer shops share out the rest of the market.
+  const rivals = list.map((r) => ({
+    id: r.id, name: r.name, real: r.real, price: r.price, won: 0,
+    ...(r.real ? { customers: r.lastCustomers || 0, sales: r.lastSales || 0 } : { customers: shares.get(r.id), ticket: r.ticket }),
+  }));
   return { size, mine, rivals, parts: att.parts };
 }
 
 // A customer who leaves without buying goes to a rival (the cheaper rival a bit more often).
 function pickRival(s) {
-  const w = RIVALS.map((r) => 1 / r.price);
+  const list = s.today?.market?.rivals?.length ? s.today.market.rivals : RIVALS;
+  const w = list.map((r) => 1 / (r.price || 1));
   let x = Math.random() * w.reduce((a, b) => a + b, 0);
-  for (let i = 0; i < RIVALS.length; i++) { x -= w[i]; if (x < 0) return RIVALS[i]; }
-  return RIVALS[0];
+  for (let i = 0; i < list.length; i++) { x -= w[i]; if (x < 0) return list[i]; }
+  return list[0];
 }
 
 function tagLost(s) {
@@ -284,6 +343,13 @@ function makeQueue(s, rng) {
   if (s.mods.rush) { lo = Math.round(lo * 1.6); hi = Math.round(hi * 1.6); }
   let n = randInt(rng, lo, hi);
   if (s.mods.fewer) { n = Math.max(3, n - s.mods.fewer); delete s.mods.fewer; }
+  // Customers won from other players yesterday (up to 2 extra a day).
+  if (s.mp?.pendingWins?.length) {
+    const total = s.mp.pendingWins.reduce((a, w) => a + w.count, 0);
+    for (const w of s.mp.pendingWins) s.today.notices.push(`You won ${w.count} customer${w.count > 1 ? 's' : ''} from ${w.from} yesterday.`);
+    s.mp.pendingWins = [];
+    n += Math.min(2, total);
+  }
   s.today.market = planMarket(s, n, rng);
   n = s.today.market.mine;
   const available = (type) => CUSTOMERS.filter((c) => c.type === type && s.customers[c.id].skipUntil <= s.day).map((c) => c.id);

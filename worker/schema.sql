@@ -46,3 +46,38 @@ CREATE TABLE IF NOT EXISTS saves (
   version INTEGER NOT NULL,
   updated_at INTEGER NOT NULL
 );
+
+-- Multiplayer markets. A player is in one market at a time.
+CREATE TABLE IF NOT EXISTS markets (
+  id TEXT PRIMARY KEY,
+  code TEXT UNIQUE NOT NULL,
+  size INTEGER NOT NULL,
+  level INTEGER NOT NULL,
+  kind TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS markets_open ON markets (kind, size, level);
+
+CREATE TABLE IF NOT EXISTS members (
+  user_key TEXT PRIMARY KEY,
+  market_id TEXT NOT NULL,
+  username TEXT NOT NULL,
+  age TEXT NOT NULL,
+  slot INTEGER NOT NULL,
+  last_seen INTEGER NOT NULL,
+  customers INTEGER NOT NULL DEFAULT 0,
+  sales INTEGER NOT NULL DEFAULT 0,
+  price TEXT NOT NULL DEFAULT 'normal',
+  advert INTEGER NOT NULL DEFAULT 0,
+  level INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS members_market ON members (market_id);
+
+CREATE TABLE IF NOT EXISTS wins (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_key TEXT NOT NULL,
+  from_name TEXT NOT NULL,
+  count INTEGER NOT NULL,
+  at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS wins_user ON wins (user_key);

@@ -103,6 +103,7 @@ export async function logout(store, token) {
 export async function deleteAccount(store, user, body, ctx) {
   const problem = await checkPin(store, user, body?.pin, ctx);
   if (problem) return problem;
+  await ctx.beforeDelete?.();
   await store.deleteUser(user.key);
   return reply(200, { ok: true });
 }

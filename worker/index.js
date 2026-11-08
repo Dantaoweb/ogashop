@@ -4,6 +4,7 @@
 import { normalize, summarize, statsPage } from './logic.mjs';
 import * as Accounts from './accounts.mjs';
 import { d1Store } from './store.mjs';
+import * as Markets from './markets.mjs';
 
 const ORIGINS = ['https://dantaoweb.github.io', 'http://127.0.0.1:8765', 'http://localhost:8080'];
 
@@ -60,8 +61,13 @@ async function account(request, url, env) {
   if (url.pathname === '/account/login') return Accounts.login(store, body, ctx);
   const user = await Accounts.userFromToken(store, token);
   if (!user) return { status: 401, json: { error: 'Please log in again.' } };
+  if (url.pathname === '/market/quick') return Markets.quick(store, user, body, ctx);
+  if (url.pathname === '/market/create') return Markets.create(store, user, body, ctx);
+  if (url.pathname === '/market/join') return Markets.join(store, user, body, ctx);
+  if (url.pathname === '/market/sync') return Markets.sync(store, user, body, ctx);
+  if (url.pathname === '/market/leave') return Markets.leave(store, user);
   if (url.pathname === '/account/logout') return Accounts.logout(store, token);
-  if (url.pathname === '/account/delete') return Accounts.deleteAccount(store, user, body, ctx);
+  if (url.pathname === '/account/delete') return Accounts.deleteAccount(store, user, body, { ...ctx, beforeDelete: () => Markets.leave(store, user) });
   if (url.pathname === '/save' && request.method === 'GET') return Accounts.getSave(store, user);
   if (url.pathname === '/save' && request.method === 'POST') return Accounts.putSave(store, user, body, ctx);
   return { status: 404, json: { error: 'Not found.' } };
@@ -70,7 +76,7 @@ async function account(request, url, env) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    if (request.method !== 'OPTIONS' && (url.pathname.startsWith('/account/') || url.pathname === '/save')) {
+    if (request.method !== 'OPTIONS' && (url.pathname.startsWith('/account/') || url.pathname.startsWith('/market/') || url.pathname === '/save')) {
       const { status, json } = await account(request, url, env);
       return new Response(JSON.stringify(json), { status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...cors(request) } });
     }
