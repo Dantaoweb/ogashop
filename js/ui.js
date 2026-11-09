@@ -80,8 +80,13 @@ function titi(text, extra = '') {
   return `<div class="titi-tip"${extra}><span class="avatar">tiTi</span><p>${text}</p></div>`;
 }
 
+// One "New idea" card per screen, so the player isn't asked to read two at once.
+let explainShown = false;
+export function startRender() { explainShown = false; }
+
 function explain(s, key) {
-  if (!isGuided(s) || s.seen['ex_' + key]) return '';
+  if (!isGuided(s) || s.seen['ex_' + key] || explainShown) return '';
+  explainShown = true;
   return `<div class="card explain"><div class="row"><span class="avatar">tiTi</span><b>New idea</b></div>
     <p style="margin:0;font-size:15px">${esc((isJunior(s) && EXPLAIN_JUNIOR[key]) || EXPLAIN[key])}</p>
     <button type="button" class="btn small secondary" data-action="seen" data-arg="ex_${key}">Got it</button></div>`;
@@ -95,12 +100,19 @@ function dayCount(s) {
   return `Day ${d} of ${LEVEL_DAYS} · ${left ? `${left} day${left > 1 ? 's' : ''} left` : 'last day'}`;
 }
 
+// Short enough for one line: "L1 · Stage 2/3 · Day 3/7".
+function shortCount(s) {
+  const d = levelDay(s);
+  const st = currentStage(s);
+  return `L${s.level}${st ? ` · Stage ${st.index + 1}/3` : ''} · ${d > LEVEL_DAYS ? `Extra day ${d - LEVEL_DAYS}` : `Day ${d}/${LEVEL_DAYS}`}`;
+}
+
 function topBar(s, { title, kicker, tiles = true, dark = false } = {}) {
   const owed = openDebts(s, { recordedOnly: true }).length;
-  return `<header class="top${dark ? ' dark' : ''}">
-    <div class="between">
-      <div class="grow"><div class="kicker">${esc(kicker || `Level ${s.level}${currentStage(s) ? ` · Stage ${currentStage(s).index + 1} of 3` : ''} · ${dayCount(s)}`)}</div>
-        <h1 class="title display">${esc(title)}</h1></div>
+  return `<header class="top${dark ? ' dark' : ''}" style="gap:8px">
+    <div class="kicker" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(kicker || shortCount(s))}</div>
+    <div class="between" style="margin-top:-6px">
+      <div class="grow"><h1 class="title display">${esc(title)}</h1></div>
       ${healingMark(s)}
       <span class="pill" aria-label="Business score ${s.score}">Score ${s.score}</span>
       <button type="button" class="icon-btn" data-action="open" data-arg="records" aria-label="My records">${icon('doc')}</button>
@@ -819,7 +831,7 @@ export function eventScreen(s) {
   const v = eventView(s);
   const choices = v.choices.map((c, i) => `<button type="button" class="choice${i === 0 ? ' primary' : ''}" data-action="event" data-arg="${i}" ${c.disabled ? 'disabled' : ''}>
       <b>${esc(c.label)}</b><span>${esc(c.disabled || c.sub || '')}</span></button>`).join('');
-  return `<main class="screen"><div class="event-wrap"><div class="sheet" role="dialog" aria-labelledby="ev-title">
+  return `<main class="screen"><div class="event-wrap"><div class="ev-backdrop" aria-hidden="true">${scene(s.level, { stock: s.stock })}</div><div class="sheet" role="dialog" aria-labelledby="ev-title">
     <div class="between"><span class="tag solid" style="text-transform:uppercase;letter-spacing:.08em">Event</span><span class="small muted" style="font-weight:600">Day ${s.day}</span></div>
     <div class="ev-icon">${icon(v.icon, 36)}</div>
     <div style="display:flex;flex-direction:column;gap:8px"><h1 id="ev-title" class="display" style="font-size:28px">${esc(v.title)}</h1>

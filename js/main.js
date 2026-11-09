@@ -274,6 +274,7 @@ function sayFrom(el) {
   Voice.speak(el.dataset.say, { who: cid, she: !!CUST[cid]?.she });
 }
 function render() {
+  UI.startRender();
   app.innerHTML = view();
   // Scroll to top when the screen changes, and keep the chat in view on the tiTi screen.
   const key = `${ui.screen}|${s?.phase}|${s?.day}|${s?.today?.idx}`;
