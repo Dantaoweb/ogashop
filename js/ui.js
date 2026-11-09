@@ -7,6 +7,7 @@ import { face, good, scene, levelPicture } from './art.js';
 import { currentStage, stageProgress, STAGES } from './stages.js';
 import { goalStatus, daysToGoal, howLong, delayNote } from './goals.js';
 import * as Voice from './voice.js';
+import * as Fx from './fx.js';
 import * as Analytics from './analytics.js';
 import * as Account from './account.js';
 import { AGE_GROUPS } from './username.js';
@@ -120,8 +121,8 @@ function topBar(s, { title, kicker, tiles = true, dark = false } = {}) {
       <button type="button" class="icon-btn" data-action="open" data-arg="settings" aria-label="Settings">${icon('gear')}</button>
     </div>
     ${tiles ? `<div class="grid3">
-      <div class="tile"><span>Cash</span><span>${fmt(s.cash)}</span></div>
-      <div class="tile"><span>Profit (level)</span><span>${fmt(s.levelProfit)}</span></div>
+      <div class="tile"><span>Cash</span><span data-count="cash" data-value="${Math.round(s.cash)}">${fmt(s.cash)}</span></div>
+      <div class="tile"><span>Profit (level)</span><span data-count="profit" data-value="${Math.round(s.levelProfit)}">${fmt(s.levelProfit)}</span></div>
       <div class="tile"><span>Owed to you</span><span>${fmt(owedToYou(s))}</span></div>
     </div>` : ''}
   </header>`;
@@ -465,7 +466,7 @@ export function customerScreen(s) {
   return `<main class="screen">
     <header class="top" style="flex-direction:row;align-items:center;justify-content:space-between">
       <div><div class="kicker">Day ${s.day} · Selling</div><div class="title display">${v.clock}</div></div>
-      <div class="row"><div style="text-align:right"><div class="kicker">Cash</div><b>${fmt(s.cash)}</b></div>
+      <div class="row"><div style="text-align:right"><div class="kicker">Cash</div><b data-count="cash" data-value="${Math.round(s.cash)}">${fmt(s.cash)}</b></div>
         ${healingMark(s)}
         <button type="button" class="icon-btn" data-action="open" data-arg="prices" aria-label="Change prices">${icon('tag')}</button>
         <button type="button" class="icon-btn" data-action="open" data-arg="debts" aria-label="Who owes you">${icon('people')}</button></div>
@@ -847,7 +848,7 @@ export function eventScreen(s) {
 
 function stars(n) {
   return `<div class="row" style="gap:4px" role="img" aria-label="${n} of 3 stars">${[0, 1, 2].map((i) =>
-    `<svg width="28" height="28" viewBox="0 0 24 24" fill="${i < n ? '#F5B70A' : 'none'}" stroke="${i < n ? '#F5B70A' : '#6B7B71'}" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true">${PATHS.star}</svg>`).join('')}</div>`;
+    `<svg width="28" height="28" viewBox="0 0 24 24" ${i < n ? `class="star-on" style="animation-delay:${0.15 + i * 0.3}s"` : ''} fill="${i < n ? '#F5B70A' : 'none'}" stroke="${i < n ? '#F5B70A' : '#6B7B71'}" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true">${PATHS.star}</svg>`).join('')}</div>`;
 }
 
 // Everything that left the business today: costs (lower profit) and personal money (lower cash only).
@@ -899,7 +900,7 @@ export function eveningScreen(s, ui = {}) {
       ${happened.length ? `<div class="card"><h3>Today</h3>${happened.map((h) => `<span class="small">${esc(h)}</span>`).join('')}</div>` : ''}
       <div class="card"><h3>Who owes you</h3>${debtRows || '<span class="small muted">Nobody owes you money.</span>'}</div>
       <div class="card"><h3>Stock left</h3><div class="wrap">${goodsForLevel(s.level).map((id) => stockChip(s, id, 0)).join('')}</div></div>
-      ${t.goalReached ? `<div class="card soft pop" style="align-items:center;text-align:center"><span class="badge"><span class="disc">${icon('star', 26)}</span></span>
+      ${t.goalReached ? `<div class="card soft pop" data-confetti style="align-items:center;text-align:center"><span class="badge"><span class="disc">${icon('star', 26)}</span></span>
         <b style="font-size:20px">Goal reached: ${esc(t.goalReached.name)}!</b>
         <span class="small">You saved ${fmt(t.goalReached.price)} from your own pay${t.goalReached.days ? ` in ${t.goalReached.days} days` : ''}, without touching the business money.</span>
         ${btn('open', 'Choose your next goal', 'primary small', 'goals')}</div>` : ''}
@@ -941,7 +942,7 @@ export function scoreScreen(s) {
       <div style="display:flex;flex-direction:column;gap:8px"><h3 style="font-size:16px">Badges</h3>
         <div class="badges">${Object.entries(BADGES).map(([id, b]) => {
           const has = s.badges.includes(id);
-          return `<div class="badge${has ? '' : ' locked'}" title="${esc(b.desc)}"><span class="disc">${icon(has ? BADGE_ICON[id] : 'lock', 24)}</span>${esc(b.name)}${t.newBadges?.includes(id) ? '<span class="tag solid">New</span>' : ''}</div>`;
+          return `<div class="badge${has ? '' : ' locked'}${t.newBadges?.includes(id) ? ' new' : ''}" title="${esc(b.desc)}"><span class="disc">${icon(has ? BADGE_ICON[id] : 'lock', 24)}</span>${esc(b.name)}${t.newBadges?.includes(id) ? '<span class="tag solid">New</span>' : ''}</div>`;
         }).join('')}</div></div>
     </div>
     <div class="foot">${btn('score-next', t.levelUp ? `Finish Level ${s.level}!` : `Start Day ${s.day + 1}`, t.levelUp ? 'amber block' : 'primary block')}</div>
@@ -1313,7 +1314,7 @@ export function debtsScreen(s) {
 export function level2Screen() {
   const item = (ico, title, desc) => `<div class="row" style="align-items:flex-start"><span class="avatar" style="background:var(--green-dark)">${icon(ico, 16)}</span><div><b>${title}</b><div class="small" style="color:var(--green-text-on)">${desc}</div></div></div>`;
   return `<main class="screen hero"><div class="body center">
-      <span class="tag solid" style="align-self:center;text-transform:uppercase;letter-spacing:.08em">Level 1 complete</span>
+      <span class="tag solid" style="align-self:center;text-transform:uppercase;letter-spacing:.08em" data-confetti>Level 1 complete</span>
       <div class="scene-card">${scene(2, { stock: { noodles: 1, bread: 1, drinks: 1, palmoil: 1, rice: 1 } })}</div>
       <h1 class="display" style="font-size:32px">Welcome to The Shop!</h1>
       <p class="lead">Your table did well. Now you have a small shop with more goods and more customers.</p>
@@ -1329,7 +1330,7 @@ export function level2Screen() {
 export function doneScreen(s) {
   const st = s.stats;
   return `<main class="screen hero"><div class="body center">
-      <span class="tag solid" style="align-self:center;text-transform:uppercase;letter-spacing:.08em">Level 2 complete</span>
+      <span class="tag solid" style="align-self:center;text-transform:uppercase;letter-spacing:.08em" data-confetti>Level 2 complete</span>
       <div class="scene-card">${scene(2, { cid: 'mamabola', stock: { rice: 1, bread: 1, drinks: 1, palmoil: 1, water: 1 } })}</div>
       <h1 class="display" style="font-size:32px">You built The Shop!</h1>
       <p class="lead">From a ₦20,000 table to a shop that restocks on time and gets its debts back.</p>
@@ -1391,8 +1392,9 @@ export function settingsScreen(s, ui) {
         ${Object.entries(PAYMENTS.pos).map(([id, label]) => `<label class="settings-opt" style="padding:6px 0"><input type="radio" name="pos" value="${id}" data-action="set-pos" ${s.payments.pos === id ? 'checked' : ''}><span>${esc(label)}${id === 'creditvoice' ? ' <span class="tag green">Records automatically</span>' : ''}</span></label>`).join('')}
       </div>`}
       ${isJunior(s) && !Account.current() ? '' : accountSettings(s, ui)}
-      ${Voice.supported ? `<div class="card"><h3>Sound</h3>
-        <label class="settings-opt"><input type="checkbox" data-action="set-voice" ${Voice.enabled() ? 'checked' : ''}><span><b>Customers speak</b><div class="small muted">Customers say what they want out loud, using your phone's voice. Their words also stay on screen.</div></span></label></div>` : ''}
+      <div class="card"><h3>Sound</h3>
+        <label class="settings-opt"><input type="checkbox" data-action="set-sounds" ${Fx.enabled() ? 'checked' : ''}><span><b>Sounds and vibration</b><div class="small muted">A till sound when you sell, a soft buzz for mistakes, and a short phone vibration.</div></span></label>
+        ${Voice.supported ? `<label class="settings-opt"><input type="checkbox" data-action="set-voice" ${Voice.enabled() ? 'checked' : ''}><span><b>Customers speak</b><div class="small muted">Customers say what they want out loud, using your phone's voice. Their words also stay on screen.</div></span></label>` : ''}</div>
       ${ui.canInstall ? `<div class="card"><h3>Add to home screen</h3><span class="small muted">Play like an app, even without data.</span>${btn('install', 'Install Oga Shop', 'secondary small')}</div>` : ''}
       ${isJunior(s) ? '' : `<div class="card"><h3>Multiplayer</h3><span class="small muted">${s.mp ? `You are in a market of ${s.mp.size} shops.` : 'Compete with real players, or with friends using a market code.'}</span>${btn('open', s.mp ? 'See my market' : 'Play with others', 'secondary small', 'multi')}</div>`}
       <div class="card"><h3>Customers</h3><span class="small muted">Rename your customers, choose their voice and give them your own lines.</span>${btn('open', 'Edit customers', 'secondary small', 'customers')}</div>

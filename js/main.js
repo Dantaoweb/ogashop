@@ -4,6 +4,7 @@ import * as UI from './ui.js';
 import { LEVELS } from './data.js';
 import { CUST, fmt, setCustom, resetCustom } from './core.js';
 import * as Voice from './voice.js';
+import * as Fx from './fx.js';
 import * as Analytics from './analytics.js';
 import * as Account from './account.js';
 import * as Market from './market.js';
@@ -281,8 +282,10 @@ function render() {
   if (key !== lastKey) {
     window.scrollTo(0, 0);
     app.querySelector('[data-animate]')?.classList.add('enter');
+    celebrate();
   }
   lastKey = key;
+  rollNumbers();
   // Speak what the customer says, once per new line on screen.
   const say = app.querySelector('[data-say]');
   const said = say ? `${key}|${say.dataset.say}` : '';
@@ -396,6 +399,7 @@ const actions = {
   },
   'record-tap': (arg) => { E.recordTap(s, Number(arg)); },
   'set-voice': (arg) => { Voice.setEnabled(arg); },
+  'set-sounds': (arg) => { Fx.setEnabled(arg); if (arg) Fx.play('right'); },
   'challenge-play': () => { const c = s.today.challenge; if (c && !c.done) { s.today.challengeGame = Ch.startChallenge(c.type, Math.random, { roundTo: isJunior(s) ? 100 : 0 }); ui.screen = 'challenge'; } },
   'challenge-skip': () => { E.skipChallenge(s); },
   'pick-mode': (arg) => { ui.startMode = arg; },
@@ -534,11 +538,67 @@ function flushSoon() {
   if (!flushTimer) flushTimer = setTimeout(() => { flushTimer = null; Analytics.flush(); }, 5000);
 }
 
+// ---------- Game feel ----------
+
+// A screen that has just appeared: stars ring one by one, big wins get confetti.
+function celebrate() {
+  try {
+    app.querySelectorAll('.star-on').forEach((_, i) => setTimeout(() => Fx.play('star'), 150 + i * 300));
+    if (app.querySelector('[data-confetti]')) { Fx.confetti(); Fx.play('level'); Fx.buzz([40, 60, 40]); }
+  } catch { /* never break the game */ }
+}
+
+// Cash and profit roll to their new value instead of jumping.
+const shown = {};
+function rollNumbers() {
+  try {
+    for (const el of app.querySelectorAll('[data-count]')) {
+      const name = el.dataset.count;
+      const now = Number(el.dataset.value);
+      if (shown[name] != null && shown[name] !== now) Fx.countUp(el, shown[name], now, fmt);
+      shown[name] = now;
+    }
+  } catch { /* never break the game */ }
+}
+
+function chState() {
+  const g = s?.today?.challengeGame;
+  const r = g?.rounds?.[g.round];
+  return r ? { round: g.round, correct: g.correct, answered: r.picked != null || r.done != null } : null;
+}
+
+const feelBefore = () => (s?.today ? {
+  sales: s.today.sales, moneyIn: s.today.moneyIn, reaction: s.today.reaction, pending: s.today.pending,
+  recorded: s.today.pending?.recorded, chat: s.today.chat?.length || 0, ch: chState(),
+} : null);
+
+// Sounds and the little "+N" after what the player just did.
+function feel(b) {
+  try {
+    const t = s?.today;
+    if (!t || !b) return;
+    if (t.sales > b.sales) {
+      Fx.play('sale');
+      Fx.buzz(20);
+      if (t.moneyIn > b.moneyIn) Fx.floatText(`+${fmt(t.moneyIn - b.moneyIn)}`);
+    } else if (t.reaction && t.reaction !== b.reaction && t.reaction.mood === 'sad') {
+      Fx.play('wrong');
+      Fx.buzz([30, 40, 30]);
+    }
+    const c = chState();
+    if (c && b.ch && c.round === b.ch.round && c.answered && !b.ch.answered) Fx.play(c.correct > b.ch.correct ? 'right' : 'wrong');
+    if (t.pending && t.pending === b.pending && !b.recorded && t.pending.recorded) Fx.play('right');
+    else if ((t.chat?.length || 0) > b.chat && /^(Not quite|Almost)/.test(t.chat.at(-1)?.text || '')) Fx.play('wrong');
+  } catch { /* never break the game */ }
+}
+
 function run(name, arg) {
   const fn = actions[name];
   if (!fn) return;
   const was = snapshot();
+  const before = feelBefore();
   fn(arg);
+  feel(before);
   countProgress(name, was);
   flushSoon();
   save();
