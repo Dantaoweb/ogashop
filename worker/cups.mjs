@@ -5,7 +5,14 @@
 import { CHAMPION_ROUNDS, goodChallenge } from './markets.mjs';
 
 export const CUP_NAMES = ['Market Cup', 'Naira Masters', 'Oga Shop League', 'Traders Trophy', 'Golden Till Cup', 'Big Market Challenge', 'Friday Cup', 'Family Cup', 'Class Cup', 'Friends Cup'];
-export const CUP_EVENTS = ['score', 'profit', 'recording', 'debts', 'stocked', 'money', 'change', 'road', 'quiz'];
+export const CUP_EVENTS = ['score', 'profit', 'recording', 'debts', 'stocked', 'money', 'change', 'road', 'quiz', 'goal', 'keeper'];
+
+// House rules: habits every player must keep each game day. Amount rules carry a number.
+export const HOUSE_AMOUNTS = { save: [500, 20000, 500], cash: [0, 200000, 500], discount: [0, 50000, 50] };
+export const HOUSE_FLAGS = ['record', 'pocket', 'bills', 'prices'];
+export const KEPT_BONUS = 1;
+export const BROKEN_COST = 2;
+export const STRICT_OUT = 3;
 export const CUP_KINDS = { real: [3, 7, 14], game: [5, 7, 14] };
 export const CUP_POINTS = [10, 8, 6, 5, 4, 3, 2, 1];
 export const MIN_DAYS = 3;
@@ -34,6 +41,8 @@ function newCode() {
 
 export function eventValue(event, st = {}) {
   const b = st.biz;
+  if (event === 'goal') return b && b.goalPct != null ? b.goalPct : null;
+  if (event === 'keeper') return b && b.ruleDays > 0 ? b.keptDays : null;
   if (BUSINESS.includes(event)) return b && b.days >= MIN_DAYS && b[event] != null ? b[event] : null;
   if (event === 'quiz') return b && b.quizTotal >= MIN_QUIZ ? b.quizRight / b.quizTotal : null;
   return st[event] || null;
@@ -66,8 +75,21 @@ export function standings(cup, players) {
       if (r.place === 1) t.wins++;
     }
   }
-  const list = [...total.values()].sort((a, b) => b.points - a.points || b.wins - a.wins || a.p.slot - b.p.slot);
-  for (const t of list) t.place = 1 + list.filter((o) => o.points > t.points || (o.points === t.points && o.wins > t.wins)).length;
+  // House rules: +1 for each day all were kept, -2 for each day one was broken; never below zero.
+  // Strict: 3 broken days and the player leaves the table.
+  const ruled = hasRules(cup.house);
+  for (const t of total.values()) {
+    const b = t.p.stats?.biz || {};
+    t.kept = b.keptDays || 0;
+    t.broken = b.brokenDays || 0;
+    t.ruleDays = b.ruleDays || 0;
+    if (ruled) t.points = Math.max(0, t.points + KEPT_BONUS * t.kept - BROKEN_COST * t.broken);
+    t.out = ruled && !!cup.house.strict && t.broken >= STRICT_OUT;
+    if (t.out) t.points = 0;
+  }
+  const list = [...total.values()].sort((a, b) => a.out - b.out || b.points - a.points || b.wins - a.wins || a.p.slot - b.p.slot);
+  const inside = list.filter((t) => !t.out);
+  for (const t of list) t.place = t.out ? null : 1 + inside.filter((o) => o.points > t.points || (o.points === t.points && o.wins > t.wins)).length;
   return { tables, list };
 }
 
@@ -112,11 +134,11 @@ async function view(store, cup, user, now) {
       code: cup.code, name: cup.name, size: cup.size, kind: cup.kind, length: cup.length, events: cup.events,
       levelFrom: cup.levelFrom, levelTo: cup.levelTo, startMode: cup.startMode, startAt: cup.startAt,
       startedAt: cup.startedAt, endsAt: cup.endsAt, openUntil: cup.createdAt + OPEN_DAYS * DAY, status: st,
-      host: cup.by === user.key, locked: players.length > 1,
+      host: cup.by === user.key, locked: players.length > 1, house: cup.house || {},
     },
     registered: players.some(me),
     players: players.map((p) => ({ name: playerName(p), you: me(p), host: p.userKey === cup.by, days: started ? Math.min(daysPlayed(p), cup.kind === 'game' ? cup.length : Infinity) : null })),
-    standings: list.map((t) => ({ name: playerName(t.p), you: me(t.p), points: t.points, wins: t.wins, place: t.place })),
+    standings: list.map((t) => ({ name: playerName(t.p), you: me(t.p), points: t.points, wins: t.wins, place: t.place, out: t.out, kept: t.kept, broken: t.broken, ruleDays: t.ruleDays })),
     events: Object.fromEntries(Object.entries(tables).map(([e, rows]) => [e, rows.map((r) => ({ name: playerName(r.p), you: me(r.p), value: r.value, place: r.place, points: r.points }))])),
   });
 }
@@ -126,13 +148,48 @@ async function view(store, cup, user, now) {
 const ratio = (v) => v === null || (typeof v === 'number' && v >= 0 && v <= 1);
 const validLevel = (l) => Number.isInteger(l) && l >= 1 && l <= 7;
 
+const count = (v, max) => v == null || (Number.isInteger(v) && v >= 0 && v <= max);
+
+export function hasRules(h) {
+  return !!h && (Object.keys(HOUSE_AMOUNTS).some((k) => h[k] != null) || HOUSE_FLAGS.some((k) => h[k]) || !!h.goal);
+}
+
+// House rules from the host: only known rules, amounts in range and on their step.
+export function badHouse(h, events) {
+  if (h == null) h = {};
+  if (typeof h !== 'object' || Array.isArray(h)) return 'Bad house rules.';
+  for (const k of Object.keys(h)) if (!HOUSE_AMOUNTS[k] && !HOUSE_FLAGS.includes(k) && k !== 'goal' && k !== 'strict') return 'Bad house rules.';
+  for (const [k, [min, max, step]] of Object.entries(HOUSE_AMOUNTS)) {
+    const v = h[k];
+    if (v != null && (!Number.isInteger(v) || v < min || v > max || v % step)) return 'Check the amounts in the house rules.';
+  }
+  for (const k of HOUSE_FLAGS) if (h[k] != null && h[k] !== true) return 'Bad house rules.';
+  if (h.strict != null && typeof h.strict !== 'boolean') return 'Bad house rules.';
+  if (h.goal != null && !/^[a-z]{2,12}$/.test(h.goal)) return 'Choose the agreed goal.';
+  if (events.includes('goal') && !h.goal) return 'The savings event needs an agreed goal.';
+  if (events.includes('keeper') && !hasRules(h)) return 'The rule keeper event needs at least one house rule.';
+  return null;
+}
+
+const houseOf = (h = {}) => {
+  const out = {};
+  for (const k of Object.keys(HOUSE_AMOUNTS)) if (h[k] != null) out[k] = h[k];
+  for (const k of HOUSE_FLAGS) if (h[k]) out[k] = true;
+  if (h.goal) out.goal = h.goal;
+  if (h.strict && hasRules(out)) out.strict = true;
+  return out;
+};
+
 export function goodBiz(b) {
   return !!b && Number.isInteger(b.days) && b.days >= 0 && b.days <= 2000
     && Number.isInteger(b.score) && b.score >= 0 && b.score <= 100
     && Number.isInteger(b.profit) && Math.abs(b.profit) <= 200000
     && ratio(b.recording) && ratio(b.debts) && ratio(b.stocked)
     && Number.isInteger(b.quizTotal) && b.quizTotal >= 0 && b.quizTotal <= 5000
-    && Number.isInteger(b.quizRight) && b.quizRight >= 0 && b.quizRight <= b.quizTotal;
+    && Number.isInteger(b.quizRight) && b.quizRight >= 0 && b.quizRight <= b.quizTotal
+    && count(b.ruleDays, 2000) && count(b.keptDays, b.ruleDays ?? 0) && count(b.brokenDays, b.ruleDays ?? 0)
+    && (b.keptDays ?? 0) + (b.brokenDays ?? 0) <= (b.ruleDays ?? 0)
+    && (b.goalPct == null || ratio(b.goalPct));
 }
 
 const goodRoad = (g) => g?.type === 'road' && Number.isInteger(g.hits) && g.hits >= 0 && g.hits <= 60;
@@ -145,6 +202,8 @@ export function badSettings(body, now) {
   if (!validLevel(body.levelFrom) || !validLevel(body.levelTo) || body.levelFrom > body.levelTo) return 'Choose the levels, from 1 to 7.';
   const ev = body.events;
   if (!Array.isArray(ev) || !ev.length || ev.some((e) => !CUP_EVENTS.includes(e)) || new Set(ev).size !== ev.length) return 'Choose at least one event.';
+  const house = badHouse(body.house, ev);
+  if (house) return house;
   if (body.startMode === 'time') {
     if (!Number.isInteger(body.startAt) || body.startAt < now + 60000 || body.startAt > now + OPEN_DAYS * DAY) return 'Choose a start time within the next 7 days.';
   } else if (body.startMode !== 'host') return 'Choose when it starts.';
@@ -154,7 +213,7 @@ export function badSettings(body, now) {
 const rulesOf = (body) => ({
   name: CUP_NAMES[body.name], size: body.size, kind: body.kind, length: body.length,
   events: CUP_EVENTS.filter((e) => body.events.includes(e)), levelFrom: body.levelFrom, levelTo: body.levelTo,
-  startMode: body.startMode, startAt: body.startMode === 'time' ? body.startAt : null,
+  startMode: body.startMode, startAt: body.startMode === 'time' ? body.startAt : null, house: houseOf(body.house || {}),
 });
 
 const levelError = (cup, level) => (!validLevel(level) || level < cup.levelFrom || level > cup.levelTo

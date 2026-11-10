@@ -589,7 +589,7 @@ const actions = {
   'trophy-continue': () => { s.trophyNews.shift(); },
   'trophy-cabinet': () => { s.trophyNews.shift(); ui.screen = 'trophies'; },
   'cup-new': () => {
-    ui.cupForm = { ...Cups.STANDARD_RULES, events: [...Cups.STANDARD_RULES.events] };
+    ui.cupForm = { ...Cups.STANDARD_RULES, events: [...Cups.STANDARD_RULES.events], house: {} };
     ui.cupEditing = null;
     ui.cupError = null;
     ui.screen = 'cup-new';
@@ -598,12 +598,37 @@ const actions = {
   'cup-edit': () => {
     const c = Cups.findCup(s, ui.cupCode)?.view?.cup;
     if (!c) return;
-    ui.cupForm = { name: Math.max(0, Cups.CUP_NAMES.indexOf(c.name)), kind: c.kind, length: c.length, size: c.size, events: [...c.events], levelFrom: c.levelFrom, levelTo: c.levelTo, start: c.startMode === 'host' ? 'host' : 'hour' };
+    ui.cupForm = { name: Math.max(0, Cups.CUP_NAMES.indexOf(c.name)), kind: c.kind, length: c.length, size: c.size, events: [...c.events], levelFrom: c.levelFrom, levelTo: c.levelTo, start: c.startMode === 'host' ? 'host' : 'hour', house: { ...(c.house || {}) } };
     ui.cupEditing = ui.cupCode;
     ui.cupError = null;
     ui.screen = 'cup-new';
   },
   'cup-name': (arg) => { ui.cupForm.name = Number(arg); },
+  'cup-rule': (arg) => {
+    const r = Cups.HOUSE_RULES[arg];
+    if (!r) return;
+    const h = { ...ui.cupForm.house };
+    if (h[arg] != null) delete h[arg];
+    else h[arg] = r.amount ? r.amount[3] : arg === 'goal' ? 'fees' : true;
+    if (!Cups.houseList(h).length) delete h.strict;
+    ui.cupForm.house = h;
+    // Events that need a house rule go when it goes.
+    ui.cupForm.events = ui.cupForm.events.filter((e) => !(e === 'goal' && !h.goal) && !(e === 'keeper' && !Cups.houseList(h).length));
+  },
+  'cup-rule-amt': (arg) => {
+    const [k, d] = String(arg).split(':');
+    const r = Cups.HOUSE_RULES[k];
+    const h = ui.cupForm.house;
+    if (!r?.amount || h[k] == null) return;
+    const [min, max, step] = r.amount;
+    h[k] = Math.min(max, Math.max(min, h[k] + Number(d) * step));
+  },
+  'cup-goal': (arg) => { if (Cups.goalById(arg)) ui.cupForm.house.goal = arg; },
+  'cup-strict': (arg) => { ui.cupForm.house.strict = !!arg; },
+  'cup-set-goal': () => {
+    const g = Cups.goalById(Cups.findCup(s, ui.cupCode)?.house?.goal);
+    if (g) setGoal(s, g.name, g.price);
+  },
   'cup-kind': (arg) => { if (Cups.CUP_KINDS[arg]) { ui.cupForm.kind = arg; ui.cupForm.length = 7; } },
   'cup-length': (arg) => { ui.cupForm.length = Number(arg); },
   'cup-size': (arg) => { ui.cupForm.size = Math.min(Cups.CUP_MAX_SIZE, Math.max(Cups.CUP_MIN_START, ui.cupForm.size + Number(arg))); },
@@ -737,6 +762,7 @@ function countProgress(name, was) {
   if (was.phase !== 'evening' && s.phase === 'evening') {
     Analytics.track('day_done', { ...detail });
     marketSync(E.dayResult(s));
+    Cups.dayRules(s);
     cupSyncAll();
   }
   if (s.level > was.level) {
@@ -839,7 +865,7 @@ app.addEventListener('click', (e) => {
 app.addEventListener('change', (e) => {
   const el = e.target;
   if (el.matches('input[type="radio"][data-action]')) run(el.dataset.action, el.value);
-  if (el.matches('input[type="checkbox"][data-action]')) run(el.dataset.action, el.dataset.action === 'cup-event' ? el.value : el.checked);
+  if (el.matches('input[type="checkbox"][data-action]')) run(el.dataset.action, ['cup-event', 'cup-rule'].includes(el.dataset.action) ? el.value : el.checked);
   if (el.matches('input[data-action="set-account-number"]')) run(el.dataset.action, el.value);
 });
 

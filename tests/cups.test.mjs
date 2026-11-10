@@ -175,6 +175,61 @@ test('in the game: nothing counts before the start; game days and levels limit w
   assert.equal(Cups.rulesBody(Cups.STANDARD_RULES, 1).startMode, 'host');
 });
 
+test('house rules: checked, +1 a kept day, -2 a broken day, strict puts you out, goal and keeper events', async () => {
+  const s = fakeStore();
+  const make = (o) => C.create(s, user('Zed'), rules(o), at());
+  assert.equal((await make({ house: { save: 750 } })).status, 400, 'amounts on their step');
+  assert.equal((await make({ house: { fly: true } })).status, 400, 'unknown rule');
+  assert.equal((await make({ house: { record: 'yes' } })).status, 400);
+  assert.equal((await make({ events: ['goal'] })).status, 400, 'the savings event needs a goal');
+  assert.equal((await make({ events: ['keeper'] })).status, 400, 'the keeper event needs a rule');
+  const code = await running(s, { events: ['profit', 'goal', 'keeper'], house: { save: 1000, record: true, goal: 'fees', strict: true } });
+  const info = await C.info(s, user('Ada'), { code }, at());
+  assert.deepEqual(info.json.cup.house, { save: 1000, record: true, goal: 'fees', strict: true });
+  await C.sync(s, user('Ada'), { code, biz: biz({ profit: 3000, ruleDays: 3, keptDays: 3, brokenDays: 0, goalPct: 0.5 }) }, at());
+  await C.sync(s, user('Bola'), { code, biz: biz({ profit: 1000, ruleDays: 3, keptDays: 1, brokenDays: 2, goalPct: 0.9 }) }, at());
+  let v = await C.sync(s, user('Chi'), { code, biz: biz({ profit: 2000, ruleDays: 3, keptDays: 0, brokenDays: 3, goalPct: 0.1 }) }, at());
+  const rows = v.json.standings.map((r) => [r.name, r.points, r.place, r.out]);
+  // Ada: profit 10 + goal 8 + keeper 10 + 3 kept = 31. Bola: 6 + 10 + 8 + 1 - 4 = 21. Chi: out.
+  assert.deepEqual(rows, [['Ada', 31, 1, false], ['Bola', 21, 2, false], ['Chi', 0, null, true]]);
+  assert.equal(v.json.events.goal[0].name, 'Bola', 'biggest share of the goal');
+  await C.sync(s, user('Ada'), { code, biz: biz({ ruleDays: 2, keptDays: 3, brokenDays: 0 }) }, at());
+  assert.equal((await C.info(s, user('Ada'), { code }, at())).json.standings[0].kept, 3, 'impossible rule counts ignored');
+});
+
+test('house rules in the game: each evening, once a day, only while it counts', () => {
+  const s = E.newGame('business', mulberry32(302));
+  const view = { cup: { code: 'HOUSEX', name: 'Family Cup', kind: 'real', length: 7, events: ['goal'], levelFrom: 1, levelTo: 7, startMode: 'host', status: 'running', endsAt: Date.now() + DAY, house: { save: 1000, record: true, pocket: true, prices: true, cash: 5000, discount: 200, bills: true, goal: 'fees' } }, registered: true, players: [], standings: [], events: {} };
+  const cup = Cups.applyCupView(s, view);
+  const t = s.today;
+  Object.assign(t, { paidSelf: 1000, sales: 3, recordedSales: 3, personal: [{ from: 'pocket' }], morningPrices: { ...s.prices }, discounts: 100 });
+  s.cash = 6000;
+  s.bills = [];
+  let r = Cups.checkRules(s, cup.house);
+  assert.deepEqual(r.broken, ['goal'], 'no agreed goal set yet');
+  s.goal = { name: 'School fees for one term', price: 40000, since: 1 };
+  assert.deepEqual(Cups.checkRules(s, cup.house).broken, []);
+  Object.assign(t, { paidSelf: 500, recordedSales: 2, personal: [{ from: 'business' }], discounts: 300 });
+  s.prices.rice += 100;
+  s.cash = 100;
+  s.bills = [{ due: s.day }];
+  r = Cups.checkRules(s, cup.house);
+  assert.deepEqual(r.broken.sort(), ['bills', 'cash', 'discount', 'pocket', 'prices', 'record', 'save']);
+  t.eventRaised = { rice: true };
+  assert.equal(Cups.checkRules(s, cup.house).broken.includes('prices'), false, 'a price raised by an event is fine');
+  s.stats.days += 1;
+  assert.equal(Cups.dayRules(s).length, 1);
+  assert.equal(Cups.dayRules(s).length, 0, 'once per game day');
+  s.pocket = 10000;
+  const b = Cups.bizToSend(s, cup);
+  assert.deepEqual([b.ruleDays, b.keptDays, b.brokenDays, b.goalPct], [1, 0, 1, 0.25]);
+  s.level = 2;
+  const open = Cups.applyCupView(s, { ...view, cup: { ...view.cup, code: 'OPENXX', status: 'open' } });
+  s.day += 1;
+  Cups.dayRules(s);
+  assert.equal(open.ruleLog, undefined, 'nothing before the start');
+});
+
 test('the end: a trophy and badges once; no points means taking part', () => {
   const s = E.newGame('business', mulberry32(301));
   const end = (code, standings, events = {}) => ({ cup: { code, name: 'Family Cup', kind: 'real', length: 7, endsAt: 5, status: 'ended', events: ['money', 'score'], levelFrom: 1, levelTo: 7 }, standings, events, players: [] });

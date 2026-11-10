@@ -1,6 +1,7 @@
 // Championships on the phone: the ones you registered for, your numbers since the start, and game results waiting
 // to be sent. The server (worker/cups.mjs) keeps the tables, starts them and decides the points.
 import { fmt } from './core.js';
+import { GOALS } from './data.js';
 
 export const CUP_NAMES = ['Market Cup', 'Naira Masters', 'Oga Shop League', 'Traders Trophy', 'Golden Till Cup', 'Big Market Challenge', 'Friday Cup', 'Family Cup', 'Class Cup', 'Friends Cup'];
 export const CUP_KINDS = { real: [3, 7, 14], game: [5, 7, 14] };
@@ -24,11 +25,32 @@ export const EVENT_INFO = {
   change: { group: 'Games', label: 'Change master', about: 'Give the right change. Best of 5, then fastest.', show: (v) => `${v.score} of 5 · ${secs(v.ms)}`, game: true },
   road: { group: 'Games', label: 'Road safety', about: 'Dodge the road. Fewest bumps wins.', show: (v) => `${v.hits} bump${v.hits === 1 ? '' : 's'}`, game: true },
   quiz: { group: 'Knowledge', label: 'Quiz', about: 'Right answers in quizzes about your shop.', show: pct },
+  goal: { group: 'House rules', label: 'Savings for the goal', about: 'Biggest share of the agreed goal saved.', show: pct, needs: 'goal' },
+  keeper: { group: 'House rules', label: 'Rule keeper', about: 'Most days with every house rule kept.', show: (v) => `${v} day${v === 1 ? '' : 's'}`, needs: 'rules' },
 };
 export const CUP_EVENTS = Object.keys(EVENT_INFO);
+const BASE_EVENTS = CUP_EVENTS.filter((e) => !EVENT_INFO[e].needs);
 
-// The standard rules: 7 real days, every event, up to 10 players, all levels, the host starts it.
-export const STANDARD_RULES = { name: 0, kind: 'real', length: 7, size: 10, events: [...CUP_EVENTS], levelFrom: 1, levelTo: 7, start: 'host' };
+// House rules: habits each player keeps every game day. Checked each evening on the phone.
+// Amount rules: [smallest, largest, step, starting amount].
+export const HOUSE_RULES = {
+  save: { label: 'Save daily', amount: [500, 20000, 500, 1000], text: (v) => `Put at least ${fmt(v)} into your pocket each day` },
+  goal: { label: 'Agreed goal', text: (id) => { const g = GOALS.find((x) => x.id === id); return g ? `Save for ${g.name} (${fmt(g.price)})` : 'Save for the agreed goal'; } },
+  record: { label: 'Record every sale', text: () => 'Record every sale you make' },
+  pocket: { label: 'Family money from your pocket', text: () => 'Never take family money from the business money' },
+  bills: { label: 'Pay bills on time', text: () => 'No bill left unpaid after its day' },
+  prices: { label: 'No mid-day price rises', text: () => "Don't raise a price after opening the shop" },
+  cash: { label: 'Keep a cash cushion', amount: [0, 200000, 500, 5000], text: (v) => `Keep at least ${fmt(v)} cash at the end of the day` },
+  discount: { label: 'Discount limit', amount: [0, 50000, 50, 500], text: (v) => `Give no more than ${fmt(v)} in discounts a day` },
+};
+export const KEPT_BONUS = 1;
+export const BROKEN_COST = 2;
+export const STRICT_OUT = 3;
+export const houseList = (h = {}) => Object.keys(HOUSE_RULES).filter((k) => h[k] != null && h[k] !== false);
+export const goalById = (id) => GOALS.find((g) => g.id === id) || null;
+
+// The standard rules: 7 real days, every event, up to 10 players, all levels, the host starts it, no house rules.
+export const STANDARD_RULES = { name: 0, kind: 'real', length: 7, size: 10, events: [...BASE_EVENTS], levelFrom: 1, levelTo: 7, start: 'host', house: {} };
 
 export const ordinal = (n) => `${n}${n % 100 >= 11 && n % 100 <= 13 ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10] || 'th'}`;
 export const levelsText = (c) => (c.levelFrom === c.levelTo ? `Level ${c.levelFrom}` : `Levels ${c.levelFrom}–${c.levelTo}`);
@@ -51,7 +73,7 @@ export function rulesBody(f, level, now = Date.now()) {
   const startAt = startTime(f.start, now);
   return {
     name: f.name, kind: f.kind, length: f.length, size: f.size, events: f.events, levelFrom: f.levelFrom, levelTo: f.levelTo,
-    startMode: startAt ? 'time' : 'host', ...(startAt ? { startAt } : {}), level,
+    startMode: startAt ? 'time' : 'host', ...(startAt ? { startAt } : {}), level, house: f.house || {},
   };
 }
 
@@ -59,7 +81,7 @@ export function rulesBody(f, level, now = Date.now()) {
 function baseOf(s) {
   const st = s.stats;
   return {
-    days: st.days, totalProfit: s.totalProfit, recW: st.recW, totW: st.totW,
+    day: s.day, days: st.days, totalProfit: s.totalProfit, recW: st.recW, totW: st.totW,
     paidOnTime: st.paidOnTime, dueAmt: st.dueAmt, cleanDays: st.cleanDays, quizN: s.quizLog.length,
   };
 }
@@ -76,7 +98,7 @@ export function applyCupView(s, v) {
     s.cups.push(cup);
   }
   const c = v.cup;
-  Object.assign(cup, { name: c.name, kind: c.kind, length: c.length, events: c.events, levelFrom: c.levelFrom, levelTo: c.levelTo, endsAt: c.endsAt, view: v });
+  Object.assign(cup, { name: c.name, kind: c.kind, length: c.length, events: c.events, levelFrom: c.levelFrom, levelTo: c.levelTo, endsAt: c.endsAt, house: c.house || {}, view: v });
   if (c.status !== 'open' && !cup.base) cup.base = baseOf(s);
   return cup;
 }
@@ -108,8 +130,62 @@ export function cupBiz(s, cup) {
     stocked: ratio(st.cleanDays - b.cleanDays, days),
     quizRight: quiz.reduce((a, q) => a + (q.correct || 0), 0),
     quizTotal: quiz.reduce((a, q) => a + (q.total || 0), 0),
+    ...ruleCounts(cup),
+    goalPct: goalShare(s, cup),
   };
 }
+
+const ruleCounts = (cup) => {
+  const log = cup.ruleLog || [];
+  return { ruleDays: log.length, keptDays: log.filter((d) => !d.broken.length).length, brokenDays: log.filter((d) => d.broken.length).length };
+};
+
+// How much of the agreed goal is saved: reached since the start counts as all of it.
+function goalShare(s, cup) {
+  const g = goalById(cup.house?.goal);
+  if (!g) return null;
+  if ((s.goalsReached || []).some((r) => r.name === g.name && r.day >= (cup.base?.day ?? 0))) return 1;
+  if (s.goal?.name !== g.name) return 0;
+  return Math.round(Math.min(1, s.pocket / g.price) * 1000) / 1000;
+}
+
+// Today's house rules, checked in the evening: which were kept and which broken.
+export function checkRules(s, h) {
+  const t = s.today;
+  const ok = {
+    save: () => (t.paidSelf || 0) >= h.save,
+    goal: () => { const g = goalById(h.goal); return !!g && (s.goal?.name === g.name || (s.goalsReached || []).some((r) => r.name === g.name && r.day === s.day)); },
+    record: () => t.recordedSales >= t.sales,
+    pocket: () => !(t.personal || []).some((x) => x.from !== 'pocket'),
+    bills: () => !s.bills.some((b) => b.due <= s.day),
+    prices: () => !Object.keys(s.prices).some((id) => t.morningPrices && s.prices[id] > t.morningPrices[id] && !t.eventRaised?.[id]),
+    cash: () => s.cash >= h.cash,
+    discount: () => (t.discounts || 0) <= h.discount,
+  };
+  const kept = [];
+  const broken = [];
+  for (const k of houseList(h)) (ok[k]() ? kept : broken).push(k);
+  return { kept, broken };
+}
+
+// Each evening: note every running championship's house rules, once per game day that counts.
+export function dayRules(s) {
+  const out = [];
+  for (const cup of activeCups(s)) {
+    const h = cup.house || {};
+    if (!houseList(h).length || cupStatus(cup) !== 'running' || !cup.base || !cupBiz(s, cup)) continue;
+    cup.ruleLog ??= [];
+    if (cup.ruleLog.some((d) => d.day === s.day)) continue;
+    const r = checkRules(s, h);
+    cup.ruleLog.push({ day: s.day, ...r });
+    out.push({ code: cup.code, name: cup.name, ...r });
+  }
+  if (s.today) s.today.cupRules = out;
+  return out;
+}
+
+// Can the player still be on the table? (Strict championships: 3 broken days and you're out.)
+export const isOut = (cup) => !!cup.house?.strict && ruleCounts(cup).brokenDays >= STRICT_OUT;
 
 // What to send now: the latest numbers that still count.
 export function bizToSend(s, cup) {

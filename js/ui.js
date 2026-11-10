@@ -8,7 +8,7 @@ import { currentStage, stageProgress, STAGES } from './stages.js';
 import { goalStatus, daysToGoal, howLong, delayNote } from './goals.js';
 import * as Voice from './voice.js';
 import * as Fx from './fx.js';
-import { CUP_NAMES, CUP_KINDS, CUP_MAX_SIZE, CUP_MIN_START, CUP_MIN_DAYS, CUP_MIN_QUIZ, CUP_BACKSTOP_DAYS, PLAYABLE_LEVEL, STANDARD_RULES, EVENT_INFO, findCup, activeCups, cupStatus, cupOver, inLevels, gamesCount, statusLine, levelsText, lengthText, myPlace, ordinal } from './cups.js';
+import { CUP_NAMES, CUP_KINDS, CUP_MAX_SIZE, CUP_MIN_START, CUP_MIN_DAYS, CUP_MIN_QUIZ, CUP_BACKSTOP_DAYS, PLAYABLE_LEVEL, STANDARD_RULES, EVENT_INFO, HOUSE_RULES, KEPT_BONUS, BROKEN_COST, STRICT_OUT, houseList, goalById, isOut, findCup, activeCups, cupStatus, cupOver, inLevels, gamesCount, statusLine, levelsText, lengthText, myPlace, ordinal } from './cups.js';
 import * as Analytics from './analytics.js';
 import * as Account from './account.js';
 import { AGE_GROUPS } from './username.js';
@@ -907,6 +907,9 @@ export function eveningScreen(s, ui = {}) {
         <b style="font-size:20px">Goal reached: ${esc(t.goalReached.name)}!</b>
         <span class="small">You saved ${fmt(t.goalReached.price)} from your own pay${t.goalReached.days ? ` in ${t.goalReached.days} days` : ''}, without touching the business money.</span>
         ${btn('open', 'Choose your next goal', 'primary small', 'goals')}</div>` : ''}
+      ${(t.cupRules || []).map((r) => `<div class="card ${r.broken.length ? 'warn' : 'soft'}"><b>${esc(r.name)}: house rules</b>
+        ${[...r.kept.map((k) => `<span class="small" style="color:var(--green);font-weight:600">✔ ${esc(HOUSE_RULES[k].label)}</span>`), ...r.broken.map((k) => `<span class="small" style="color:var(--red);font-weight:600">✘ ${esc(HOUSE_RULES[k].label)}</span>`)].join('')}
+        <span class="small muted">${r.broken.length ? `−${BROKEN_COST} points today.` : `All kept: +${KEPT_BONUS} point.`}</span></div>`).join('')}
       ${titi(`<b>Tip:</b> ${esc(t.tip)}`)}
       ${t.noteKey ? `<div class="card warn"><b>Did you know?</b><span style="font-size:15px">${esc((isJunior(s) && NOTES_JUNIOR[t.noteKey]) || NOTES[t.noteKey])}</span></div>` : ''}
     </div>
@@ -1113,8 +1116,10 @@ function cupsMorning(s) {
   if (!list.length) return '';
   return `<div class="card"><b>${icon('star', 16)} Championships</b>${list.map((c) => {
     const me = cupStatus(c) === 'running' ? myPlace(c) : null;
+    const rules = cupStatus(c) === 'running' ? houseList(c.house) : [];
     return `<button type="button" class="link" data-action="cup-open" data-arg="${esc(c.code)}" style="padding:4px 0;text-align:left;color:var(--ink);text-decoration:none;display:flex;justify-content:space-between;gap:8px">
-      <span>${esc(c.name)}${me ? `: <b>${ordinal(me.place)} of ${me.of}</b>` : ''}</span><span class="small muted">${esc(statusLine(c))}</span></button>`;
+      <span>${esc(c.name)}${me ? `: <b>${ordinal(me.place)} of ${me.of}</b>` : ''}</span><span class="small muted">${esc(statusLine(c))}</span></button>
+      ${rules.length ? `<span class="small" style="margin-top:-6px">Today's house rules: ${rules.map((k) => esc(HOUSE_RULES[k].text(c.house[k]))).join(' · ')}.</span>` : ''}`;
   }).join('')}</div>`;
 }
 
@@ -1143,8 +1148,18 @@ function rulesCard(v) {
     ${row('Levels', `${levelsText(c)}${c.levelTo > PLAYABLE_LEVEL ? ' (Levels 3–7 coming soon)' : ''}`)}
     ${row('Players', `Up to ${c.size}`)}
     ${hr}${groups}${hr}
+    ${houseBlock(c.house)}
     <span class="small">Each event: 1st 10 points, 2nd 8, 3rd 6, then 5, 4, 3, 2, 1. Most points wins. Business events count from the start, as averages, after ${CUP_MIN_DAYS} game days; the quiz after ${CUP_MIN_QUIZ} questions; games count your best score. Only play while your shop is in these levels counts.</span>
     <span class="small muted">Trophies for the top 3. No money and no prizes.</span></div>`;
+}
+
+// The house rules part of the rules page.
+function houseBlock(h = {}) {
+  const list = houseList(h);
+  if (!list.length) return '';
+  return `<b class="small">House rules, every game day</b>
+    ${list.map((k) => `<span class="small">• ${esc(HOUSE_RULES[k].text(h[k]))}</span>`).join('')}
+    <span class="small">Each day you keep every house rule: +${KEPT_BONUS} point. Each day you break one: −${BROKEN_COST} points.${h.strict ? ` <b>Strict: ${STRICT_OUT} broken days and you leave the table</b> (your shop carries on).` : ''}</span>${hr}`;
 }
 
 const playerList = (v) => v.players.map((p) => `<div class="between small"><span>${esc(p.name)}${p.you ? ' <span class="tag green">You</span>' : ''}${p.host ? ' <span class="tag amber">Host</span>' : ''}</span>${p.days != null && v.cup.kind === 'game' ? `<span class="muted">${p.days} of ${v.cup.length} days</span>` : ''}</div>`).join('');
@@ -1182,12 +1197,39 @@ export function cupsScreen(s, ui) {
   </div></main>`;
 }
 
+// House rules on the create form: each one switched on or off, with its amount.
+function houseForm(f) {
+  const h = f.house;
+  const rows = Object.entries(HOUSE_RULES).map(([k, r]) => {
+    const on = h[k] != null;
+    let extra = '';
+    if (on && r.amount) {
+      const [min, max] = r.amount;
+      extra = `<div class="between" style="padding:0 0 6px 32px"><b>${fmt(h[k])}</b><div class="stepper"><button type="button" class="step" data-action="cup-rule-amt" data-arg="${k}:-1" aria-label="Less" ${h[k] <= min ? 'disabled' : ''}>−</button><button type="button" class="step" data-action="cup-rule-amt" data-arg="${k}:1" aria-label="More" ${h[k] >= max ? 'disabled' : ''}>+</button></div></div>`;
+    }
+    if (on && k === 'goal') {
+      extra = `<div class="wrap" style="padding:0 0 6px 32px">${GOALS.map((g) => `<button type="button" class="chip" data-action="cup-goal" data-arg="${g.id}" aria-pressed="${h.goal === g.id}" style="min-height:40px;font-weight:600;${h.goal === g.id ? 'background:var(--green);color:#fff;border-color:var(--green)' : ''}">${esc(g.name)} · ${fmt(g.price)}</button>`).join('')}</div>`;
+    }
+    const sample = on ? h[k] : r.amount ? r.amount[3] : 'fees';
+    return `<label class="settings-opt" style="padding:6px 0"><input type="checkbox" data-action="cup-rule" value="${k}" ${on ? 'checked' : ''}><span><b>${esc(r.label)}</b><div class="small muted">${esc(r.text(sample))}</div></span></label>${extra}`;
+  }).join('');
+  const any = houseList(h).length > 0;
+  return `<div class="card"><h3>House rules (optional)</h3>
+    <span class="small muted">Habits every player keeps each game day. Keeping them all: +${KEPT_BONUS} point a day. Breaking one: −${BROKEN_COST} points that day.</span>
+    ${rows}
+    ${any ? `${hr}<label class="settings-opt" style="padding:6px 0"><input type="checkbox" data-action="cup-strict" ${h.strict ? 'checked' : ''}><span><b>Strict</b><div class="small muted">${STRICT_OUT} broken days and a player leaves the table (their shop carries on).</div></span></label>` : ''}</div>`;
+}
+
 export function cupNewScreen(s, ui) {
   const f = ui.cupForm;
   const pick = (action, arg, label, on) => `<button type="button" class="chip" data-action="${action}" data-arg="${arg}" aria-pressed="${on}" style="min-height:40px;font-weight:600;justify-content:center;${on ? 'background:var(--green);color:#fff;border-color:var(--green)' : ''}">${esc(label)}</button>`;
   const stepper = (action, value, label, min, max) => `<div class="stepper"><button type="button" class="step" data-action="${action}" data-arg="-1" aria-label="${label} down" ${value <= min ? 'disabled' : ''}>−</button><output>${value}</output><button type="button" class="step" data-action="${action}" data-arg="1" aria-label="${label} up" ${value >= max ? 'disabled' : ''}>+</button></div>`;
-  const groups = ['Business', 'Games', 'Knowledge'].map((g) => `<b class="small" style="margin-top:4px">${g}</b>
-    ${Object.entries(EVENT_INFO).filter(([, e]) => e.group === g).map(([id, e]) => `<label class="settings-opt" style="padding:6px 0"><input type="checkbox" data-action="cup-event" value="${id}" ${f.events.includes(id) ? 'checked' : ''}><span><b>${esc(e.label)}</b><div class="small muted">${esc(e.about)}</div></span></label>`).join('')}`).join('');
+  const allowed = (e) => !e.needs || (e.needs === 'goal' ? !!f.house.goal : houseList(f.house).length > 0);
+  const groups = ['Business', 'Games', 'Knowledge', 'House rules'].map((g) => {
+    const list = Object.entries(EVENT_INFO).filter(([, e]) => e.group === g && allowed(e));
+    return !list.length ? '' : `<b class="small" style="margin-top:4px">${g}</b>
+    ${list.map(([id, e]) => `<label class="settings-opt" style="padding:6px 0"><input type="checkbox" data-action="cup-event" value="${id}" ${f.events.includes(id) ? 'checked' : ''}><span><b>${esc(e.label)}</b><div class="small muted">${esc(e.about)}</div></span></label>`).join('')}`;
+  }).join('');
   const outside = s.level < f.levelFrom || s.level > f.levelTo;
   return `<main class="screen">${backHeader(ui.cupEditing ? 'Change the rules' : 'New championship', 'cup-back')}<div class="body">
     ${ui.cupError ? `<div class="toast" role="alert">${esc(ui.cupError)}</div>` : ''}
@@ -1205,6 +1247,7 @@ export function cupNewScreen(s, ui) {
       <div class="grid3">${pick('cup-start', 'hour', 'In 1 hour', f.start === 'hour')}${pick('cup-start', 'tomorrow', 'Tomorrow 8 am', f.start === 'tomorrow')}${pick('cup-start', 'host', "I'll start it", f.start === 'host')}</div>
       <span class="small muted">${f.start === 'host' ? `You press Start once at least ${CUP_MIN_START} players have registered.` : `If fewer than ${CUP_MIN_START} players have registered by then, it is cancelled.`}</span></div>
     <div class="card"><div class="between"><div><h3>Players</h3><span class="small muted">Including you, up to ${CUP_MAX_SIZE}.</span></div>${stepper('cup-size', f.size, 'Players', CUP_MIN_START, CUP_MAX_SIZE)}</div></div>
+    ${houseForm(f)}
     <div class="card"><h3>Events</h3><span class="small muted">Each event gives points: 1st 10, 2nd 8, 3rd 6, then 5, 4, 3, 2, 1.</span>${groups}</div>
   </div>
   <div class="foot">${btn('cup-create', ui.cupEditing ? 'Save the rules' : `Open registration for ${CUP_NAMES[f.name]}`, 'primary block', '', ui.cupBusy || !f.events.length || outside || f.levelFrom > PLAYABLE_LEVEL ? 'disabled' : '')}</div></main>`;
@@ -1227,6 +1270,21 @@ export function cupPreviewScreen(s, ui) {
     <div class="card"><h3>Registered</h3>${playerList(v)}</div>
   </div>
   <div class="foot">${reason ? `<div class="toast">${esc(reason)}</div>` : btn('cup-register', 'I agree to the rules and register', 'primary block', '', ui.cupBusy ? 'disabled' : '')}</div></main>`;
+}
+
+// While it runs: today's house rules, the agreed goal button, and your record so far.
+function houseToday(s, cup) {
+  const h = cup.house || {};
+  const list = houseList(h);
+  if (!list.length) return '';
+  const log = cup.ruleLog || [];
+  const g = goalById(h.goal);
+  const needGoal = g && s.goal?.name !== g.name;
+  const keptDays = log.filter((d) => !d.broken.length).length;
+  return `<div class="card ${isOut(cup) ? 'bad' : 'soft'}"><b>Today's house rules</b>
+    ${list.map((k) => `<span class="small">• ${esc(HOUSE_RULES[k].text(h[k]))}</span>`).join('')}
+    ${needGoal ? `${btn('cup-set-goal', `Make ${g.name} my savings goal`, 'primary small block')}<span class="small muted">${s.goal ? `This replaces your goal "${esc(s.goal.name)}".` : 'Your pocket savings will go toward it.'}</span>` : ''}
+    <span class="small muted">${log.length ? `Kept every rule on ${keptDays} of ${log.length} days.` : 'Checked each evening.'}${isOut(cup) ? ` You broke the rules on ${STRICT_OUT} days, so you are off the table.` : ''}</span></div>`;
 }
 
 export function cupScreen(s, ui) {
@@ -1255,7 +1313,8 @@ export function cupScreen(s, ui) {
       ${titi('Nothing counts until the start. Then everyone begins from zero together.')}`;
   } else if (st !== 'cancelled') {
     const days = Object.fromEntries(v.players.map((p) => [p.name, p.days]));
-    const table = v.standings.map((r) => `<div class="between small"><span class="row" style="gap:8px">${medal(r.place)}<span>${esc(r.name)}${r.you ? ' <span class="tag green">You</span>' : ''}${c.kind === 'game' ? ` <span class="muted">· day ${days[r.name] ?? 0}/${c.length}</span>` : ''}</span></span><b>${r.points} pts${r.wins ? ` · ${r.wins} win${r.wins > 1 ? 's' : ''}` : ''}</b></div>`).join('');
+    const ruled = houseList(c.house).length > 0;
+    const table = v.standings.map((r) => `<div class="between small"><span class="row" style="gap:8px">${r.out ? '<span class="tag red">Out</span>' : medal(r.place)}<span>${esc(r.name)}${r.you ? ' <span class="tag green">You</span>' : ''}${c.kind === 'game' ? ` <span class="muted">· day ${days[r.name] ?? 0}/${c.length}</span>` : ''}${ruled && r.ruleDays ? ` <span class="muted">· rules ${r.kept}/${r.ruleDays}</span>` : ''}</span></span><b>${r.points} pts${r.wins ? ` · ${r.wins} win${r.wins > 1 ? 's' : ''}` : ''}</b></div>`).join('');
     const canPlay = gamesCount(s, cup);
     const events = c.events.map((id) => {
       const e = EVENT_INFO[id];
@@ -1265,7 +1324,7 @@ export function cupScreen(s, ui) {
         ${rows || `<span class="small muted">${waiting}</span>`}
         ${e.game && st === 'running' && canPlay ? btn('cup-play', 'Play', 'secondary small block', id) : ''}</div>`;
     }).join(hr);
-    main = `<div class="card"><h3>Table</h3>${table}</div><div class="card"><h3>Events</h3>${events}</div>${rulesCard(v)}`;
+    main = `${st === 'running' ? houseToday(s, cup) : ''}<div class="card"><h3>Table</h3>${table}</div><div class="card"><h3>Events</h3>${events}</div>${rulesCard(v)}`;
   }
   const leave = st === 'open' && c.host ? 'Cancel this championship' : cupOver(cup) ? 'Remove from my list' : st === 'open' ? 'Leave before it starts' : 'Leave this championship';
   const confirm = st === 'open' && c.host ? 'Everyone registered will see it cancelled. Tap again to confirm.' : cupOver(cup) ? 'Your trophy stays in the cabinet. Tap again to confirm.' : 'You will lose your place. Tap again to confirm.';

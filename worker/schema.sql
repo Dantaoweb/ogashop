@@ -103,7 +103,8 @@ CREATE TABLE IF NOT EXISTS cups (
   ends_at INTEGER,
   cancelled INTEGER NOT NULL DEFAULT 0,
   created_by TEXT NOT NULL,
-  created_at INTEGER NOT NULL
+  created_at INTEGER NOT NULL,
+  house TEXT NOT NULL DEFAULT '{}'
 );
 
 CREATE TABLE IF NOT EXISTS cup_players (
