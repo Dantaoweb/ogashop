@@ -176,6 +176,7 @@ export function startScreen(ui, hasSave, saveInfo) {
         ${choice('learning', 'cap', 'var(--amber-soft)', 'var(--amber-ink)', 'I\'m learning business', 'A gentle start. tiTi explains each new idea as you go.')}
         ${choice('junior', 'star', 'var(--green-soft)', 'var(--green)', 'I\'m a child (8–12)', 'Simple words, easy sums and no rushing. For home or class.')}
         ${ui.startPath === 'junior' ? '' : modePicker(ui)}
+      ${ui.invite && ui.startPath !== 'junior' ? `<div class="card soft"><b>You were invited to market ${esc(ui.invite)}</b><span class="small">Choose how you play, then start. You'll join the market next.</span></div>` : ''}
         <p class="small muted center" style="margin:0">Same levels for everyone. Switch any time in Settings.</p>
         <button type="button" class="link" data-action="open" data-arg="levels" style="align-self:center;color:var(--green)">See all ${ALL_LEVELS.length} levels</button>
       </div>
@@ -1088,6 +1089,15 @@ function championsCard(s) {
     ${Object.entries(CHAMPION_TITLES).map(section).join('<hr style="border:0;border-top:1px dashed var(--line);margin:4px 0;width:100%">')}</div>`;
 }
 
+// Someone shared a market link with this player.
+function inviteCard(ui, leaving = false) {
+  return `<div class="card strong" style="align-items:center;text-align:center">
+    <span class="small muted">You were invited to a market</span>
+    <b class="display" style="font-size:30px;letter-spacing:.12em">${esc(ui.invite)}</b>
+    ${leaving ? '<span class="small">Joining it means leaving the market you are in now.</span>' : ''}
+    ${btn('mp-join-invite', `Join market ${ui.invite}`, 'primary block', '', ui.mpBusy ? 'disabled' : '')}</div>`;
+}
+
 export function multiScreen(s, ui) {
   const header = `<header class="top"><div class="row"><button type="button" class="icon-btn" data-action="close" aria-label="Back" style="margin-left:-10px">${icon('back', 22, 2)}</button><h1 class="title display">Multiplayer</h1></div></header>`;
   const error = ui.mpError ? `<div class="toast" role="alert">${esc(ui.mpError)}</div>` : '';
@@ -1102,7 +1112,10 @@ export function multiScreen(s, ui) {
     const rows = s.mp.shops.map((x) => `<div class="between small"><span>${esc(x.name)}${x.you ? ' <span class="tag green">You</span>' : ''}${x.active ? '' : ' <span class="muted">(away)</span>'}</span><span class="muted">${x.customers} customers · ${fmt(x.sales)}</span></div>`).join('');
     const empty = s.mp.size - s.mp.shops.length;
     return `<main class="screen">${header}<div class="body">${error}
-      ${s.mp.code ? `<div class="card strong" style="align-items:center;text-align:center"><span class="small muted">Share this market code with friends</span><b class="display" style="font-size:34px;letter-spacing:.12em">${esc(s.mp.code)}</b></div>` : ''}
+      ${ui.invite && ui.invite !== s.mp.code ? inviteCard(ui, true) : ''}
+      ${s.mp.code ? `<div class="card strong" style="align-items:center;text-align:center"><span class="small muted">Share this market code with friends</span><b class="display" style="font-size:34px;letter-spacing:.12em">${esc(s.mp.code)}</b>
+        <div class="grid2" style="width:100%">${btn('mp-share', `${icon('send', 18, 2)} Share`, 'primary small')}${btn('mp-copy', ui.copied ? 'Link copied' : 'Copy link', 'secondary small')}</div>
+        <span class="small muted">Friends who open the link go straight to your market. They need an account (13 and over).</span></div>` : ''}
       <div class="card"><h3>Your market: ${s.mp.size} shops</h3>${rows}
         ${empty > 0 ? `<span class="small muted">${empty} place${empty > 1 ? 's are' : ' is'} open. Computer shops fill ${empty > 1 ? 'them' : 'it'} until players join.</span>` : ''}</div>
       ${championsCard(s)}
@@ -1114,14 +1127,14 @@ export function multiScreen(s, ui) {
   const size = ui.mpSize || 4;
   const sizes = [2, 3, 4, 5, 6].map((n) => `<button type="button" class="note-btn" style="min-height:52px;${n === size ? 'background:var(--green);color:#fff;border-color:var(--green)' : ''}" data-action="mp-size" data-arg="${n}" aria-pressed="${n === size}">${n}</button>`).join('');
   const busy = ui.mpBusy ? 'disabled' : '';
-  return `<main class="screen">${header}<div class="body">${error}
+  return `<main class="screen">${header}<div class="body">${error}${ui.invite ? inviteCard(ui) : ''}
     <div class="card"><h3>How many players?</h3><span class="small muted">Including you.</span>
       <div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px">${sizes}</div></div>
     ${btn('mp-quick', `Quick join: find a market of ${size}`, 'primary block', '', busy)}
     ${btn('mp-create', `Create a market of ${size} and get a code`, 'secondary block', '', busy)}
     <form data-form="mp-code" class="card"><h3>Have a market code?</h3>
       <label class="sr-only" for="mp-code">Market code</label>
-      <input id="mp-code" name="code" maxlength="6" autocomplete="off" autocapitalize="characters" placeholder="ABCDEF" style="height:44px;border:1px solid var(--line-2);border-radius:12px;padding:0 12px;font-size:18px;letter-spacing:.12em;text-transform:uppercase">
+      <input id="mp-code" name="code" value="${esc(ui.invite || '')}" maxlength="6" autocomplete="off" autocapitalize="characters" placeholder="ABCDEF" style="height:44px;border:1px solid var(--line-2);border-radius:12px;padding:0 12px;font-size:18px;letter-spacing:.12em;text-transform:uppercase">
       <button type="submit" class="btn secondary small" ${busy}>Join this market</button></form>
     ${btn('close', 'Not now, keep single player', 'secondary small block')}
   </div></main>`;

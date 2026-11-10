@@ -281,6 +281,7 @@ The score moves slowly: at most ±6 points a day, so one bad day never wipes out
 ## 7s. Multiplayer markets *(tune)*
 
 - New games choose **Single player** (computer rivals) or **Multiplayer** (needs an account). Settings can switch later and keeps the game.
+- A market with a code has **Share** (WhatsApp or the phone's share menu) and **Copy link**. The link (`?market=CODE`) opens the game on the market screen with the code ready; a new player picks how to play, makes an account, then taps Join. Junior ignores the link.
 - Multiplayer: choose 2–6 players, then **Quick join** (same size and level), **Create a market** (6-letter code) or **enter a code**.
 - Day by day: when a shop finishes a day it shares customers, sales, whether its prices are low or high, and any advert. Nobody waits for anyone.
 - Real rivals' low prices and adverts lower your share by at most 20%. Customers you lose go to real shops, and that player gets up to 2 extra customers the next day.

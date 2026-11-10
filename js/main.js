@@ -23,6 +23,28 @@ let s = load();
 const ui = { screen: s ? (s.quiz ? 'quiz' : null) : 'start', startPath: null, buy: {}, msg: '', error: null, confirmNew: false, confirmReset: false, canInstall: false };
 let installPrompt = null;
 
+// A shared link (?market=ABCDEF) opens the market screen with that code ready to join.
+function readInvite() {
+  try {
+    const url = new URL(location.href);
+    if (!url.searchParams.has('market')) return null;
+    const code = (url.searchParams.get('market') || '').trim().toUpperCase();
+    url.searchParams.delete('market');
+    history.replaceState(null, '', url.pathname + url.search + url.hash);
+    return /^[A-Z]{6}$/.test(code) ? code : null;
+  } catch { return null; }
+}
+const invite = readInvite();
+if (invite && !isJunior(s)) {
+  ui.invite = invite;
+  if (s) ui.screen = 'multi';
+  else ui.startMode = 'multi';
+}
+
+function inviteLink(code) {
+  return `${location.origin}${location.pathname}?market=${code}`;
+}
+
 function load() {
   try {
     const raw = localStorage.getItem(SAVE_KEY);
@@ -322,7 +344,7 @@ const actions = {
     ui.buy = {};
   },
   open: (arg) => { if (arg === 'levels') ui.levelsFrom = ui.screen; ui.screen = arg; ui.confirmReset = false; },
-  close: () => { ui.editing = null;  ui.screen = ui.screen === 'levels' && !s ? 'start' : ui.screen === 'levels' && ui.levelsFrom ? ui.levelsFrom : null; ui.levelsFrom = null; },
+  close: () => { ui.editing = null; ui.copied = false;  ui.screen = ui.screen === 'levels' && !s ? 'start' : ui.screen === 'levels' && ui.levelsFrom ? ui.levelsFrom : null; ui.levelsFrom = null; },
   seen: (arg) => { s.seen[arg] = true; },
 
   pay: (arg) => { E.setPay(s, s.pay + Number(arg)); },
@@ -406,6 +428,33 @@ const actions = {
   'mp-size': (arg) => { ui.mpSize = Number(arg); },
   'mp-quick': () => { marketCall(() => Market.quickJoin(ui.mpSize || 4, s.level)); },
   'mp-create': () => { marketCall(() => Market.createMarket(ui.mpSize || 4, s.level)); },
+  'mp-join-invite': async () => {
+    const code = ui.invite;
+    if (!code) return;
+    await marketCall(() => Market.joinCode(code));
+    if (!ui.mpError) { ui.invite = null; render(); }
+  },
+  'mp-share': async () => {
+    const code = s.mp?.code;
+    if (!code) return;
+    const link = inviteLink(code);
+    const text = `Join my market in Oga Shop and let's see whose shop does best! Tap the link, or enter code ${code} in Multiplayer.`;
+    if (navigator.share) {
+      try { await navigator.share({ title: 'Oga Shop market', text, url: link }); return; } catch (e) { if (e?.name === 'AbortError') return; }
+    }
+    window.open(`https://wa.me/?text=${encodeURIComponent(`${text} ${link}`)}`, '_blank', 'noopener');
+  },
+  'mp-copy': async () => {
+    const code = s.mp?.code;
+    if (!code) return;
+    try {
+      await navigator.clipboard.writeText(inviteLink(code));
+      ui.copied = true;
+    } catch {
+      ui.mpError = "Copying didn't work on this phone. Send the code instead.";
+    }
+    render();
+  },
   'mp-leave': async () => {
     ui.mpBusy = true;
     render();
