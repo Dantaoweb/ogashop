@@ -5,6 +5,7 @@ import { LEVELS } from './data.js';
 import { CUST, fmt, setCustom, resetCustom } from './core.js';
 import * as Voice from './voice.js';
 import * as Fx from './fx.js';
+import * as Cups from './cups.js';
 import * as Analytics from './analytics.js';
 import * as Account from './account.js';
 import * as Market from './market.js';
@@ -35,6 +36,23 @@ function readInvite() {
   } catch { return null; }
 }
 const invite = readInvite();
+
+// A shared championship link (?cup=ABCDEF) opens Championships with that code ready.
+function readCupInvite() {
+  try {
+    const url = new URL(location.href);
+    if (!url.searchParams.has('cup')) return null;
+    const code = (url.searchParams.get('cup') || '').trim().toUpperCase();
+    url.searchParams.delete('cup');
+    history.replaceState(null, '', url.pathname + url.search + url.hash);
+    return /^[A-Z]{6}$/.test(code) ? code : null;
+  } catch { return null; }
+}
+const cupInvite = readCupInvite();
+if (cupInvite && !isJunior(s)) {
+  ui.cupInvite = cupInvite;
+  if (s) ui.screen = 'cups';
+}
 if (invite && !isJunior(s)) {
   ui.invite = invite;
   if (s) ui.screen = 'multi';
@@ -136,6 +154,52 @@ async function marketSync(result) {
   if (s.phase === 'morning' || ui.screen === 'multi') render();
 }
 
+// ---------- Championships ----------
+
+async function cupCall(fn) {
+  ui.cupBusy = true;
+  ui.cupError = null;
+  render();
+  const r = await fn();
+  ui.cupBusy = false;
+  if (r.error) ui.cupError = r.error;
+  else if (s) {
+    const cup = Cups.applyCupView(s, r.view);
+    ui.cupCode = cup.code;
+    ui.screen = 'cup';
+    save();
+  }
+  render();
+  return r;
+}
+
+// Send each championship your numbers and new games, and get the latest tables back.
+let cupSyncing = false;
+async function cupSyncAll() {
+  if (!s?.cups?.length || !Account.loggedIn() || isJunior(s) || cupSyncing) return;
+  cupSyncing = true;
+  try {
+    for (const cup of [...s.cups]) {
+      if (cup.final) continue;
+      const sent = cup.games;
+      const r = await Market.cupSync(cup.code, Cups.cupBiz(s, cup), sent);
+      if (r.view) {
+        Cups.applyCupView(s, r.view);
+        cup.games = cup.games.filter((g) => !sent.includes(g));
+        if (r.view.cup.ended) cup.final = true;
+      } else if (r.status === 404) Cups.removeCup(s, cup.code);
+    }
+    save();
+    if (s.phase === 'morning' || ['cups', 'cup'].includes(ui.screen)) render();
+  } finally {
+    cupSyncing = false;
+  }
+}
+
+function cupLink(code) {
+  return `${location.origin}${location.pathname}?cup=${code}`;
+}
+
 async function accountForm(mode, f) {
   ui.accountError = null;
   if (mode === 'signup' && !f.age.value) { ui.accountError = 'Please choose your age group.'; render(); return; }
@@ -146,9 +210,10 @@ async function accountForm(mode, f) {
   ui.accountBusy = false;
   ui.accountError = err;
   if (!err) {
-    ui.screen = ui.accountFrom === 'multi' ? 'multi' : s ? null : 'start';
+    ui.screen = ['multi', 'cups'].includes(ui.accountFrom) ? ui.accountFrom : s ? null : 'start';
     await syncNow();
     await marketSync();
+    await cupSyncAll();
   }
   render();
 }
@@ -171,6 +236,9 @@ function view() {
   if (ui.screen === 'goals') return UI.goalsScreen(s, ui);
   if (ui.screen === 'records') return UI.recordsScreen(s);
   if (ui.screen === 'multi' && s) return UI.multiScreen(s, ui);
+  if (ui.screen === 'cups' && s) return UI.cupsScreen(s, ui);
+  if (ui.screen === 'cup-new' && s && ui.cupForm) return UI.cupNewScreen(ui);
+  if (ui.screen === 'cup' && s && Cups.findCup(s, ui.cupCode)) return UI.cupScreen(s, ui);
   if (ui.screen === 'stage' && s?.today?.stageDone) return UI.stageScreen(s);
   if (ui.screen === 'customers') return UI.customersScreen(s, ui);
   if (ui.screen === 'challenge' && s.today.challengeGame) return UI.challengeScreen(s, s.today.challengeGame);
@@ -339,7 +407,7 @@ const actions = {
     if (!ui.startPath) return;
     if (s && !ui.confirmNew) { ui.confirmNew = true; return; }
     s = E.newGame(ui.startPath);
-    ui.screen = ui.startMode === 'multi' && ui.startPath !== 'junior' ? 'multi' : null;
+    ui.screen = ui.startPath === 'junior' ? null : ui.cupInvite ? 'cups' : ui.startMode === 'multi' ? 'multi' : null;
     ui.confirmNew = false;
     ui.buy = {};
   },
@@ -498,10 +566,74 @@ const actions = {
     const g = s.today.challengeGame;
     if (!g.practice) Ch.finishChallenge(s, g);
     s.today.challengeGame = null;
-    ui.screen = g.practice ? 'multi' : null;
+    ui.screen = g.practice ? g.from || 'multi' : null;
+    Cups.queueCupGame(s, Ch.cupResult(g));
+    cupSyncAll();
     if (!s.mp) return;
     E.queueChampion(s, Ch.championResult(g));
     marketSync();
+  },
+  'cup-play': (arg) => {
+    const cup = Cups.findCup(s, ui.cupCode);
+    if (!cup || Cups.cupEnded(cup) || !cup.events.includes(arg) || !Cups.EVENT_INFO[arg]?.game) return;
+    s.today.challengeGame = { ...Ch.startChallenge(arg, Math.random, { practice: true }), from: 'cup' };
+    ui.screen = 'challenge';
+  },
+  'cup-new': () => {
+    ui.cupForm = { name: 0, days: 7, size: 10, events: [...Cups.CUP_EVENTS] };
+    ui.cupError = null;
+    ui.screen = 'cup-new';
+  },
+  'cup-name': (arg) => { ui.cupForm.name = Number(arg); },
+  'cup-days': (arg) => { ui.cupForm.days = Number(arg); },
+  'cup-size': (arg) => { ui.cupForm.size = Math.min(Cups.CUP_MAX_SIZE, Math.max(2, ui.cupForm.size + Number(arg))); },
+  'cup-event': (arg) => {
+    const ev = ui.cupForm.events;
+    ui.cupForm.events = ev.includes(arg) ? ev.filter((e) => e !== arg) : Cups.CUP_EVENTS.filter((e) => e === arg || ev.includes(e));
+  },
+  'cup-create': () => {
+    const f = ui.cupForm;
+    if (!f.events.length) { ui.cupError = 'Choose at least one event.'; return; }
+    cupCall(() => Market.cupCreate({ name: f.name, days: f.days, size: f.size, events: f.events }));
+  },
+  'cup-join-invite': async () => {
+    const code = ui.cupInvite;
+    if (!code) return;
+    const r = await cupCall(() => Market.cupJoin(code));
+    if (!r.error) { ui.cupInvite = null; render(); }
+  },
+  'cup-open': (arg) => { ui.cupCode = arg; ui.cupError = null; ui.copied = false; ui.screen = 'cup'; cupSyncAll(); },
+  'cup-back': () => { ui.screen = 'cups'; ui.copied = false; },
+  'cup-share': async () => {
+    const code = ui.cupCode;
+    const cup = Cups.findCup(s, code);
+    if (!cup) return;
+    const text = `Join my ${cup.name} in Oga Shop! Tap the link, or enter code ${code} in Championships.`;
+    if (navigator.share) {
+      try { await navigator.share({ title: cup.name, text, url: cupLink(code) }); return; } catch (e) { if (e?.name === 'AbortError') return; }
+    }
+    window.open(`https://wa.me/?text=${encodeURIComponent(`${text} ${cupLink(code)}`)}`, '_blank', 'noopener');
+  },
+  'cup-copy': async () => {
+    try {
+      await navigator.clipboard.writeText(cupLink(ui.cupCode));
+      ui.copied = true;
+    } catch {
+      ui.cupError = "Copying didn't work on this phone. Send the code instead.";
+    }
+    render();
+  },
+  'cup-leave': async () => {
+    if (!ui.confirmCupLeave) { ui.confirmCupLeave = true; return; }
+    ui.confirmCupLeave = false;
+    const code = ui.cupCode;
+    ui.cupBusy = true;
+    render();
+    const r = await Market.cupLeave(code);
+    ui.cupBusy = false;
+    if (r.error && r.status !== 401) ui.cupError = r.error;
+    else { Cups.removeCup(s, code); ui.screen = 'cups'; save(); }
+    render();
   },
   'champ-play': (arg) => {
     if (!s.mp || !Ch.CHAMPION_TITLES[arg]) return;
@@ -565,6 +697,7 @@ function countProgress(name, was) {
   if (was.phase !== 'evening' && s.phase === 'evening') {
     Analytics.track('day_done', { ...detail });
     marketSync(E.dayResult(s));
+    cupSyncAll();
   }
   if (s.level > was.level) {
     if (s.mp?.kind === 'quick') marketCall(() => Market.quickJoin(s.mp.size, s.level));
@@ -666,7 +799,7 @@ app.addEventListener('click', (e) => {
 app.addEventListener('change', (e) => {
   const el = e.target;
   if (el.matches('input[type="radio"][data-action]')) run(el.dataset.action, el.value);
-  if (el.matches('input[type="checkbox"][data-action]')) run(el.dataset.action, el.checked);
+  if (el.matches('input[type="checkbox"][data-action]')) run(el.dataset.action, el.dataset.action === 'cup-event' ? el.value : el.checked);
   if (el.matches('input[data-action="set-account-number"]')) run(el.dataset.action, el.value);
 });
 
@@ -694,6 +827,12 @@ app.addEventListener('submit', (e) => {
       if (!err) ui.confirmDelete = false;
       render();
     });
+    return;
+  }
+  const cupForm = e.target.closest('[data-form="cup-code"]');
+  if (cupForm) {
+    e.preventDefault();
+    cupCall(() => Market.cupJoin(cupForm.elements.code.value));
     return;
   }
   const codeForm = e.target.closest('[data-form="mp-code"]');
@@ -750,7 +889,7 @@ window.addEventListener('beforeinstallprompt', (e) => {
 
 // Counting: this visit, how long it took to load, and send what's waiting when there's data.
 Analytics.startVisit();
-syncNow().then(() => marketSync());
+syncNow().then(() => marketSync()).then(() => cupSyncAll());
 window.addEventListener('online', () => pushNow());
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') pushNow(); });
 window.addEventListener('load', () => setTimeout(() => {

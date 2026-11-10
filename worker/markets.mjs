@@ -116,7 +116,7 @@ function goodResult(r) {
     && validLevel(r.level) && Number.isInteger(r.gameDay) && r.gameDay >= 1;
 }
 
-function goodChallenge(c) {
+export function goodChallenge(c) {
   const rounds = CHAMPION_ROUNDS[c?.type];
   if (!rounds || !Object.hasOwn(CHAMPION_ROUNDS, c.type)) return false;
   return Number.isInteger(c.score) && c.score >= 1 && c.score <= rounds

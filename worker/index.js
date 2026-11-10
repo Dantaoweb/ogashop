@@ -5,6 +5,7 @@ import { normalize, summarize, statsPage } from './logic.mjs';
 import * as Accounts from './accounts.mjs';
 import { d1Store } from './store.mjs';
 import * as Markets from './markets.mjs';
+import * as Cups from './cups.mjs';
 
 const ORIGINS = ['https://dantaoweb.github.io', 'http://127.0.0.1:8765', 'http://localhost:8080'];
 
@@ -66,6 +67,10 @@ async function account(request, url, env) {
   if (url.pathname === '/market/join') return Markets.join(store, user, body, ctx);
   if (url.pathname === '/market/sync') return Markets.sync(store, user, body, ctx);
   if (url.pathname === '/market/leave') return Markets.leave(store, user);
+  if (url.pathname === '/cup/create') return Cups.create(store, user, body, ctx);
+  if (url.pathname === '/cup/join') return Cups.join(store, user, body, ctx);
+  if (url.pathname === '/cup/sync') return Cups.sync(store, user, body, ctx);
+  if (url.pathname === '/cup/leave') return Cups.leave(store, user, body);
   if (url.pathname === '/account/logout') return Accounts.logout(store, token);
   if (url.pathname === '/account/delete') return Accounts.deleteAccount(store, user, body, { ...ctx, beforeDelete: () => Markets.leave(store, user) });
   if (url.pathname === '/save' && request.method === 'GET') return Accounts.getSave(store, user);
@@ -76,7 +81,7 @@ async function account(request, url, env) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    if (request.method !== 'OPTIONS' && (url.pathname.startsWith('/account/') || url.pathname.startsWith('/market/') || url.pathname === '/save')) {
+    if (request.method !== 'OPTIONS' && (url.pathname.startsWith('/account/') || url.pathname.startsWith('/market/') || url.pathname.startsWith('/cup/') || url.pathname === '/save')) {
       const { status, json } = await account(request, url, env);
       return new Response(JSON.stringify(json), { status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...cors(request) } });
     }

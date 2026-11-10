@@ -28,7 +28,7 @@ export function newGame(path, rng = Math.random) {
     stats: { recW: 0, totW: 0, dueAmt: 0, paidOnTime: 0, days: 0, cleanDays: 0, repaid: 0, lost: 0, noLateStreak: 0, pocketPays: 0, capitalTakes: 0, overpayStreak: 0, served: 0, unhappy: 0, billsPaid: 0, billsLateDays: 0, changeRight: 0, goodChecks: 0 },
     badges: [], seen: {}, eventLog: {}, mods: {}, history: [], goal: null, goalsReached: [], sales: [], quizLog: [], quiz: null,
     payments: { account: 'creditvoice', accountNumber: PAYMENTS.defaultAccountNumber, pos: 'creditvoice' },
-    skills: {}, challengeLog: [], mp: null, stage: null, stageLog: [],
+    skills: {}, challengeLog: [], mp: null, stage: null, stageLog: [], cups: [], trophies: [],
     phase: 'morning', today: null,
   };
   for (const id of Object.keys(GOODS)) {
@@ -114,6 +114,8 @@ export function migrate(s) {
   s.mp ??= null;
   s.stage ??= null;
   s.stageLog ??= [];
+  s.cups ??= [];
+  s.trophies ??= [];
   s.skills ??= {};
   if (s.today) { s.today.lostTo ??= []; s.today.market ??= null; }
   s.challengeLog ??= [];

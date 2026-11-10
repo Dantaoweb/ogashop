@@ -330,6 +330,17 @@ Each multiplayer market has two titles: **Money Checker** (Money check, out of 6
 - Taking or losing a title shows on the morning screen.
 - Scores start fresh in each new market. The server rejects scores above the maximum, and times under 1 second a round or over 30 minutes.
 
+## 7w. Championships
+
+Players with an account make their own championship and invite others with a code or link (`?cup=CODE`).
+
+- **Settings:** a name from a list (Market Cup, Naira Masters, Oga Shop League, Traders Trophy, Golden Till Cup, Big Market Challenge, Friday Cup, Family Cup, Class Cup, Friends Cup; no free text), 3, 7 or 14 real days, 2 to 20 players, and any of the events below.
+- **Business events:** business score, profit per day, sales recorded, debts paid on time, days fully stocked. Counted from the day the player joined, as averages, and only after 3 game days in the championship.
+- **Games:** Money check and Change master (best score, then fastest), Road safety (fewest bumps). Challenge days and "Play" in the championship both count.
+- **Knowledge:** quiz answers right, after 3 questions.
+- **Points per event:** 1st 10, 2nd 8, 3rd 6, then 5, 4, 3, 2, 1, and 1 for everyone ranked below. Equal results share the place. Most points wins; ties go to more event wins.
+- A player can be in 3 championships at a time. Nothing changes after the end. Ages 13–17 show as "Player 2". No Junior, no money, no skills: trophies only.
+
 ## 8. Open points for review
 
 1. **Prices:** check every buy and sell price with traders in at least two markets.

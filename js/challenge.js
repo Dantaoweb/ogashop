@@ -123,6 +123,12 @@ export function nextRound(c, now = Date.now()) {
   c.ms = now - c.startedAt;
 }
 
+// What goes to a championship: the market games, plus Road safety (fewest bumps).
+export function cupResult(c) {
+  if (c?.type === 'road') return c.finished && Number.isInteger(c.hits) ? { type: 'road', hits: c.hits } : null;
+  return championResult(c);
+}
+
 // What goes to the market's board, or null for games that aren't on it.
 export function championResult(c) {
   if (!c?.finished || !CHAMPION_TITLES[c.type] || !Number.isFinite(c.ms)) return null;

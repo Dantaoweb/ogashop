@@ -8,6 +8,7 @@ import { currentStage, stageProgress, STAGES } from './stages.js';
 import { goalStatus, daysToGoal, howLong, delayNote } from './goals.js';
 import * as Voice from './voice.js';
 import * as Fx from './fx.js';
+import { CUP_NAMES, CUP_DAYS, CUP_MAX_SIZE, CUP_MIN_DAYS, CUP_MIN_QUIZ, EVENT_INFO, findCup, activeCups, cupEnded, timeLeft, myPlace, ordinal } from './cups.js';
 import * as Analytics from './analytics.js';
 import * as Account from './account.js';
 import { AGE_GROUPS } from './username.js';
@@ -345,6 +346,7 @@ export function morningScreen(s, ui) {
       ${isJunior(s) ? '' : consentCard()}
       ${challengeCard(s)}
       ${stageCard(s)}
+      ${cupsMorning(s)}
       ${marketMorning(s)}
       ${billsCard(s)}
       ${isStuck(s) ? `<div class="card bad"><b>You have no stock and no money to buy any.</b>
@@ -659,14 +661,14 @@ export function payScreen(s) {
 
 export function challengeScreen(s, c) {
   const def = CHALLENGES[c.type];
-  const header = `<header class="top"><div class="kicker">${c.practice ? 'Market champions · Beat your best' : `Challenge day · Level ${s.level} · ${dayCount(s)}`}</div><h1 class="title display">${esc(def.name)}</h1></header>`;
+  const header = `<header class="top"><div class="kicker">${c.practice ? (c.from === 'cup' ? 'Championship · Beat your best' : 'Market champions · Beat your best') : `Challenge day · Level ${s.level} · ${dayCount(s)}`}</div><h1 class="title display">${esc(def.name)}</h1></header>`;
   if (c.finished && c.practice) {
     return `<main class="screen">${header}<div class="body">
       <div class="card soft pop" style="align-items:center;text-align:center">
-        <b class="display" style="font-size:36px">${c.correct} of ${c.rounds.length}</b>
-        <b>Time: ${esc(champTime(c.ms))}</b>
-        <span class="small">If this beats your best, it goes on your market's board.</span></div>
-      </div><div class="foot">${btn('challenge-finish', 'Back to my market', 'primary block')}</div></main>`;
+        <b class="display" style="font-size:36px">${c.type === 'road' ? `${c.hits} bump${c.hits === 1 ? '' : 's'}` : `${c.correct} of ${c.rounds.length}`}</b>
+        ${c.type === 'road' ? '' : `<b>Time: ${esc(champTime(c.ms))}</b>`}
+        <span class="small">If this beats your best, it goes on the ${c.from === 'cup' ? 'championship' : "market's"} board.</span></div>
+      </div><div class="foot">${btn('challenge-finish', c.from === 'cup' ? 'Back to the championship' : 'Back to my market', 'primary block')}</div></main>`;
   }
   if (c.finished) {
     const ok = c.type === 'road' ? c.hits <= def.pass : c.correct >= def.pass;
@@ -1098,6 +1100,110 @@ function inviteCard(ui, leaving = false) {
     ${btn('mp-join-invite', `Join market ${ui.invite}`, 'primary block', '', ui.mpBusy ? 'disabled' : '')}</div>`;
 }
 
+// ---------- Championships ----------
+
+const backHeader = (title, action = 'close') => `<header class="top"><div class="row"><button type="button" class="icon-btn" data-action="${action}" aria-label="Back" style="margin-left:-10px">${icon('back', 22, 2)}</button><h1 class="title display">${esc(title)}</h1></div></header>`;
+
+// Morning: a line for each running championship.
+function cupsMorning(s) {
+  if (isJunior(s)) return '';
+  const list = activeCups(s);
+  if (!list.length) return '';
+  return `<div class="card"><b>${icon('star', 16)} Championships</b>${list.map((c) => {
+    const me = myPlace(c);
+    return `<button type="button" class="link" data-action="cup-open" data-arg="${esc(c.code)}" style="padding:4px 0;text-align:left;color:var(--ink);text-decoration:none;display:flex;justify-content:space-between;gap:8px">
+      <span>${esc(c.name)}${me ? `: <b>${ordinal(me.place)} of ${me.of}</b>` : ''}</span><span class="small muted">${esc(timeLeft(c))}</span></button>`;
+  }).join('')}</div>`;
+}
+
+function cupInviteCard(ui) {
+  return `<div class="card strong" style="align-items:center;text-align:center">
+    <span class="small muted">You were invited to a championship</span>
+    <b class="display" style="font-size:30px;letter-spacing:.12em">${esc(ui.cupInvite)}</b>
+    ${btn('cup-join-invite', `Join championship ${ui.cupInvite}`, 'primary block', '', ui.cupBusy ? 'disabled' : '')}</div>`;
+}
+
+export function cupsScreen(s, ui) {
+  const header = backHeader('Championships');
+  if (!Account.loggedIn()) {
+    return `<main class="screen">${header}<div class="body">
+      ${ui.cupInvite ? `<div class="card soft"><b>You were invited to championship ${esc(ui.cupInvite)}</b><span class="small">Make an account or log in, then join.</span></div>` : ''}
+      ${titi('Championships are played against real people, so you need an account (13 and over).')}
+      <div class="grid2">${btn('account-open', 'Create account', 'primary small', 'signup')}${btn('account-open', 'Log in', 'secondary small', 'login')}</div>
+    </div></main>`;
+  }
+  const error = ui.cupError ? `<div class="toast" role="alert">${esc(ui.cupError)}</div>` : '';
+  const mine = (s.cups || []).slice().sort((a, b) => cupEnded(a) - cupEnded(b) || a.endsAt - b.endsAt);
+  const rows = mine.map((c) => {
+    const me = myPlace(c);
+    return `<button type="button" class="choice" data-action="cup-open" data-arg="${esc(c.code)}">
+      <b>${esc(c.name)} <span class="small muted" style="font-weight:600">· ${esc(c.code)}</span></b>
+      <span>${me ? `${ordinal(me.place)} of ${me.of} · ${me.points} points · ` : ''}${esc(timeLeft(c))}</span></button>`;
+  }).join('');
+  return `<main class="screen">${header}<div class="body">${error}
+    ${ui.cupInvite ? cupInviteCard(ui) : ''}
+    ${titi('Make your own championship, choose the events, and invite friends. Points for each event decide the winner.')}
+    ${rows ? `<h2 class="small muted" style="text-transform:uppercase;letter-spacing:.06em">Your championships</h2>${rows}` : ''}
+    ${btn('cup-new', 'Create a championship', 'primary block', '', ui.cupBusy ? 'disabled' : '')}
+    <form data-form="cup-code" class="card"><h3>Have a championship code?</h3>
+      <label class="sr-only" for="cup-code">Championship code</label>
+      <input id="cup-code" name="code" value="${esc(ui.cupInvite || '')}" maxlength="6" autocomplete="off" autocapitalize="characters" placeholder="ABCDEF" style="height:44px;border:1px solid var(--line-2);border-radius:12px;padding:0 12px;font-size:18px;letter-spacing:.12em;text-transform:uppercase">
+      <button type="submit" class="btn secondary small" ${ui.cupBusy ? 'disabled' : ''}>Join</button></form>
+  </div></main>`;
+}
+
+export function cupNewScreen(ui) {
+  const f = ui.cupForm;
+  const pick = (action, arg, label, on) => `<button type="button" class="chip" data-action="${action}" data-arg="${arg}" aria-pressed="${on}" style="min-height:40px;font-weight:600;${on ? 'background:var(--green);color:#fff;border-color:var(--green)' : ''}">${esc(label)}</button>`;
+  const groups = ['Business', 'Games', 'Knowledge'].map((g) => `<b class="small" style="margin-top:4px">${g}</b>
+    ${Object.entries(EVENT_INFO).filter(([, e]) => e.group === g).map(([id, e]) => {
+      const on = f.events.includes(id);
+      return `<label class="settings-opt" style="padding:6px 0"><input type="checkbox" data-action="cup-event" value="${id}" ${on ? 'checked' : ''}><span><b>${esc(e.label)}</b><div class="small muted">${esc(e.about)}</div></span></label>`;
+    }).join('')}`).join('');
+  return `<main class="screen">${backHeader('New championship', 'cup-back')}<div class="body">
+    ${ui.cupError ? `<div class="toast" role="alert">${esc(ui.cupError)}</div>` : ''}
+    <div class="card"><h3>Name</h3><div class="wrap">${CUP_NAMES.map((n, i) => pick('cup-name', i, n, f.name === i)).join('')}</div></div>
+    <div class="card"><h3>How long?</h3><span class="small muted">Real days, from now.</span>
+      <div class="grid3">${CUP_DAYS.map((d) => pick('cup-days', d, `${d} days`, f.days === d)).join('')}</div></div>
+    <div class="card"><div class="between"><div><h3>Players</h3><span class="small muted">Including you, up to ${CUP_MAX_SIZE}.</span></div>
+      <div class="stepper"><button type="button" class="step" data-action="cup-size" data-arg="-1" aria-label="Fewer players" ${f.size <= 2 ? 'disabled' : ''}>−</button><output>${f.size}</output><button type="button" class="step" data-action="cup-size" data-arg="1" aria-label="More players" ${f.size >= CUP_MAX_SIZE ? 'disabled' : ''}>+</button></div></div></div>
+    <div class="card"><h3>Events</h3><span class="small muted">Each event gives points: 1st 10, 2nd 8, 3rd 6, then 5, 4, 3, 2, 1. Business events count after ${CUP_MIN_DAYS} game days; the quiz after ${CUP_MIN_QUIZ} questions.</span>
+      ${groups}</div>
+  </div>
+  <div class="foot">${btn('cup-create', `Create ${CUP_NAMES[f.name]}`, 'primary block', '', ui.cupBusy || !f.events.length ? 'disabled' : '')}</div></main>`;
+}
+
+export function cupScreen(s, ui) {
+  const cup = findCup(s, ui.cupCode);
+  const v = cup.view;
+  const ended = cupEnded(cup);
+  const error = ui.cupError ? `<div class="toast" role="alert">${esc(ui.cupError)}</div>` : '';
+  const medal = (p) => (p <= 3 ? `<span class="tag ${p === 1 ? 'solid' : 'amber'}">${ordinal(p)}</span>` : `<span class="small muted" style="font-weight:700">${ordinal(p)}</span>`);
+  const table = v.standings.map((r) => `<div class="between small"><span class="row" style="gap:8px">${medal(r.place)}<span>${esc(r.name)}${r.you ? ' <span class="tag green">You</span>' : ''}</span></span><b>${r.points} pts${r.wins ? ` · ${r.wins} win${r.wins > 1 ? 's' : ''}` : ''}</b></div>`).join('');
+  const events = v.cup.events.map((id) => {
+    const e = EVENT_INFO[id];
+    const rows = (v.events[id] || []).map((r) => `<div class="between small"><span class="row" style="gap:8px">${medal(r.place)}<span>${esc(r.name)}${r.you ? ' <span class="tag green">You</span>' : ''}</span></span><b>${esc(e.show(r.value))} · ${r.points} pts</b></div>`).join('');
+    const waiting = e.group === 'Business' ? `Counts after ${CUP_MIN_DAYS} game days in this championship.` : id === 'quiz' ? `Counts after ${CUP_MIN_QUIZ} quiz questions.` : 'No scores yet. Be the first.';
+    return `<div style="display:flex;flex-direction:column;gap:6px"><div class="between"><b>${esc(e.label)}</b><span class="small muted">${esc(e.group)}</span></div>
+      <span class="small muted">${esc(e.about)}</span>
+      ${rows || `<span class="small muted">${waiting}</span>`}
+      ${e.game && !ended ? btn('cup-play', 'Play', 'secondary small block', id) : ''}</div>`;
+  }).join('<hr style="border:0;border-top:1px dashed var(--line);margin:4px 0;width:100%">');
+  const me = myPlace(cup);
+  return `<main class="screen">${backHeader(cup.name, 'cup-back')}<div class="body">${error}
+    <div class="card strong" style="align-items:center;text-align:center">
+      <span class="small muted">${ended ? 'Finished' : `${esc(timeLeft(cup))} · ${v.players} of ${v.cup.size} players`}</span>
+      ${me ? `<b class="display" style="font-size:30px">${ordinal(me.place)} of ${me.of}</b><span class="small">${me.points} points</span>` : ''}
+      ${ended ? '' : `<span class="small muted">Code <b style="letter-spacing:.1em">${esc(cup.code)}</b></span>
+        <div class="grid2" style="width:100%">${btn('cup-share', `${icon('send', 18, 2)} Share`, 'primary small')}${btn('cup-copy', ui.copied ? 'Link copied' : 'Copy link', 'secondary small')}</div>`}</div>
+    <div class="card"><h3>Table</h3>${table}</div>
+    <div class="card"><h3>Events</h3>${events}</div>
+    ${titi('Business numbers count from the day you joined, as an average, so playing more days doesn\'t win by itself. Games count your best score.')}
+    ${ui.confirmCupLeave ? '<div class="toast">You will leave this championship and lose your place. Tap again to confirm.</div>' : ''}
+    ${btn('cup-leave', 'Leave this championship', 'secondary small block', '', ui.cupBusy ? 'disabled' : '')}
+  </div></main>`;
+}
+
 export function multiScreen(s, ui) {
   const header = `<header class="top"><div class="row"><button type="button" class="icon-btn" data-action="close" aria-label="Back" style="margin-left:-10px">${icon('back', 22, 2)}</button><h1 class="title display">Multiplayer</h1></div></header>`;
   const error = ui.mpError ? `<div class="toast" role="alert">${esc(ui.mpError)}</div>` : '';
@@ -1409,6 +1515,7 @@ export function settingsScreen(s, ui) {
         <label class="settings-opt"><input type="checkbox" data-action="set-sounds" ${Fx.enabled() ? 'checked' : ''}><span><b>Sounds and vibration</b><div class="small muted">A till sound when you sell, a soft buzz for mistakes, and a short phone vibration.</div></span></label>
         ${Voice.supported ? `<label class="settings-opt"><input type="checkbox" data-action="set-voice" ${Voice.enabled() ? 'checked' : ''}><span><b>Customers speak</b><div class="small muted">Customers say what they want out loud, using your phone's voice. Their words also stay on screen.</div></span></label>` : ''}</div>
       ${ui.canInstall ? `<div class="card"><h3>Add to home screen</h3><span class="small muted">Play like an app, even without data.</span>${btn('install', 'Install Oga Shop', 'secondary small')}</div>` : ''}
+      ${isJunior(s) ? '' : `<div class="card"><h3>Championships</h3><span class="small muted">Make your own championship with friends: choose the events, play, and win trophies.</span>${btn('open', 'Championships', 'secondary small', 'cups')}</div>`}
       ${isJunior(s) ? '' : `<div class="card"><h3>Multiplayer</h3><span class="small muted">${s.mp ? `You are in a market of ${s.mp.size} shops.` : 'Compete with real players, or with friends using a market code.'}</span>${btn('open', s.mp ? 'See my market' : 'Play with others', 'secondary small', 'multi')}</div>`}
       <div class="card"><h3>Customers</h3><span class="small muted">Rename your customers, choose their voice and give them your own lines.</span>${btn('open', 'Edit customers', 'secondary small', 'customers')}</div>
       <div class="card"><h3>Levels</h3><span class="small muted">See all ${ALL_LEVELS.length} levels, what each one teaches, and how far you are.</span>${btn('open', 'See all levels', 'secondary small', 'levels')}</div>

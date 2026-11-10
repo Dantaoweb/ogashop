@@ -12,3 +12,9 @@ export const createMarket = (size, level) => ask('/market/create', { size, level
 export const joinCode = (code) => ask('/market/join', { code });
 export const sync = (result, challenges = []) => ask('/market/sync', { ...(result ? { result } : {}), ...(challenges.length ? { challenges } : {}) });
 export const leave = () => ask('/market/leave', {});
+
+// Championships
+export const cupCreate = (settings) => ask('/cup/create', settings);
+export const cupJoin = (code) => ask('/cup/join', { code });
+export const cupSync = (code, biz, games) => ask('/cup/sync', { code, biz, games });
+export const cupLeave = (code) => ask('/cup/leave', { code });
