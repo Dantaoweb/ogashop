@@ -14,7 +14,10 @@ export const sync = (result, challenges = []) => ask('/market/sync', { ...(resul
 export const leave = () => ask('/market/leave', {});
 
 // Championships
-export const cupCreate = (settings) => ask('/cup/create', settings);
-export const cupJoin = (code) => ask('/cup/join', { code });
-export const cupSync = (code, biz, games) => ask('/cup/sync', { code, biz, games });
+export const cupCreate = (rules) => ask('/cup/create', rules);
+export const cupUpdate = (code, rules) => ask('/cup/update', { ...rules, code });
+export const cupInfo = (code) => ask('/cup/info', { code });
+export const cupJoin = (code, level) => ask('/cup/join', { code, level, agree: true });
+export const cupStart = (code) => ask('/cup/start', { code });
+export const cupSync = (code, biz, games) => ask('/cup/sync', { code, ...(biz ? { biz } : {}), games });
 export const cupLeave = (code) => ask('/cup/leave', { code });

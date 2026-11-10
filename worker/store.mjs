@@ -1,7 +1,7 @@
 // Accounts and saves in the D1 database.
 const toBest = (score, ms) => (score == null ? null : { score, ms });
 const toMember = (r) => r && { userKey: r.user_key, marketId: r.market_id, username: r.username, age: r.age, slot: r.slot, lastSeen: r.last_seen, customers: r.customers, sales: r.sales, price: r.price, advert: r.advert, level: r.level, best: { money: toBest(r.money_score, r.money_ms), change: toBest(r.change_score, r.change_ms) } };
-const toCup = (r) => r && { id: r.id, code: r.code, name: r.name, size: r.size, days: r.days, events: JSON.parse(r.events), startsAt: r.starts_at, endsAt: r.ends_at };
+const toCup = (r) => r && { id: r.id, code: r.code, name: r.name, size: r.size, kind: r.kind, length: r.length, events: JSON.parse(r.events), levelFrom: r.level_from, levelTo: r.level_to, startMode: r.start_mode, startAt: r.start_at, startedAt: r.started_at, endsAt: r.ends_at, cancelled: r.cancelled, by: r.created_by, createdAt: r.created_at };
 const toCupPlayer = (r) => ({ userKey: r.user_key, username: r.username, age: r.age, slot: r.slot, joinedAt: r.joined_at, stats: JSON.parse(r.stats || '{}') });
 const toMarket = (r) => r && { id: r.id, code: r.code, size: r.size, level: r.level, kind: r.kind };
 const toUser = (r) => r && { key: r.key, username: r.username, salt: r.salt, pinHash: r.pin_hash, age: r.age, fails: r.fails, lockedUntil: r.locked_until };
@@ -63,11 +63,17 @@ export function d1Store(db) {
       return db.prepare(sql).bind(score, ms, key).run();
     },
     // Championships
-    async createCup({ id, code, name, size, days, events, startsAt, endsAt, by }) {
-      const r = await db.prepare('INSERT INTO cups (id, code, name, size, days, events, starts_at, ends_at, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(code) DO NOTHING')
-        .bind(id, code, name, size, days, JSON.stringify(events), startsAt, endsAt, by).run();
+    async createCup(c) {
+      const r = await db.prepare('INSERT INTO cups (id, code, name, size, kind, length, events, level_from, level_to, start_mode, start_at, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(code) DO NOTHING')
+        .bind(c.id, c.code, c.name, c.size, c.kind, c.length, JSON.stringify(c.events), c.levelFrom, c.levelTo, c.startMode, c.startAt, c.by, c.createdAt).run();
       return r.meta.changes === 1;
     },
+    updateCup(id, c) {
+      return db.prepare('UPDATE cups SET name = ?, size = ?, kind = ?, length = ?, events = ?, level_from = ?, level_to = ?, start_mode = ?, start_at = ? WHERE id = ?')
+        .bind(c.name, c.size, c.kind, c.length, JSON.stringify(c.events), c.levelFrom, c.levelTo, c.startMode, c.startAt, id).run();
+    },
+    startCup(id, at, endsAt) { return db.prepare('UPDATE cups SET started_at = ?, ends_at = ? WHERE id = ? AND started_at IS NULL').bind(at, endsAt, id).run(); },
+    cancelCup(id) { return db.prepare('UPDATE cups SET cancelled = 1 WHERE id = ?').bind(id).run(); },
     async getCupByCode(code) { return toCup(await db.prepare('SELECT * FROM cups WHERE code = ?').bind(code).first()); },
     async cupPlayers(id) { return (await db.prepare('SELECT * FROM cup_players WHERE cup_id = ? ORDER BY slot').bind(id).all()).results.map(toCupPlayer); },
     addCupPlayer({ cupId, userKey, username, age, slot, now }) {
@@ -76,13 +82,14 @@ export function d1Store(db) {
     removeCupPlayer(id, key) { return db.prepare('DELETE FROM cup_players WHERE cup_id = ? AND user_key = ?').bind(id, key).run(); },
     deleteCup(id) { return db.batch([db.prepare('DELETE FROM cup_players WHERE cup_id = ?').bind(id), db.prepare('DELETE FROM cups WHERE id = ?').bind(id)]); },
     saveCupStats(id, key, stats) { return db.prepare('UPDATE cup_players SET stats = ? WHERE cup_id = ? AND user_key = ?').bind(JSON.stringify(stats), id, key).run(); },
+    // Championships not yet over: open, or running and before their end.
     async activeCupCount(key, now) {
-      return (await db.prepare('SELECT COUNT(*) AS n FROM cup_players p JOIN cups c ON c.id = p.cup_id WHERE p.user_key = ? AND c.ends_at > ?').bind(key, now).first()).n;
+      return (await db.prepare('SELECT COUNT(*) AS n FROM cup_players p JOIN cups c ON c.id = p.cup_id WHERE p.user_key = ? AND c.cancelled = 0 AND (c.started_at IS NULL OR c.ends_at > ?)').bind(key, now).first()).n;
     },
-    deleteEndedCups(before) {
+    deleteOldCups(before) {
       return db.batch([
-        db.prepare('DELETE FROM cup_players WHERE cup_id IN (SELECT id FROM cups WHERE ends_at < ?)').bind(before),
-        db.prepare('DELETE FROM cups WHERE ends_at < ?').bind(before),
+        db.prepare('DELETE FROM cup_players WHERE cup_id IN (SELECT id FROM cups WHERE created_at < ?)').bind(before),
+        db.prepare('DELETE FROM cups WHERE created_at < ?').bind(before),
       ]);
     },
     addWin(key, from, count, at) { return db.prepare('INSERT INTO wins (user_key, from_name, count, at) VALUES (?, ?, ?, ?)').bind(key, from, count, at).run(); },

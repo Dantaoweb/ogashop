@@ -332,15 +332,18 @@ Each multiplayer market has two titles: **Money Checker** (Money check, out of 6
 
 ## 7w. Championships
 
-Players with an account make their own championship and invite others with a code or link (`?cup=CODE`).
+A host sets the rules and opens registration. Players read the rules, agree and register. Everyone starts together; nobody joins late.
 
-- **Settings:** a name from a list (Market Cup, Naira Masters, Oga Shop League, Traders Trophy, Golden Till Cup, Big Market Challenge, Friday Cup, Family Cup, Class Cup, Friends Cup; no free text), 3, 7 or 14 real days, 2 to 20 players, and any of the events below.
-- **Business events:** business score, profit per day, sales recorded, debts paid on time, days fully stocked. Counted from the day the player joined, as averages, and only after 3 game days in the championship.
-- **Games:** Money check and Change master (best score, then fastest), Road safety (fewest bumps). Challenge days and "Play" in the championship both count.
-- **Knowledge:** quiz answers right, after 3 questions.
-- **Points per event:** 1st 10, 2nd 8, 3rd 6, then 5, 4, 3, 2, 1, and 1 for everyone ranked below. Equal results share the place. Most points wins; ties go to more event wins.
-- **At the end:** a gold, silver or bronze trophy for the top 3 (with points), or "Took part" for everyone else, shown on a trophy screen and kept in the **Trophy cabinet** (score screen and Championships). Badges: **Champion** (1st), **On the podium** (top 3), **Full championship** (3 or more game days in it).
-- A player can be in 3 championships at a time. Nothing changes after the end. Ages 13–17 show as "Player 2". No Junior, no money, no skills: trophies only.
+- **Rules:** a name from a list (Market Cup, Naira Masters, Oga Shop League, Traders Trophy, Golden Till Cup, Big Market Challenge, Friday Cup, Family Cup, Class Cup, Friends Cup; no free text), the type, the length, the levels (from 1 to 7), 2 to 20 players, the events, and the start. **Standard rules:** 7 real days, every event, up to 10 players, Levels 1–7, the host presses Start.
+- **Type:** *by real days* (3, 7 or 14 days; the same end for everyone) or *by game days* (5, 7 or 14 game days for each player; it ends when all have played them, or after 14 real days at most).
+- **Start:** in 1 hour, tomorrow at 8 am, or when the host presses Start (at least 2 players). Registration closes at the start. If fewer than 2 have registered at the start time, or nobody starts it within 7 days, or the host leaves before the start, it is cancelled.
+- **Levels:** only players whose shop is at those levels can register, and only play at those levels counts. Levels 3–7 can be chosen but aren't playable yet.
+- The host can change the rules only until someone else registers; after that they are fixed, because players agreed to them.
+- **Business events:** business score, profit per day, sales recorded, debts paid on time, days fully stocked. From the start, as averages, after 3 game days.
+- **Games:** Money check and Change master (best score, then fastest), Road safety (fewest bumps). **Knowledge:** quiz answers right, after 3 questions.
+- **Points per event:** 1st 10, 2nd 8, 3rd 6, then 5, 4, 3, 2, 1, and 1 below that. Equal results share the place. Most points wins; ties go to more event wins.
+- **At the end:** gold, silver or bronze for the top 3 with points, or "Took part", kept in the **Trophy cabinet**. Badges: **Champion**, **On the podium**, **Full championship** (3 or more game days in it).
+- A player can be in 3 championships at a time. Ages 13–17 show as "Player 2". No Junior, no money, no skills: trophies only.
 
 ## 8. Open points for review
 

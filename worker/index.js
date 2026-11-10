@@ -68,9 +68,12 @@ async function account(request, url, env) {
   if (url.pathname === '/market/sync') return Markets.sync(store, user, body, ctx);
   if (url.pathname === '/market/leave') return Markets.leave(store, user);
   if (url.pathname === '/cup/create') return Cups.create(store, user, body, ctx);
-  if (url.pathname === '/cup/join') return Cups.join(store, user, body, ctx);
+  if (url.pathname === '/cup/info') return Cups.info(store, user, body, ctx);
+  if (url.pathname === '/cup/join') return Cups.register(store, user, body, ctx);
+  if (url.pathname === '/cup/update') return Cups.update(store, user, body, ctx);
+  if (url.pathname === '/cup/start') return Cups.start(store, user, body, ctx);
   if (url.pathname === '/cup/sync') return Cups.sync(store, user, body, ctx);
-  if (url.pathname === '/cup/leave') return Cups.leave(store, user, body);
+  if (url.pathname === '/cup/leave') return Cups.leave(store, user, body, ctx);
   if (url.pathname === '/account/logout') return Accounts.logout(store, token);
   if (url.pathname === '/account/delete') return Accounts.deleteAccount(store, user, body, { ...ctx, beforeDelete: () => Markets.leave(store, user) });
   if (url.pathname === '/save' && request.method === 'GET') return Accounts.getSave(store, user);

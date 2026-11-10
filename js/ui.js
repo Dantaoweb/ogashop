@@ -8,7 +8,7 @@ import { currentStage, stageProgress, STAGES } from './stages.js';
 import { goalStatus, daysToGoal, howLong, delayNote } from './goals.js';
 import * as Voice from './voice.js';
 import * as Fx from './fx.js';
-import { CUP_NAMES, CUP_DAYS, CUP_MAX_SIZE, CUP_MIN_DAYS, CUP_MIN_QUIZ, EVENT_INFO, findCup, activeCups, cupEnded, timeLeft, myPlace, ordinal } from './cups.js';
+import { CUP_NAMES, CUP_KINDS, CUP_MAX_SIZE, CUP_MIN_START, CUP_MIN_DAYS, CUP_MIN_QUIZ, CUP_BACKSTOP_DAYS, PLAYABLE_LEVEL, STANDARD_RULES, EVENT_INFO, findCup, activeCups, cupStatus, cupOver, inLevels, gamesCount, statusLine, levelsText, lengthText, myPlace, ordinal } from './cups.js';
 import * as Analytics from './analytics.js';
 import * as Account from './account.js';
 import { AGE_GROUPS } from './username.js';
@@ -1104,16 +1104,17 @@ function inviteCard(ui, leaving = false) {
 // ---------- Championships ----------
 
 const backHeader = (title, action = 'close') => `<header class="top"><div class="row"><button type="button" class="icon-btn" data-action="${action}" aria-label="Back" style="margin-left:-10px">${icon('back', 22, 2)}</button><h1 class="title display">${esc(title)}</h1></div></header>`;
+const hr = '<hr style="border:0;border-top:1px dashed var(--line);margin:4px 0;width:100%">';
 
-// Morning: a line for each running championship.
+// Morning: a line for each championship you are in.
 function cupsMorning(s) {
   if (isJunior(s)) return '';
   const list = activeCups(s);
   if (!list.length) return '';
   return `<div class="card"><b>${icon('star', 16)} Championships</b>${list.map((c) => {
-    const me = myPlace(c);
+    const me = cupStatus(c) === 'running' ? myPlace(c) : null;
     return `<button type="button" class="link" data-action="cup-open" data-arg="${esc(c.code)}" style="padding:4px 0;text-align:left;color:var(--ink);text-decoration:none;display:flex;justify-content:space-between;gap:8px">
-      <span>${esc(c.name)}${me ? `: <b>${ordinal(me.place)} of ${me.of}</b>` : ''}</span><span class="small muted">${esc(timeLeft(c))}</span></button>`;
+      <span>${esc(c.name)}${me ? `: <b>${ordinal(me.place)} of ${me.of}</b>` : ''}</span><span class="small muted">${esc(statusLine(c))}</span></button>`;
   }).join('')}</div>`;
 }
 
@@ -1121,88 +1122,156 @@ function cupInviteCard(ui) {
   return `<div class="card strong" style="align-items:center;text-align:center">
     <span class="small muted">You were invited to a championship</span>
     <b class="display" style="font-size:30px;letter-spacing:.12em">${esc(ui.cupInvite)}</b>
-    ${btn('cup-join-invite', `Join championship ${ui.cupInvite}`, 'primary block', '', ui.cupBusy ? 'disabled' : '')}</div>`;
+    ${btn('cup-preview', 'See the rules', 'primary block', ui.cupInvite, ui.cupBusy ? 'disabled' : '')}</div>`;
 }
+
+const when = (t) => new Date(t).toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
+
+// Everything a player agrees to.
+function rulesCard(v) {
+  const c = v.cup;
+  const start = c.startedAt ? `Started ${when(c.startedAt)}` : c.startMode === 'time' ? `Starts ${when(c.startAt)}` : 'When the host presses Start';
+  const groups = ['Business', 'Games', 'Knowledge'].map((g) => {
+    const list = c.events.filter((e) => EVENT_INFO[e].group === g);
+    return list.length ? `<div class="between small" style="align-items:flex-start"><span class="muted">${g}</span><b style="text-align:right">${list.map((e) => esc(EVENT_INFO[e].label)).join(', ')}</b></div>` : '';
+  }).join('');
+  const row = (k, val) => `<div class="between small" style="align-items:flex-start"><span class="muted">${k}</span><b style="text-align:right">${val}</b></div>`;
+  return `<div class="card"><h3>Rules</h3>
+    ${row('Type', c.kind === 'game' ? 'By game days' : 'By real days')}
+    ${row('Length', c.kind === 'game' ? `${c.length} game days for each player (closes after ${CUP_BACKSTOP_DAYS} real days at most)` : `${c.length} real days, the same end for everyone`)}
+    ${row('Start', esc(start))}
+    ${row('Levels', `${levelsText(c)}${c.levelTo > PLAYABLE_LEVEL ? ' (Levels 3–7 coming soon)' : ''}`)}
+    ${row('Players', `Up to ${c.size}`)}
+    ${hr}${groups}${hr}
+    <span class="small">Each event: 1st 10 points, 2nd 8, 3rd 6, then 5, 4, 3, 2, 1. Most points wins. Business events count from the start, as averages, after ${CUP_MIN_DAYS} game days; the quiz after ${CUP_MIN_QUIZ} questions; games count your best score. Only play while your shop is in these levels counts.</span>
+    <span class="small muted">Trophies for the top 3. No money and no prizes.</span></div>`;
+}
+
+const playerList = (v) => v.players.map((p) => `<div class="between small"><span>${esc(p.name)}${p.you ? ' <span class="tag green">You</span>' : ''}${p.host ? ' <span class="tag amber">Host</span>' : ''}</span>${p.days != null && v.cup.kind === 'game' ? `<span class="muted">${p.days} of ${v.cup.length} days</span>` : ''}</div>`).join('');
 
 export function cupsScreen(s, ui) {
   const header = backHeader('Championships');
   if (!Account.loggedIn()) {
     return `<main class="screen">${header}<div class="body">
-      ${ui.cupInvite ? `<div class="card soft"><b>You were invited to championship ${esc(ui.cupInvite)}</b><span class="small">Make an account or log in, then join.</span></div>` : ''}
+      ${ui.cupInvite ? `<div class="card soft"><b>You were invited to championship ${esc(ui.cupInvite)}</b><span class="small">Make an account or log in, then see the rules.</span></div>` : ''}
       ${titi('Championships are played against real people, so you need an account (13 and over).')}
       <div class="grid2">${btn('account-open', 'Create account', 'primary small', 'signup')}${btn('account-open', 'Log in', 'secondary small', 'login')}</div>
     </div></main>`;
   }
   const error = ui.cupError ? `<div class="toast" role="alert">${esc(ui.cupError)}</div>` : '';
-  const mine = (s.cups || []).slice().sort((a, b) => cupEnded(a) - cupEnded(b) || a.endsAt - b.endsAt);
+  const order = { running: 0, open: 1, ended: 2, cancelled: 3 };
+  const mine = (s.cups || []).slice().sort((a, b) => order[cupStatus(a)] - order[cupStatus(b)]);
   const rows = mine.map((c) => {
-    const me = myPlace(c);
+    const me = cupStatus(c) !== 'open' ? myPlace(c) : null;
     return `<button type="button" class="choice" data-action="cup-open" data-arg="${esc(c.code)}">
       <b>${esc(c.name)} <span class="small muted" style="font-weight:600">· ${esc(c.code)}</span></b>
-      <span>${me ? `${ordinal(me.place)} of ${me.of} · ${me.points} points · ` : ''}${esc(timeLeft(c))}</span></button>`;
+      <span>${me ? `${ordinal(me.place)} of ${me.of} · ${me.points} points · ` : ''}${esc(statusLine(c))}</span></button>`;
   }).join('');
+  const busy = ui.cupBusy ? 'disabled' : '';
   return `<main class="screen">${header}<div class="body">${error}
     ${ui.cupInvite ? cupInviteCard(ui) : ''}
-    ${titi('Make your own championship, choose the events, and invite friends. Points for each event decide the winner.')}
+    ${titi('Host a championship: set the rules, invite people, and everyone starts together. Players read the rules and agree before they register.')}
     ${rows ? `<h2 class="small muted" style="text-transform:uppercase;letter-spacing:.06em">Your championships</h2>${rows}` : ''}
-    ${btn('cup-new', 'Create a championship', 'primary block', '', ui.cupBusy ? 'disabled' : '')}
+    <div class="grid2">${btn('cup-standard', 'Use standard rules', 'primary small', '', busy)}${btn('cup-new', 'Set my own rules', 'secondary small', '', busy)}</div>
+    <span class="small muted">Standard rules: ${lengthText(STANDARD_RULES)}, every event, up to ${STANDARD_RULES.size} players, Levels 1–7, you press Start.</span>
     ${btn('open', `${icon('star', 18)} Trophy cabinet${s.trophies?.length ? ` (${s.trophies.length})` : ''}`, 'secondary small block', 'trophies')}
     <form data-form="cup-code" class="card"><h3>Have a championship code?</h3>
       <label class="sr-only" for="cup-code">Championship code</label>
       <input id="cup-code" name="code" value="${esc(ui.cupInvite || '')}" maxlength="6" autocomplete="off" autocapitalize="characters" placeholder="ABCDEF" style="height:44px;border:1px solid var(--line-2);border-radius:12px;padding:0 12px;font-size:18px;letter-spacing:.12em;text-transform:uppercase">
-      <button type="submit" class="btn secondary small" ${ui.cupBusy ? 'disabled' : ''}>Join</button></form>
+      <button type="submit" class="btn secondary small" ${busy}>See the rules</button></form>
   </div></main>`;
 }
 
-export function cupNewScreen(ui) {
+export function cupNewScreen(s, ui) {
   const f = ui.cupForm;
-  const pick = (action, arg, label, on) => `<button type="button" class="chip" data-action="${action}" data-arg="${arg}" aria-pressed="${on}" style="min-height:40px;font-weight:600;${on ? 'background:var(--green);color:#fff;border-color:var(--green)' : ''}">${esc(label)}</button>`;
+  const pick = (action, arg, label, on) => `<button type="button" class="chip" data-action="${action}" data-arg="${arg}" aria-pressed="${on}" style="min-height:40px;font-weight:600;justify-content:center;${on ? 'background:var(--green);color:#fff;border-color:var(--green)' : ''}">${esc(label)}</button>`;
+  const stepper = (action, value, label, min, max) => `<div class="stepper"><button type="button" class="step" data-action="${action}" data-arg="-1" aria-label="${label} down" ${value <= min ? 'disabled' : ''}>−</button><output>${value}</output><button type="button" class="step" data-action="${action}" data-arg="1" aria-label="${label} up" ${value >= max ? 'disabled' : ''}>+</button></div>`;
   const groups = ['Business', 'Games', 'Knowledge'].map((g) => `<b class="small" style="margin-top:4px">${g}</b>
-    ${Object.entries(EVENT_INFO).filter(([, e]) => e.group === g).map(([id, e]) => {
-      const on = f.events.includes(id);
-      return `<label class="settings-opt" style="padding:6px 0"><input type="checkbox" data-action="cup-event" value="${id}" ${on ? 'checked' : ''}><span><b>${esc(e.label)}</b><div class="small muted">${esc(e.about)}</div></span></label>`;
-    }).join('')}`).join('');
-  return `<main class="screen">${backHeader('New championship', 'cup-back')}<div class="body">
+    ${Object.entries(EVENT_INFO).filter(([, e]) => e.group === g).map(([id, e]) => `<label class="settings-opt" style="padding:6px 0"><input type="checkbox" data-action="cup-event" value="${id}" ${f.events.includes(id) ? 'checked' : ''}><span><b>${esc(e.label)}</b><div class="small muted">${esc(e.about)}</div></span></label>`).join('')}`).join('');
+  const outside = s.level < f.levelFrom || s.level > f.levelTo;
+  return `<main class="screen">${backHeader(ui.cupEditing ? 'Change the rules' : 'New championship', 'cup-back')}<div class="body">
     ${ui.cupError ? `<div class="toast" role="alert">${esc(ui.cupError)}</div>` : ''}
     <div class="card"><h3>Name</h3><div class="wrap">${CUP_NAMES.map((n, i) => pick('cup-name', i, n, f.name === i)).join('')}</div></div>
-    <div class="card"><h3>How long?</h3><span class="small muted">Real days, from now.</span>
-      <div class="grid3">${CUP_DAYS.map((d) => pick('cup-days', d, `${d} days`, f.days === d)).join('')}</div></div>
-    <div class="card"><div class="between"><div><h3>Players</h3><span class="small muted">Including you, up to ${CUP_MAX_SIZE}.</span></div>
-      <div class="stepper"><button type="button" class="step" data-action="cup-size" data-arg="-1" aria-label="Fewer players" ${f.size <= 2 ? 'disabled' : ''}>−</button><output>${f.size}</output><button type="button" class="step" data-action="cup-size" data-arg="1" aria-label="More players" ${f.size >= CUP_MAX_SIZE ? 'disabled' : ''}>+</button></div></div></div>
-    <div class="card"><h3>Events</h3><span class="small muted">Each event gives points: 1st 10, 2nd 8, 3rd 6, then 5, 4, 3, 2, 1. Business events count after ${CUP_MIN_DAYS} game days; the quiz after ${CUP_MIN_QUIZ} questions.</span>
-      ${groups}</div>
+    <div class="card"><h3>Type</h3>
+      <div class="grid2">${pick('cup-kind', 'real', 'By real days', f.kind === 'real')}${pick('cup-kind', 'game', 'By game days', f.kind === 'game')}</div>
+      <span class="small muted">${f.kind === 'game' ? `Every player gets the same number of game days from the start. It ends when all have played them (or after ${CUP_BACKSTOP_DAYS} real days).` : 'It ends for everyone at the same time.'}</span>
+      <div class="grid3">${CUP_KINDS[f.kind].map((d) => pick('cup-length', d, `${d} ${f.kind === 'game' ? 'game days' : 'days'}`, f.length === d)).join('')}</div></div>
+    <div class="card"><h3>Levels</h3><span class="small muted">Only players whose shop is at these levels can register, and only play at these levels counts.</span>
+      <div class="between"><span>From Level</span>${stepper('cup-from', f.levelFrom, 'From level', 1, f.levelTo)}</div>
+      <div class="between"><span>To Level</span>${stepper('cup-to', f.levelTo, 'To level', f.levelFrom, 7)}</div>
+      ${f.levelTo > PLAYABLE_LEVEL ? `<span class="small muted">Levels 3–7 are coming soon. ${f.levelFrom > PLAYABLE_LEVEL ? 'Nobody can play them yet.' : 'Players can register at Levels 1–2 for now.'}</span>` : ''}
+      ${outside ? `<span class="small" style="color:var(--red);font-weight:600">Your shop is at Level ${s.level}, outside these levels. Include it to host.</span>` : ''}</div>
+    <div class="card"><h3>Start</h3><span class="small muted">Everyone starts together. Registration closes at the start.</span>
+      <div class="grid3">${pick('cup-start', 'hour', 'In 1 hour', f.start === 'hour')}${pick('cup-start', 'tomorrow', 'Tomorrow 8 am', f.start === 'tomorrow')}${pick('cup-start', 'host', "I'll start it", f.start === 'host')}</div>
+      <span class="small muted">${f.start === 'host' ? `You press Start once at least ${CUP_MIN_START} players have registered.` : `If fewer than ${CUP_MIN_START} players have registered by then, it is cancelled.`}</span></div>
+    <div class="card"><div class="between"><div><h3>Players</h3><span class="small muted">Including you, up to ${CUP_MAX_SIZE}.</span></div>${stepper('cup-size', f.size, 'Players', CUP_MIN_START, CUP_MAX_SIZE)}</div></div>
+    <div class="card"><h3>Events</h3><span class="small muted">Each event gives points: 1st 10, 2nd 8, 3rd 6, then 5, 4, 3, 2, 1.</span>${groups}</div>
   </div>
-  <div class="foot">${btn('cup-create', `Create ${CUP_NAMES[f.name]}`, 'primary block', '', ui.cupBusy || !f.events.length ? 'disabled' : '')}</div></main>`;
+  <div class="foot">${btn('cup-create', ui.cupEditing ? 'Save the rules' : `Open registration for ${CUP_NAMES[f.name]}`, 'primary block', '', ui.cupBusy || !f.events.length || outside || f.levelFrom > PLAYABLE_LEVEL ? 'disabled' : '')}</div></main>`;
+}
+
+// The rules page someone sees before registering.
+export function cupPreviewScreen(s, ui) {
+  const v = ui.cupPreview;
+  const c = v.cup;
+  const outside = s.level < c.levelFrom || s.level > c.levelTo;
+  const reason = c.status === 'cancelled' ? 'This championship was cancelled.'
+    : c.status !== 'open' ? 'This championship has started. Registration is closed.'
+    : v.players.length >= c.size ? 'This championship is full.'
+    : outside ? `This championship is for ${levelsText(c)}. Your shop is at Level ${s.level}.` : null;
+  return `<main class="screen">${backHeader(c.name, 'cup-back')}<div class="body">
+    ${ui.cupError ? `<div class="toast" role="alert">${esc(ui.cupError)}</div>` : ''}
+    <div class="card strong" style="align-items:center;text-align:center"><span class="small muted">Code ${esc(c.code)}</span><b class="display" style="font-size:26px">${esc(c.name)}</b>
+      <span class="small">${v.players.length} of ${c.size} registered · ${esc(statusLine({ view: v }))}</span></div>
+    ${rulesCard(v)}
+    <div class="card"><h3>Registered</h3>${playerList(v)}</div>
+  </div>
+  <div class="foot">${reason ? `<div class="toast">${esc(reason)}</div>` : btn('cup-register', 'I agree to the rules and register', 'primary block', '', ui.cupBusy ? 'disabled' : '')}</div></main>`;
 }
 
 export function cupScreen(s, ui) {
   const cup = findCup(s, ui.cupCode);
   const v = cup.view;
-  const ended = cupEnded(cup);
+  const c = v.cup;
+  const st = c.status;
   const error = ui.cupError ? `<div class="toast" role="alert">${esc(ui.cupError)}</div>` : '';
   const medal = (p) => (p <= 3 ? `<span class="tag ${p === 1 ? 'solid' : 'amber'}">${ordinal(p)}</span>` : `<span class="small muted" style="font-weight:700">${ordinal(p)}</span>`);
-  const table = v.standings.map((r) => `<div class="between small"><span class="row" style="gap:8px">${medal(r.place)}<span>${esc(r.name)}${r.you ? ' <span class="tag green">You</span>' : ''}</span></span><b>${r.points} pts${r.wins ? ` · ${r.wins} win${r.wins > 1 ? 's' : ''}` : ''}</b></div>`).join('');
-  const events = v.cup.events.map((id) => {
-    const e = EVENT_INFO[id];
-    const rows = (v.events[id] || []).map((r) => `<div class="between small"><span class="row" style="gap:8px">${medal(r.place)}<span>${esc(r.name)}${r.you ? ' <span class="tag green">You</span>' : ''}</span></span><b>${esc(e.show(r.value))} · ${r.points} pts</b></div>`).join('');
-    const waiting = e.group === 'Business' ? `Counts after ${CUP_MIN_DAYS} game days in this championship.` : id === 'quiz' ? `Counts after ${CUP_MIN_QUIZ} quiz questions.` : 'No scores yet. Be the first.';
-    return `<div style="display:flex;flex-direction:column;gap:6px"><div class="between"><b>${esc(e.label)}</b><span class="small muted">${esc(e.group)}</span></div>
-      <span class="small muted">${esc(e.about)}</span>
-      ${rows || `<span class="small muted">${waiting}</span>`}
-      ${e.game && !ended ? btn('cup-play', 'Play', 'secondary small block', id) : ''}</div>`;
-  }).join('<hr style="border:0;border-top:1px dashed var(--line);margin:4px 0;width:100%">');
-  const me = myPlace(cup);
-  return `<main class="screen">${backHeader(cup.name, 'cup-back')}<div class="body">${error}
-    <div class="card strong" style="align-items:center;text-align:center">
-      <span class="small muted">${ended ? 'Finished' : `${esc(timeLeft(cup))} · ${v.players} of ${v.cup.size} players`}</span>
-      ${me ? `<b class="display" style="font-size:30px">${ordinal(me.place)} of ${me.of}</b><span class="small">${me.points} points</span>` : ''}
-      ${ended ? '' : `<span class="small muted">Code <b style="letter-spacing:.1em">${esc(cup.code)}</b></span>
-        <div class="grid2" style="width:100%">${btn('cup-share', `${icon('send', 18, 2)} Share`, 'primary small')}${btn('cup-copy', ui.copied ? 'Link copied' : 'Copy link', 'secondary small')}</div>`}</div>
-    <div class="card"><h3>Table</h3>${table}</div>
-    <div class="card"><h3>Events</h3>${events}</div>
-    ${titi('Business numbers count from the day you joined, as an average, so playing more days doesn\'t win by itself. Games count your best score.')}
-    ${ui.confirmCupLeave ? '<div class="toast">You will leave this championship and lose your place. Tap again to confirm.</div>' : ''}
-    ${btn('cup-leave', 'Leave this championship', 'secondary small block', '', ui.cupBusy ? 'disabled' : '')}
+  const share = st === 'open' ? `<span class="small muted">Code <b style="letter-spacing:.1em">${esc(cup.code)}</b></span>
+    <div class="grid2" style="width:100%">${btn('cup-share', `${icon('send', 18, 2)} Invite`, 'primary small')}${btn('cup-copy', ui.copied ? 'Link copied' : 'Copy link', 'secondary small')}</div>` : '';
+  const me = st !== 'open' ? myPlace(cup) : null;
+  const head = `<div class="card strong" style="align-items:center;text-align:center">
+    <span class="small muted">${esc(statusLine(cup))}${st === 'open' ? ` · ${v.players.length} of ${c.size} registered` : ''}</span>
+    ${me ? `<b class="display" style="font-size:30px">${ordinal(me.place)} of ${me.of}</b><span class="small">${me.points} points</span>` : ''}
+    ${st === 'cancelled' ? '<span class="small">It did not start, so nobody plays it. Your game is not affected.</span>' : ''}
+    ${st === 'running' && !inLevels(s, cup) ? `<span class="small" style="color:var(--red);font-weight:600">Your shop is at Level ${s.level}, outside ${levelsText(c)}. Your play doesn't count here now.</span>` : ''}
+    ${share}</div>`;
+  let main = '';
+  if (st === 'open') {
+    const host = c.host ? `<div class="card soft"><b>You are the host</b>
+      <span class="small">${c.startMode === 'host' ? `Press Start when everyone is in. At least ${CUP_MIN_START} players.` : `It starts by itself ${when(c.startAt)}.`}</span>
+      ${c.startMode === 'host' ? btn('cup-start', 'Start the championship now', 'primary small block', '', v.players.length < CUP_MIN_START || ui.cupBusy ? 'disabled' : '') : ''}
+      ${c.locked ? '<span class="small muted">Players have agreed to these rules, so they can no longer change.</span>' : btn('cup-edit', 'Change the rules', 'secondary small block')}</div>` : '';
+    main = `${host}<div class="card"><h3>Registered</h3>${playerList(v)}</div>${rulesCard(v)}
+      ${titi('Nothing counts until the start. Then everyone begins from zero together.')}`;
+  } else if (st !== 'cancelled') {
+    const days = Object.fromEntries(v.players.map((p) => [p.name, p.days]));
+    const table = v.standings.map((r) => `<div class="between small"><span class="row" style="gap:8px">${medal(r.place)}<span>${esc(r.name)}${r.you ? ' <span class="tag green">You</span>' : ''}${c.kind === 'game' ? ` <span class="muted">· day ${days[r.name] ?? 0}/${c.length}</span>` : ''}</span></span><b>${r.points} pts${r.wins ? ` · ${r.wins} win${r.wins > 1 ? 's' : ''}` : ''}</b></div>`).join('');
+    const canPlay = gamesCount(s, cup);
+    const events = c.events.map((id) => {
+      const e = EVENT_INFO[id];
+      const rows = (v.events[id] || []).map((r) => `<div class="between small"><span class="row" style="gap:8px">${medal(r.place)}<span>${esc(r.name)}${r.you ? ' <span class="tag green">You</span>' : ''}</span></span><b>${esc(e.show(r.value))} · ${r.points} pts</b></div>`).join('');
+      const waiting = e.group === 'Business' ? `Counts after ${CUP_MIN_DAYS} game days from the start.` : id === 'quiz' ? `Counts after ${CUP_MIN_QUIZ} quiz questions.` : 'No scores yet. Be the first.';
+      return `<div style="display:flex;flex-direction:column;gap:6px"><div class="between"><b>${esc(e.label)}</b><span class="small muted">${esc(e.group)}</span></div>
+        ${rows || `<span class="small muted">${waiting}</span>`}
+        ${e.game && st === 'running' && canPlay ? btn('cup-play', 'Play', 'secondary small block', id) : ''}</div>`;
+    }).join(hr);
+    main = `<div class="card"><h3>Table</h3>${table}</div><div class="card"><h3>Events</h3>${events}</div>${rulesCard(v)}`;
+  }
+  const leave = st === 'open' && c.host ? 'Cancel this championship' : cupOver(cup) ? 'Remove from my list' : st === 'open' ? 'Leave before it starts' : 'Leave this championship';
+  const confirm = st === 'open' && c.host ? 'Everyone registered will see it cancelled. Tap again to confirm.' : cupOver(cup) ? 'Your trophy stays in the cabinet. Tap again to confirm.' : 'You will lose your place. Tap again to confirm.';
+  return `<main class="screen">${backHeader(cup.name, 'cup-back')}<div class="body">${error}${head}${main}
+    ${ui.confirmCupLeave ? `<div class="toast">${confirm}</div>` : ''}
+    ${btn('cup-leave', leave, 'secondary small block', '', ui.cupBusy ? 'disabled' : '')}
   </div></main>`;
 }
 
