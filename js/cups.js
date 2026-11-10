@@ -88,6 +88,28 @@ export function queueCupGame(s, result, now = Date.now()) {
   }
 }
 
+// When a championship ends: a trophy for the cabinet and any new badges. Once only.
+export function awardCup(s, cup) {
+  const v = cup.view;
+  if (cup.awarded || !v?.cup?.ended) return null;
+  cup.awarded = true;
+  const me = myPlace(cup);
+  const eventsWon = cup.events.filter((e) => v.events?.[e]?.some((r) => r.you && r.place === 1));
+  const scored = !!me && me.points > 0;
+  const kind = scored && me.place <= 3 ? ['gold', 'silver', 'bronze'][me.place - 1] : 'part';
+  const trophy = { code: cup.code, name: cup.name, kind, place: me?.place ?? null, of: me?.of ?? v.standings.length, points: me?.points ?? 0, eventsWon, endedAt: cup.endsAt, days: v.cup.days };
+  s.trophies ??= [];
+  s.trophies.push(trophy);
+  const earned = [];
+  const give = (id) => { if (!s.badges.includes(id)) { s.badges.push(id); earned.push(id); } };
+  if (kind === 'gold') give('cup_champion');
+  if (kind !== 'part') give('cup_podium');
+  if ((cup.daysIn || 0) >= CUP_MIN_DAYS) give('cup_full');
+  trophy.badges = earned;
+  s.trophyNews = [...(s.trophyNews || []), trophy];
+  return trophy;
+}
+
 // "3 days left", "5 hours left" or "Finished".
 export function timeLeft(cup, now = Date.now()) {
   const ms = cup.endsAt - now;

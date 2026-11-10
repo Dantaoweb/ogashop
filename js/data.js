@@ -204,6 +204,9 @@ export const BADGES = {
   money_checker:   { name: 'Eagle eye',         desc: 'Passed the Money check challenge.' },
   fast_runner:     { name: 'Fast runner',       desc: 'Passed the Road safety challenge.' },
   change_master:   { name: 'Change master',     desc: 'Passed the Change master challenge.' },
+  cup_champion:    { name: 'Champion',          desc: 'Won a championship.' },
+  cup_podium:      { name: 'On the podium',     desc: 'Finished in the top 3 of a championship.' },
+  cup_full:        { name: 'Full championship', desc: 'Played 3 game days or more in a championship.' },
   know_business:   { name: 'Know your business', desc: '4 out of 5 or better in an end-of-level quiz.' },
 };
 

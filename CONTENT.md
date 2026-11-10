@@ -339,6 +339,7 @@ Players with an account make their own championship and invite others with a cod
 - **Games:** Money check and Change master (best score, then fastest), Road safety (fewest bumps). Challenge days and "Play" in the championship both count.
 - **Knowledge:** quiz answers right, after 3 questions.
 - **Points per event:** 1st 10, 2nd 8, 3rd 6, then 5, 4, 3, 2, 1, and 1 for everyone ranked below. Equal results share the place. Most points wins; ties go to more event wins.
+- **At the end:** a gold, silver or bronze trophy for the top 3 (with points), or "Took part" for everyone else, shown on a trophy screen and kept in the **Trophy cabinet** (score screen and Championships). Badges: **Champion** (1st), **On the podium** (top 3), **Full championship** (3 or more game days in it).
 - A player can be in 3 championships at a time. Nothing changes after the end. Ages 13–17 show as "Player 2". No Junior, no money, no skills: trophies only.
 
 ## 8. Open points for review

@@ -55,7 +55,7 @@ const PATHS = {
 };
 export const icon = (name, size = 24, sw = 1.8) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" ${P} stroke-width="${sw}" aria-hidden="true">${PATHS[name] || ''}</svg>`;
 
-const BADGE_ICON = { first_sale: 'coin', record_keeper: 'doc', fully_stocked: 'box', never_lost_debt: 'check', debt_free_week: 'calendar', goal_reached: 'star', know_business: 'search', money_checker: 'search', fast_runner: 'person', change_master: 'coin' };
+const BADGE_ICON = { cup_champion: 'star', cup_podium: 'star', cup_full: 'calendar', first_sale: 'coin', record_keeper: 'doc', fully_stocked: 'box', never_lost_debt: 'check', debt_free_week: 'calendar', goal_reached: 'star', know_business: 'search', money_checker: 'search', fast_runner: 'person', change_master: 'coin' };
 
 const stockChip = (s, id, lowAt) => `<span class="chip${s.stock[id] <= lowAt ? ' low' : ''}">${good(id, 18)}${esc(GOODS[id].short)} ${s.stock[id]}</span>`;
 const items = (list) => list.map((it) => `${it.qty} ${GOODS[it.item].short.toLowerCase()}`).join(' and ');
@@ -942,6 +942,7 @@ export function scoreScreen(s) {
         ${goal('Profit this level', Math.max(0, s.levelProfit), L.goalProfit, `${fmt(s.levelProfit)} / ${fmt(L.goalProfit)}`)}
         ${goal('Business score', s.score, L.goalScore, `${s.score} / ${L.goalScore}`)}
         ${L.maxLateDays ? `<span class="small muted">And no debt more than ${L.maxLateDays} days late.</span>` : ''}</div>
+      ${s.trophies?.length ? btn('open', `${icon('star', 18)} Trophy cabinet (${s.trophies.length})`, 'secondary small block', 'trophies') : ''}
       <div style="display:flex;flex-direction:column;gap:8px"><h3 style="font-size:16px">Badges</h3>
         <div class="badges">${Object.entries(BADGES).map(([id, b]) => {
           const has = s.badges.includes(id);
@@ -1145,6 +1146,7 @@ export function cupsScreen(s, ui) {
     ${titi('Make your own championship, choose the events, and invite friends. Points for each event decide the winner.')}
     ${rows ? `<h2 class="small muted" style="text-transform:uppercase;letter-spacing:.06em">Your championships</h2>${rows}` : ''}
     ${btn('cup-new', 'Create a championship', 'primary block', '', ui.cupBusy ? 'disabled' : '')}
+    ${btn('open', `${icon('star', 18)} Trophy cabinet${s.trophies?.length ? ` (${s.trophies.length})` : ''}`, 'secondary small block', 'trophies')}
     <form data-form="cup-code" class="card"><h3>Have a championship code?</h3>
       <label class="sr-only" for="cup-code">Championship code</label>
       <input id="cup-code" name="code" value="${esc(ui.cupInvite || '')}" maxlength="6" autocomplete="off" autocapitalize="characters" placeholder="ABCDEF" style="height:44px;border:1px solid var(--line-2);border-radius:12px;padding:0 12px;font-size:18px;letter-spacing:.12em;text-transform:uppercase">
@@ -1201,6 +1203,53 @@ export function cupScreen(s, ui) {
     ${titi('Business numbers count from the day you joined, as an average, so playing more days doesn\'t win by itself. Games count your best score.')}
     ${ui.confirmCupLeave ? '<div class="toast">You will leave this championship and lose your place. Tap again to confirm.</div>' : ''}
     ${btn('cup-leave', 'Leave this championship', 'secondary small block', '', ui.cupBusy ? 'disabled' : '')}
+  </div></main>`;
+}
+
+// ---------- Trophies ----------
+
+const TROPHY_COLOR = { gold: '#F5B70A', silver: '#AEB8BF', bronze: '#C97B3B', part: '#9CC9A8' };
+const TROPHY_WORD = { gold: 'Gold', silver: 'Silver', bronze: 'Bronze', part: 'Took part' };
+
+function cupArt(kind, size = 96) {
+  const c = TROPHY_COLOR[kind];
+  return `<svg width="${size}" height="${size}" viewBox="0 0 64 64" aria-hidden="true">
+    <path d="M19 12H9v4c0 6 5 10 11 10M45 12h10v4c0 6-5 10-11 10" fill="none" stroke="${c}" stroke-width="4" stroke-linecap="round"/>
+    <path d="M18 8h28v14c0 8-6 15-14 15s-14-7-14-15z" fill="${c}"/>
+    <path d="M24 12v9c0 3 2 6 5 7" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" opacity=".55"/>
+    <rect x="29" y="36" width="6" height="9" fill="${c}"/>
+    <rect x="20" y="45" width="24" height="9" rx="2.5" fill="${c}"/>
+    <rect x="24" y="48" width="16" height="3" rx="1.5" fill="#fff" opacity=".5"/></svg>`;
+}
+
+export function trophyScreen(s, tr) {
+  const top = tr.kind !== 'part';
+  const won = tr.eventsWon.map((e) => EVENT_INFO[e]?.label).filter(Boolean);
+  return `<main class="screen hero"><div class="body center">
+      <span class="tag solid" style="align-self:center;text-transform:uppercase;letter-spacing:.08em" ${top ? 'data-confetti' : ''}>${esc(tr.name)} is over</span>
+      <div class="pop" style="display:flex;justify-content:center">${cupArt(tr.kind, 140)}</div>
+      <h1 class="display" style="font-size:32px">${top ? `${ordinal(tr.place)} place!` : 'Well played!'}</h1>
+      <p class="lead">${tr.place ? `${ordinal(tr.place)} of ${tr.of} player${tr.of === 1 ? "" : "s"} · ${tr.points} points` : `${tr.of} players took part`}</p>
+      ${won.length ? `<div class="card" style="color:var(--ink);text-align:left"><b>Events you won</b><span class="small">${won.map(esc).join(', ')}</span></div>` : ''}
+      ${tr.badges?.length ? `<div class="card" style="color:var(--ink);text-align:left"><b>New badge${tr.badges.length > 1 ? 's' : ''}</b><span class="small">${tr.badges.map((b) => esc(BADGES[b].name)).join(', ')}</span></div>` : ''}
+      <p class="lead small">${top ? 'Your trophy is in your Trophy cabinet.' : 'Your place is saved in your Trophy cabinet. Try another championship!'}</p>
+    </div>
+    <div class="foot" style="background:none">${btn('trophy-continue', 'Continue', 'amber block')}${btn('trophy-cabinet', 'See my trophy cabinet', 'ghost-light block')}</div></main>`;
+}
+
+export function trophiesScreen(s) {
+  const list = (s.trophies || []).slice().reverse();
+  const counts = ['gold', 'silver', 'bronze'].map((k) => [k, list.filter((t) => t.kind === k).length]);
+  const shelf = list.map((t) => `<div class="card" style="flex-direction:row;align-items:center;gap:12px">
+      <span style="flex:none">${cupArt(t.kind, 56)}</span>
+      <div class="grow"><b>${esc(t.name)}</b>
+        <div class="small">${t.place ? `${ordinal(t.place)} of ${t.of} · ${t.points} points` : 'Took part'} · ${t.days} days</div>
+        ${t.eventsWon.length ? `<div class="small muted">Won: ${t.eventsWon.map((e) => esc(EVENT_INFO[e]?.label || e)).join(', ')}</div>` : ''}
+        <div class="small muted">${esc(new Date(t.endedAt).toLocaleDateString())}</div></div>
+      <span class="tag ${t.kind === 'gold' ? 'solid' : t.kind === 'part' ? 'green' : 'amber'}">${TROPHY_WORD[t.kind]}</span></div>`).join('');
+  return `<main class="screen">${backHeader('Trophy cabinet')}<div class="body">
+    <div class="grid3">${counts.map(([k, n]) => `<div class="card" style="align-items:center;text-align:center;gap:4px;padding:10px">${cupArt(k, 44)}<b style="font-size:20px">${n}</b><span class="small muted">${TROPHY_WORD[k]}</span></div>`).join('')}</div>
+    ${shelf || titi('No trophies yet. Join or create a championship from Settings, and finish in the top 3 to win one.')}
   </div></main>`;
 }
 

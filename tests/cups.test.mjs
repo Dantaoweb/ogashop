@@ -87,6 +87,25 @@ test('points: by place with ties shared, business needs 3 days, games best then 
   assert.equal((await C.sync(s, user('Nobody'), { code }, ctx())).status, 404);
 });
 
+test('the end: a trophy and badges once; no points means taking part', () => {
+  const s = E.newGame('business', mulberry32(301));
+  const end = (standings, events = {}) => ({ cup: { code: 'CUPCUP', name: 'Family Cup', endsAt: 5, days: 7, ended: true, events: ['money', 'score'] }, standings, events, players: standings.length });
+  const cup = Cups.applyCupView(s, end([{ name: 'Me', you: true, points: 18, wins: 2, place: 1 }, { name: 'B', you: false, points: 8, place: 2 }], { money: [{ you: true, place: 1 }], score: [{ you: true, place: 1 }] }));
+  cup.daysIn = 4;
+  const tr = Cups.awardCup(s, cup);
+  assert.deepEqual([tr.kind, tr.place, tr.of, tr.points, tr.eventsWon], ['gold', 1, 2, 18, ['money', 'score']]);
+  assert.deepEqual(tr.badges, ['cup_champion', 'cup_podium', 'cup_full']);
+  assert.equal(Cups.awardCup(s, cup), null, 'once only');
+  assert.equal(s.trophies.length, 1);
+  assert.equal(s.trophyNews.length, 1);
+  const c2 = Cups.applyCupView(s, { ...end([{ name: 'Me', you: true, points: 0, wins: 0, place: 1 }]), cup: { code: 'OTHERS', name: 'Friday Cup', endsAt: 5, days: 3, ended: true, events: ['score'] } });
+  const t2 = Cups.awardCup(s, c2);
+  assert.equal(t2.kind, 'part', 'first with no points is not a gold');
+  assert.deepEqual(t2.badges, []);
+  const running = Cups.applyCupView(s, { ...end([]), cup: { code: 'RUNNIN', name: 'Market Cup', endsAt: Date.now() + DAY, days: 7, ended: false, events: ['score'] } });
+  assert.equal(Cups.awardCup(s, running), null, 'nothing before the end');
+});
+
 test('in the game: numbers count from joining, as averages; best game waits to be sent', () => {
   const s = E.newGame('business', mulberry32(300));
   s.stats.days = 4; s.totalProfit = 9000; s.stats.recW = 5; s.stats.totW = 10; s.quizLog = [{ correct: 1, total: 5 }];

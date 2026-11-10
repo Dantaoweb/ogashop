@@ -182,11 +182,13 @@ async function cupSyncAll() {
     for (const cup of [...s.cups]) {
       if (cup.final) continue;
       const sent = cup.games;
-      const r = await Market.cupSync(cup.code, Cups.cupBiz(s, cup), sent);
+      const biz = Cups.cupBiz(s, cup);
+      if (!Cups.cupEnded(cup)) cup.daysIn = biz.days;
+      const r = await Market.cupSync(cup.code, biz, sent);
       if (r.view) {
         Cups.applyCupView(s, r.view);
         cup.games = cup.games.filter((g) => !sent.includes(g));
-        if (r.view.cup.ended) cup.final = true;
+        if (r.view.cup.ended) { cup.final = true; Cups.awardCup(s, cup); }
       } else if (r.status === 404) Cups.removeCup(s, cup.code);
     }
     save();
@@ -236,6 +238,8 @@ function view() {
   if (ui.screen === 'goals') return UI.goalsScreen(s, ui);
   if (ui.screen === 'records') return UI.recordsScreen(s);
   if (ui.screen === 'multi' && s) return UI.multiScreen(s, ui);
+  if (s?.trophyNews?.length && ((s.phase === 'morning' && !ui.screen) || ['cups', 'cup', 'trophies'].includes(ui.screen))) return UI.trophyScreen(s, s.trophyNews[0]);
+  if (ui.screen === 'trophies' && s) return UI.trophiesScreen(s);
   if (ui.screen === 'cups' && s) return UI.cupsScreen(s, ui);
   if (ui.screen === 'cup-new' && s && ui.cupForm) return UI.cupNewScreen(ui);
   if (ui.screen === 'cup' && s && Cups.findCup(s, ui.cupCode)) return UI.cupScreen(s, ui);
@@ -579,6 +583,8 @@ const actions = {
     s.today.challengeGame = { ...Ch.startChallenge(arg, Math.random, { practice: true }), from: 'cup' };
     ui.screen = 'challenge';
   },
+  'trophy-continue': () => { s.trophyNews.shift(); },
+  'trophy-cabinet': () => { s.trophyNews.shift(); ui.screen = 'trophies'; },
   'cup-new': () => {
     ui.cupForm = { name: 0, days: 7, size: 10, events: [...Cups.CUP_EVENTS] };
     ui.cupError = null;

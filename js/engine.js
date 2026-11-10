@@ -116,6 +116,7 @@ export function migrate(s) {
   s.stageLog ??= [];
   s.cups ??= [];
   s.trophies ??= [];
+  s.trophyNews ??= [];
   s.skills ??= {};
   if (s.today) { s.today.lostTo ??= []; s.today.market ??= null; }
   s.challengeLog ??= [];
