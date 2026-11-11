@@ -378,10 +378,11 @@ function sayFrom(el) {
   Voice.speak(el.dataset.say, { who: cid, she: !!CUST[cid]?.she });
 }
 function render() {
+  if (ui.sheet && (ui.screen || s?.phase !== 'morning')) ui.sheet = null;
   UI.startRender();
   UI.setShops(home && s ? (home.cups || []).filter((c) => c.shop && !Cups.cupOver(c)).map((c) => ({ code: c.code, name: c.name })) : [], s?.cupCode || 'home');
   if (s?.cupCode) s.cupDone = Cups.shopDone(Cups.findCup(home, s.cupCode));
-  app.innerHTML = view();
+  app.innerHTML = view() + (ui.sheet && s ? UI.sheetHtml(s, ui) : '');
   // Scroll to top when the screen changes, and keep the chat in view on the tiTi screen.
   const key = `${ui.screen}|${s?.phase}|${s?.day}|${s?.today?.idx}`;
   if (key !== lastKey) {
@@ -469,6 +470,8 @@ const actions = {
     if (s.cupCode && Cups.shopDone(Cups.findCup(home, s.cupCode))) return;
     ui.buy = {}; ui.error = null; E.openShop(s);
   },
+  sheet: (arg) => { ui.sheet = arg; ui.topUpOpen = false; ui.topUpError = null; },
+  'sheet-close': () => { ui.sheet = null; ui.topUpOpen = false; },
   'shop-switch': (arg) => {
     const cup = arg === 'home' ? null : Cups.findCup(home, arg);
     s = cup?.shop || home;

@@ -204,33 +204,7 @@ export function startScreen(ui, hasSave, saveInfo) {
 
 // ---------- Morning ----------
 
-// This stage's idea and goal.
-function stageCard(s) {
-  const st = currentStage(s);
-  if (!st) return '';
-  const got = stageProgress(s);
-  const money = st.goal.type === 'profit';
-  return `<div class="card"><div class="between"><b>Stage ${st.index + 1}: ${esc(st.name)}</b>${s.stage?.done ? '<span class="tag green">Done</span>' : ''}</div>
-    <div class="between small"><span class="muted">Goal: ${esc(st.goal.text)}</span><b>${money ? `${fmt(got)} of ${fmt(st.goal.n)}` : `${got} of ${st.goal.n}`}</b></div>
-    <div class="progress lg"><div style="width:${Math.min(100, Math.round((got / st.goal.n) * 100))}%"></div></div></div>`;
-}
 
-// Morning: today's market, your share, and how to win more customers.
-function marketMorning(s) {
-  const m = s.today.market;
-  if (!m) return '';
-  const advertUp = (s.mods.advertUntil ?? 0) >= s.day;
-  const cost = ADVERT.cost[s.level] || ADVERT.cost[1];
-  return `<div class="card"><div class="between"><b>Market today</b><span class="small muted">about ${m.size} customers</span></div>
-    <div class="between small"><span>Your shop</span><b>${m.mine} expected</b></div>
-    ${m.rivals.map((r) => {
-      const deal = (s.mods.rivalDeals || []).find((d) => d.rival === r.id && !d.fake && d.until >= s.day);
-      return `<div class="between small"><span class="muted">${esc(r.name)}${r.real ? ' <span class="tag green">Player</span>' : ''}${deal ? ` <span class="tag amber">${esc(deal.what)} until Day ${deal.until}</span>` : ''}</span><span class="muted">${r.customers}${r.real ? ' yesterday' : ''}</span></div>`;
-    }).join('')}
-    ${m.parts.length ? `<span class="small muted">${m.parts.map(([label, v]) => `${esc(label)} ${v > 0 ? '+' : ''}${Math.round(v * 100)}%`).join(' · ')}</span>` : '<span class="small muted">Win more customers: an advert, good prices, loyal customers, full stock.</span>'}
-    ${advertUp ? `<span class="tag green" style="align-self:flex-start">${icon('star', 12)} Your advert is up until Day ${s.mods.advertUntil}</span>`
-      : btn('advert', `Put up an advert at your shop front (${fmt(cost)}, ${ADVERT.days} days)`, 'secondary small block', '', s.cash < cost ? 'disabled' : '')}</div>`;
-}
 
 // Evening: you and the rivals, and who you lost to them.
 function marketEvening(s) {
@@ -316,6 +290,215 @@ function billWarning(s, cost) {
   return `<span class="small" style="color:var(--red);font-weight:600">After buying you'll have ${fmt(left)}, but the ${esc(next.label.toLowerCase())} (${fmt(billOwed(next))}) is due on Day ${next.due}.</span>`;
 }
 
+// ---------- Pictures for the morning: tap one to read about it ----------
+
+const RIVAL_COLORS = ['#F5B70A', '#2F80ED', '#E85D3F', '#7B4FB8', '#1E9E6A', '#D94F8A'];
+
+// Market today as a donut: your slice in green, each rival a colour, the total in the middle.
+function donut(m, size = 92) {
+  const parts = [{ n: m.mine, c: '#0E6B43' }, ...m.rivals.map((r, i) => ({ n: r.customers || 0, c: RIVAL_COLORS[i % RIVAL_COLORS.length] }))];
+  const total = Math.max(1, parts.reduce((a, p) => a + p.n, 0));
+  const R = 15.9;
+  let at = 25;
+  const rings = parts.filter((p) => p.n > 0).map((p) => {
+    const len = (p.n / total) * 100;
+    const seg = `<circle cx="21" cy="21" r="${R}" fill="none" stroke="${p.c}" stroke-width="7" stroke-dasharray="${len.toFixed(2)} ${(100 - len).toFixed(2)}" stroke-dashoffset="${at.toFixed(2)}"/>`;
+    at = (at - len + 100) % 100;
+    return seg;
+  }).join('');
+  return `<svg width="${size}" height="${size}" viewBox="0 0 42 42" aria-hidden="true"><circle cx="21" cy="21" r="${R}" fill="none" stroke="#E8EDE9" stroke-width="7"/>${rings}
+    <text x="21" y="21" text-anchor="middle" font-size="9" font-weight="800" font-family="system-ui,sans-serif" fill="#17231C">${m.size}</text>
+    <text x="21" y="27.5" text-anchor="middle" font-size="4" font-family="system-ui,sans-serif" fill="#55635A">customers</text></svg>`;
+}
+
+// The advert as a banner on two poles: bright when it is up, dashed grey when not.
+function bannerArt(up, size = 92) {
+  const fill = up ? '#F5B70A' : '#F3F5F2';
+  const ink = up ? '#17231C' : '#8A968E';
+  return `<svg width="${size}" height="${Math.round(size * 0.8)}" viewBox="0 0 60 48" aria-hidden="true">
+    <path d="M8 4 V46 M52 4 V46" stroke="#8B5A2B" stroke-width="3" stroke-linecap="round"/>
+    <path d="M8 8 H52 V26 L46 30 L40 26 L34 30 L28 26 L22 30 L16 26 L8 30 Z" fill="${fill}" stroke="${up ? '#C98F00' : '#A9B6AD'}" stroke-width="1.5" ${up ? '' : 'stroke-dasharray="3 2"'}/>
+    <text x="30" y="21" text-anchor="middle" font-size="8" font-weight="800" font-family="system-ui,sans-serif" fill="${ink}">${up ? 'SALE!' : 'AD'}</text></svg>`;
+}
+
+// Daily pay: a money bag dropping into your pocket jar.
+function payArt(size = 92) {
+  return `<svg width="${size}" height="${Math.round(size * 0.8)}" viewBox="0 0 60 48" aria-hidden="true">
+    <path d="M14 14 L10 8 H24 L20 14 Z" fill="#C98F00"/>
+    <path d="M17 14 C4 18 4 40 17 40 C30 40 30 18 17 14 Z" fill="#F5B70A" stroke="#C98F00" stroke-width="1.5"/>
+    <text x="17" y="32" text-anchor="middle" font-size="12" font-weight="800" font-family="system-ui,sans-serif" fill="#7A5400">₦</text>
+    <path d="M30 26 L36 26" stroke="#0E6B43" stroke-width="2" stroke-linecap="round"/><path d="M34 23 L37 26 L34 29" fill="none" stroke="#0E6B43" stroke-width="2" stroke-linecap="round"/>
+    <rect x="40" y="16" width="16" height="26" rx="4" fill="#E3F0E8" stroke="#0E6B43" stroke-width="1.5"/><rect x="38" y="13" width="20" height="5" rx="2" fill="#0E6B43"/>
+    <circle cx="48" cy="36" r="3.5" fill="#F5B70A"/><circle cx="46" cy="30" r="3" fill="#F5B70A"/></svg>`;
+}
+
+// A bill as a tear-off calendar page with the due day.
+function calendarArt(day, late, size = 92) {
+  const head = late ? '#B3261E' : '#0E6B43';
+  return `<svg width="${size}" height="${Math.round(size * 0.8)}" viewBox="0 0 60 48" aria-hidden="true">
+    <rect x="12" y="6" width="36" height="38" rx="4" fill="#FFFFFF" stroke="#C3CEC6" stroke-width="1.5"/>
+    <rect x="12" y="6" width="36" height="11" rx="4" fill="${head}"/><rect x="12" y="13" width="36" height="4" fill="${head}"/>
+    <path d="M20 3 V10 M40 3 V10" stroke="#55635A" stroke-width="2.5" stroke-linecap="round"/>
+    <text x="30" y="14.5" text-anchor="middle" font-size="6" font-weight="800" font-family="system-ui,sans-serif" fill="#FFFFFF">DAY</text>
+    <text x="30" y="37" text-anchor="middle" font-size="16" font-weight="800" font-family="system-ui,sans-serif" fill="#17231C">${day}</text></svg>`;
+}
+
+// The stage as three stepping stones.
+function stonesArt(index, pct) {
+  const stone = (i) => {
+    const x = 14 + i * 36;
+    const done = i < index;
+    const now = i === index;
+    return `${i ? `<path d="M${x - 26} 14 H${x - 10}" stroke="${done || now ? '#0E6B43' : '#C3CEC6'}" stroke-width="3" stroke-dasharray="${done || now ? '0' : '3 3'}"/>` : ''}
+      <circle cx="${x}" cy="14" r="10" fill="${done ? '#0E6B43' : now ? '#FFFFFF' : '#F3F5F2'}" stroke="${done || now ? '#0E6B43' : '#C3CEC6'}" stroke-width="2.5"/>
+      ${now ? `<circle cx="${x}" cy="14" r="10" fill="none" stroke="#F5B70A" stroke-width="3" stroke-dasharray="${(pct * 0.628).toFixed(1)} 62.8" transform="rotate(-90 ${x} 14)"/>` : ''}
+      <text x="${x}" y="17.5" text-anchor="middle" font-size="10" font-weight="800" font-family="system-ui,sans-serif" fill="${done ? '#FFFFFF' : '#17231C'}">${done ? '✓' : i + 1}</text>`;
+  };
+  return `<svg width="100" height="28" viewBox="0 0 100 28" aria-hidden="true">${[0, 1, 2].map(stone).join('')}</svg>`;
+}
+
+// A picture tile you can tap to read more.
+const tapTile = (sheet, label, art, line1, line2 = '', extra = '') => `<button type="button" class="glance" data-action="sheet" data-arg="${esc(sheet)}" aria-label="${esc(label)}. Tap to read more." ${extra}>
+    <span class="glance-art">${art}</span><b>${line1}</b>${line2 ? `<span class="small muted">${line2}</span>` : ''}</button>`;
+
+function glance(s, ui) {
+  const m = s.today.market;
+  const advertUp = (s.mods.advertUntil ?? 0) >= s.day;
+  const bills = billsDueSoon(s);
+  const g = goalStatus(s);
+  const tiles = [];
+  if (m) tiles.push(tapTile('market', 'Market today', donut(m), `You: ${m.mine}`, `of about ${m.size} customers`));
+  tiles.push(tapTile('advert', 'Advert', bannerArt(advertUp), advertUp ? `Up to Day ${s.mods.advertUntil}` : 'No advert', advertUp ? 'More customers' : 'Tap to put one up'));
+  tiles.push(tapTile('pay', 'Your daily pay', payArt(), fmt(s.pay), `Pocket ${fmt(s.pocket)}${g ? ` · goal ${g.pct}%` : ''}`));
+  if (bills.length) {
+    const b = bills[0];
+    const late = b.due < s.day;
+    tiles.push(tapTile('bills', 'Bills coming', calendarArt(b.due, late), `${fmt(billOwed(b))}`, late ? `<span style="color:var(--red);font-weight:700">Late!</span>` : b.due === s.day ? 'Due tonight' : `${esc(b.label)}`));
+  }
+  return `<div class="glance-grid">${tiles.join('')}</div>`;
+}
+
+// The stage, small: stones and the count. Tap for the goal.
+function stageStones(s) {
+  const st = currentStage(s);
+  if (!st) return '';
+  const got = stageProgress(s);
+  const money = st.goal.type === 'profit';
+  const pct = Math.min(100, Math.round((got / st.goal.n) * 100));
+  return `<button type="button" class="card stage-strip" data-action="sheet" data-arg="stage" aria-label="Stage ${st.index + 1}: ${esc(st.name)}. Tap to read more.">
+    ${stonesArt(st.index, s.stage?.done ? 100 : pct)}
+    <span class="grow" style="text-align:left"><b class="small">Stage ${st.index + 1}: ${esc(st.name)}</b><span class="small muted" style="display:block">${money ? `${fmt(got)} of ${fmt(st.goal.n)}` : `${got} of ${st.goal.n}`}${s.stage?.done ? ' · done' : ''}</span></span></button>`;
+}
+
+// Your stock as a shelf: each good with its count. Tap one for its price and buying.
+function shelf(s, ui) {
+  const draft = ui.buy;
+  const items = goodsForLevel(s.level).map((id) => {
+    const g = GOODS[id];
+    const low = s.stock[id] <= 2;
+    const asked = (s.lastAsks || {})[id] || 0;
+    const going = s.batches.some((b) => b.item === id && b.exp === s.day);
+    return `<button type="button" class="shelf-item${low ? ' low' : ''}" data-action="sheet" data-arg="good:${id}" aria-label="${esc(g.name)}: ${s.stock[id]} in stock, sells at ${fmt(s.prices[id])}. Tap to set the price or buy more.">
+      <span class="count">${s.stock[id]}</span>${draft[id] ? `<span class="adding">+${draft[id]}</span>` : ''}
+      ${good(id, 44)}<b>${esc(g.short)}</b><span class="price">${fmt(s.prices[id])}</span>
+      ${asked ? '<span class="flag" title="Customers asked for this">!</span>' : going ? '<span class="flag" title="Some go bad tonight">⏱</span>' : ''}</button>`;
+  }).join('');
+  return `<div class="between"><h2 style="font-size:18px">Your shelf</h2><span class="small muted">Tap a good to set its price or buy more</span></div>
+    <div class="shelf">${items}</div>`;
+}
+
+// ---------- The sheet that opens when you tap a picture ----------
+
+function sheetBody(s, ui, kind, arg) {
+  const t = s.today;
+  if (kind === 'market') {
+    const m = t.market;
+    if (!m) return null;
+    const rows = [{ name: 'Your shop', n: m.mine, c: '#0E6B43', you: true }, ...m.rivals.map((r, i) => ({ name: r.name, n: r.customers || 0, c: RIVAL_COLORS[i % RIVAL_COLORS.length], real: r.real, deal: (s.mods.rivalDeals || []).find((d) => d.rival === r.id && !d.fake && d.until >= s.day) }))];
+    return { title: 'Market today', art: donut(m, 120), html: `
+      ${rows.map((r) => `<div class="between small"><span class="row" style="gap:8px"><span style="width:12px;height:12px;border-radius:3px;background:${r.c};display:inline-block"></span>${esc(r.name)}${r.real ? ' <span class="tag green">Player</span>' : ''}${r.deal ? ` <span class="tag amber">${esc(r.deal.what)} until Day ${r.deal.until}</span>` : ''}</span><b>${r.n}${r.you ? ' expected' : ''}</b></div>`).join('')}
+      <span class="small muted">${m.parts.length ? m.parts.map(([label, v]) => `${esc(label)} ${v > 0 ? '+' : ''}${Math.round(v * 100)}%`).join(' · ') : 'Win more customers: an advert, good prices, loyal customers, full stock.'}</span>` };
+  }
+  if (kind === 'advert') {
+    const up = (s.mods.advertUntil ?? 0) >= s.day;
+    const cost = ADVERT.cost[s.level] || ADVERT.cost[1];
+    return { title: 'Advert', art: bannerArt(up, 120), html: up
+      ? `<span>Your advert is up until Day ${s.mods.advertUntil}. More people stop at your shop.</span>`
+      : `<span>A banner at your shop front brings more customers for ${ADVERT.days} days. It costs ${fmt(cost)}, and that is a business cost: it comes off your profit.</span>
+        ${btn('advert', `Put up an advert (${fmt(cost)})`, 'primary block', '', s.cash < cost ? 'disabled' : '')}
+        ${s.cash < cost ? `<span class="small muted">You need ${fmt(cost - s.cash)} more cash.</span>` : ''}` };
+  }
+  if (kind === 'pay') {
+    return { title: 'Your daily pay', art: payArt(120), html: `
+      <span>Each evening this moves from the business cash into your pocket. Family needs and your savings come from your pocket.</span>
+      <div class="between"><b>Daily pay</b><div class="stepper"><button type="button" class="step" data-action="pay" data-arg="-500" aria-label="Lower your daily pay" ${s.pay <= 0 ? 'disabled' : ''}>−</button>
+        <output>${fmt(s.pay)}</output><button type="button" class="step" data-action="pay" data-arg="500" aria-label="Raise your daily pay">+</button></div></div>
+      <div class="between small"><span class="muted">In your pocket now</span><b>${fmt(s.pocket)}</b></div>
+      ${s.pocket > 0 && !ui.topUpOpen ? `<button type="button" class="link" data-action="topup-open" style="padding:6px 0;color:var(--green);align-self:flex-start">Put money into the business</button>` : ''}
+      ${ui.topUpOpen && s.pocket > 0 ? topUpBox(s, ui) : ''}
+      ${goalBox(s)}` };
+  }
+  if (kind === 'bills') {
+    const bills = billsDueSoon(s);
+    if (!bills.length) return null;
+    const b = bills[0];
+    return { title: 'Bills coming', art: calendarArt(b.due, b.due < s.day, 120), html: billsCard(s).replace('<div class="card warn"><h3>Bills coming</h3>', '<div style="display:flex;flex-direction:column;gap:10px">') };
+  }
+  if (kind === 'stage') {
+    const st = currentStage(s);
+    if (!st) return null;
+    const got = stageProgress(s);
+    const money = st.goal.type === 'profit';
+    return { title: `Stage ${st.index + 1}: ${st.name}`, art: stonesArt(st.index, Math.min(100, Math.round((got / st.goal.n) * 100))), html: `
+      <span><b>Goal:</b> ${esc(st.goal.text)}</span>
+      <div class="between small"><span class="muted">So far</span><b>${money ? `${fmt(got)} of ${fmt(st.goal.n)}` : `${got} of ${st.goal.n}`}</b></div>
+      <div class="progress lg"><div style="width:${Math.min(100, Math.round((got / st.goal.n) * 100))}%"></div></div>
+      <span class="small">${esc(st.learn)}</span>
+      <span class="small muted">Stages move on by day and never block you. Each level has 3.</span>` };
+  }
+  if (kind === 'good') {
+    const id = arg;
+    const g = GOODS[id];
+    if (!g || !goodsForLevel(s.level).includes(id)) return null;
+    const draft = ui.buy;
+    const margin = s.prices[id] - buyPrice(s, id);
+    const asked = (s.lastAsks || {})[id] || 0;
+    const going = s.batches.filter((b) => b.item === id && b.exp === s.day).reduce((a, b) => a + b.qty, 0);
+    return { title: g.name, art: good(id, 96), html: `
+      <div class="grid3">
+        <div class="tile soft-tile"><span>In stock</span><span>${s.stock[id]}</span></div>
+        <div class="tile soft-tile"><span>You buy at</span><span>${fmt(buyPrice(s, id))}</span></div>
+        <div class="tile soft-tile"><span>Profit each</span><span style="color:${margin > 0 ? 'var(--green)' : 'var(--red)'}">${margin >= 0 ? '+' : ''}${fmt(margin)}</span></div></div>
+      <span class="small muted">Sold by the ${esc(g.unit)}.</span>
+      ${asked ? `<span class="small" style="color:var(--red);font-weight:700">Customers asked for this ${asked}× yesterday.</span>` : ''}
+      ${going ? `<span class="small" style="color:var(--red);font-weight:700">${going} go bad tonight.</span>` : ''}
+      <div class="between"><b>Sell price</b><div class="stepper">
+        <button type="button" class="step" data-action="price" data-arg="${id}:-${priceStep(s)}" aria-label="Lower ${esc(g.name)} price">−</button>
+        <output>${fmt(s.prices[id])}</output>
+        <button type="button" class="step" data-action="price" data-arg="${id}:${priceStep(s)}" aria-label="Raise ${esc(g.name)} price">+</button></div></div>
+      <div class="between"><b>Buy more</b><div class="stepper">
+        <button type="button" class="step" data-action="buy-qty" data-arg="${id}:-1" aria-label="Buy one less ${esc(g.name)}" ${draft[id] ? '' : 'disabled'}>−</button>
+        <output>${draft[id] || 0}</output>
+        <button type="button" class="step" data-action="buy-qty" data-arg="${id}:1" aria-label="Buy one more ${esc(g.name)}">+</button></div></div>
+      ${draft[id] ? `<span class="small muted">${draft[id]} more costs ${fmt(draft[id] * buyPrice(s, id))}. Pay for everything you picked with the button at the bottom.</span>` : ''}` };
+  }
+  return null;
+}
+
+export function sheetHtml(s, ui) {
+  const [kind, arg] = String(ui.sheet || '').split(':');
+  const body = sheetBody(s, ui, kind, arg);
+  if (!body) return '';
+  return `<div class="tap-sheet-wrap" role="dialog" aria-modal="true" aria-labelledby="tap-sheet-title">
+    <button type="button" class="tap-sheet-back" data-action="sheet-close" aria-label="Close"></button>
+    <div class="tap-sheet">
+      <span class="grab" aria-hidden="true"></span>
+      <div class="row" style="gap:12px"><span style="flex:none">${body.art}</span><h2 id="tap-sheet-title" class="display" style="font-size:22px">${esc(body.title)}</h2></div>
+      ${body.html}
+      ${btn('sheet-close', 'Done', 'secondary block')}
+    </div></div>`;
+}
+
 export function morningScreen(s, ui) {
   const t = s.today;
   const goods = goodsForLevel(s.level);
@@ -323,29 +506,6 @@ export function morningScreen(s, ui) {
   const cost = goods.reduce((a, id) => a + (draft[id] || 0) * buyPrice(s, id), 0);
   const credErr = s.level >= 2 && cost ? supplierCreditError(s, cost) : null;
   const expiring = (id) => s.batches.filter((b) => b.item === id && b.exp === s.day).reduce((a, b) => a + b.qty, 0);
-  const rows = goods.map((id) => {
-    const g = GOODS[id];
-    const low = s.stock[id] <= 2;
-    const asked = (s.lastAsks || {})[id] || 0;
-    const exp = expiring(id);
-    const margin = s.prices[id] - buyPrice(s, id);
-    return `<div class="stock-row${low ? ' low' : ''}">
-      <div class="between"><span class="good-ico">${good(id, 36)}</span><div class="grow"><b>${esc(g.name)}</b> <span class="muted small">(${esc(g.unit)})</span>
-        <div class="small ${low ? '' : 'muted'}" style="${low ? 'color:var(--amber-ink);font-weight:600' : ''}">${s.stock[id]} in stock · buy ${fmt(buyPrice(s, id))}${exp ? ` · <span style="color:var(--red);font-weight:700">${exp} go bad tonight</span>` : ''}${asked ? `<div class="small" style="color:var(--red);font-weight:700">Customers asked for this ${asked}× yesterday</div>` : ''}</div></div>
-        ${low ? '<span class="tag solid">Low</span>' : `<span class="small" style="font-weight:700;color:${margin > 0 ? 'var(--green)' : 'var(--red)'}">${margin >= 0 ? '+' : ''}${fmt(margin)} each</span>`}
-      </div>
-      <div class="controls">
-        <div><div class="ctl-label">Sell price</div><div class="stepper">
-          <button type="button" class="step" data-action="price" data-arg="${id}:-${priceStep(s)}" aria-label="Lower ${esc(g.name)} price">−</button>
-          <output>${fmt(s.prices[id])}</output>
-          <button type="button" class="step" data-action="price" data-arg="${id}:${priceStep(s)}" aria-label="Raise ${esc(g.name)} price">+</button></div></div>
-        <div><div class="ctl-label">Buy more</div><div class="stepper">
-          <button type="button" class="step" data-action="buy-qty" data-arg="${id}:-1" aria-label="Buy one less ${esc(g.name)}" ${draft[id] ? '' : 'disabled'}>−</button>
-          <output>${draft[id] || 0}</output>
-          <button type="button" class="step" data-action="buy-qty" data-arg="${id}:1" aria-label="Buy one more ${esc(g.name)}">+</button></div></div>
-      </div>
-    </div>`;
-  }).join('');
   const sup = supplierOwed(s);
   return `<main class="screen">
     ${topBar(s, { title: 'Morning' })}
@@ -358,23 +518,14 @@ export function morningScreen(s, ui) {
       ${isJunior(s) ? '' : consentCard()}
       ${challengeCard(s)}
       ${s.cupCode ? `<div class="card soft"><b>Championship shop: ${esc(shopTabs.find((c) => c.code === s.cupCode)?.name || '')}</b><span class="small">Everyone in this championship started with the same cash and stock, and gets the same customers today. Your own shop is not touched.</span></div>` : ''}
-      ${stageCard(s)}
+      ${stageStones(s)}
       ${cupsMorning(s)}
-      ${marketMorning(s)}
-      ${billsCard(s)}
+      ${glance(s, ui)}
       ${isStuck(s) ? `<div class="card bad"><b>You have no stock and no money to buy any.</b>
         <span class="small">tiTi: "This happens when all the cash goes to stock and bills come. Next time keep some cash aside."</span>
         ${btn('restart-level', `Start Level ${s.level} again`, 'primary small block')}</div>` : ''}
       ${explain(s, 'pay')}
-      <div class="card"><div class="between"><div><b>Your daily pay</b><div class="small muted">Moves to your pocket each evening · Pocket: <b style="color:var(--ink)">${fmt(s.pocket)}</b></div>
-        ${s.pocket > 0 && !ui.topUpOpen ? `<button type="button" class="link" data-action="topup-open" style="padding:6px 0;color:var(--green)">Put money into the business</button>` : ''}</div>
-        <div class="stepper"><button type="button" class="step" data-action="pay" data-arg="-500" aria-label="Lower your daily pay" ${s.pay <= 0 ? 'disabled' : ''}>−</button>
-          <output>${fmt(s.pay)}</output>
-          <button type="button" class="step" data-action="pay" data-arg="500" aria-label="Raise your daily pay">+</button></div></div>
-        ${ui.topUpOpen && s.pocket > 0 ? topUpBox(s, ui) : ''}
-        ${goalBox(s)}</div>
-      <div class="between"><h2 style="font-size:18px">Your stock</h2><span class="small muted">Set prices, buy stock</span></div>
-      <div class="list">${rows}</div>
+      ${shelf(s, ui)}
       ${ui.error ? `<div class="toast" role="alert">${esc(ui.error)}</div>` : ''}
       ${s.level >= 2 && cost && credErr ? `<span class="small muted">${esc(credErr)}</span>` : ''}
     </div>
