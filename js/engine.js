@@ -19,9 +19,10 @@ import { parseSale, checkSale, detectQuery, suggestMessage } from './parser.js';
 
 export const SAVE_VERSION = 1;
 
-export function newGame(path, rng = Math.random) {
+// A championship shop (cup): everyone gets the same seed (same customers each day), a start level and a top level.
+export function newGame(path, rng = Math.random, cup = null) {
   const s = {
-    v: SAVE_VERSION, path, level: 1, day: 0, levelStartDay: 1, completed: false,
+    v: SAVE_VERSION, path, level: cup?.level || 1, day: 0, levelStartDay: 1, completed: false,
     cash: START_CASH, pay: path === 'junior' ? JUNIOR_PAY : START_PAY, pocket: 0, stock: {}, cost: {}, prices: {}, batches: [], market: {},
     customers: {}, debts: [], nextDebtId: 1, supplier: [], bills: [], nextBillId: 1, billNext: {},
     levelProfit: 0, totalProfit: 0, score: 50,
@@ -39,15 +40,28 @@ export function newGame(path, rng = Math.random) {
   for (const [id, qty] of Object.entries(START_STOCK)) addStock(s, id, qty, baseBuy(s, id));
   for (const c of CUSTOMERS) s.customers[c.id] = { loyalty: 1, skipUntil: 0 };
   s.custom = {};
+  if (cup) Object.assign(s, { seed: cup.seed, cupCode: cup.code, maxLevel: cup.maxLevel || null, venue: cup.venue || null });
   applyCustom(s);
   startDay(s, rng);
   return s;
+}
+
+// The same random numbers for every player on the same day of a championship shop.
+function seeded(seed, day) {
+  let a = (seed ^ Math.imul(day + 1, 0x9e3779b1)) | 0;
+  return () => {
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
 }
 
 // ---------- Morning ----------
 
 export function startDay(s, rng = Math.random) {
   s.day++;
+  if (s.seed != null) rng = seeded(s.seed, s.day);
   for (const [item, m] of Object.entries(s.market)) {
     if (m.days == null) continue;
     m.days--;
@@ -1283,7 +1297,7 @@ export function endDay(s, rng = Math.random) {
   t.tip = pickTip(s);
   t.noteKey = isGuided(s) ? (t.event?.note && !s.seen['note_' + t.event.note] ? t.event.note : NOTE_ORDER.find((k) => !s.seen['note_' + k])) : null;
   if (t.noteKey) s.seen['note_' + t.noteKey] = true;
-  t.levelUp = !s.completed && levelGoalMet(s);
+  t.levelUp = !s.completed && !(s.maxLevel && s.level >= s.maxLevel) && levelGoalMet(s);
   t.stageDone = finishStageDay(s);
   s.lastAsks = { ...t.asks };
   s.history.push({ day: s.day, level: s.level, moneyIn: t.moneyIn, profit: t.profit, stars: t.stars });

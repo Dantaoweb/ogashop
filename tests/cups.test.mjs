@@ -44,7 +44,8 @@ test('create: rules are checked, the host is registered, registration is open', 
   assert.equal(await bad({ levelTo: 8 }), 400);
   assert.equal(await bad({ startMode: 'time', startAt: T0 + 1000 }), 400, 'too soon');
   assert.equal(await bad({ startMode: 'time', startAt: T0 + 8 * DAY }), 400, 'too far');
-  assert.match((await C.create(s, user('Ada'), rules({ levelFrom: 2, levelTo: 2, level: 1 }), at())).json.error, /Levels? 2/, 'the host must be in the levels');
+  assert.match((await C.create(s, user('Ada'), rules({ levelFrom: 3, levelTo: 5 }), at())).json.error, /Start at Level 1 or 2/, 'levels 3-7 are coming soon');
+  assert.equal((await C.create(s, user('Ada'), rules({ levelFrom: 2, levelTo: 2, level: 1 }), at())).status, 200, 'the host\'s own level does not matter: everyone gets a fresh shop');
   const r = await C.create(s, user('Ada'), rules({ kind: 'game', length: 5, events: ['quiz', 'score'], levelTo: 2 }), at());
   assert.equal(r.status, 200);
   assert.deepEqual([r.json.cup.status, r.json.cup.host, r.json.registered, r.json.cup.kind, r.json.cup.length], ['open', true, true, 'game', 5]);
@@ -59,7 +60,7 @@ test('register: see the rules first, agree, levels, full, teens hidden; rules lo
   const info = await C.info(s, user('Bola'), { code }, at());
   assert.deepEqual([info.json.registered, info.json.cup.status, info.json.players.length], [false, 'open', 1]);
   assert.match((await C.register(s, user('Bola'), { code, level: 1 }, at())).json.error, /agree/);
-  assert.match((await join(s, 'Bola', code, { level: 2 })).json.error, /Level 1\. Your shop is at Level 2/);
+  assert.equal((await C.info(s, user('Bola'), { code }, at())).json.registered, false);
   assert.equal((await C.update(s, user('Ada'), { ...rules({ size: 4, levelTo: 1 }), code }, at())).status, 200, 'host alone: can change');
   const v = await join(s, 'TeenName', code, { age: '13-17' });
   assert.deepEqual(v.json.players.map((p) => p.name), ['Ada', 'Player 2']);
@@ -142,37 +143,54 @@ test('by game days: numbers stop after your game days; it ends when everyone has
   assert.equal(v.json.cup.endsAt, T0 + 14 * DAY, 'with a 14-day backstop');
 });
 
-test('in the game: nothing counts before the start; game days and levels limit what counts', () => {
-  const s = E.newGame('business', mulberry32(300));
-  const view = (status, o = {}) => ({ cup: { code: 'ABCDEF', name: 'Market Cup', kind: 'game', length: 5, events: ['profit', 'money'], levelFrom: 1, levelTo: 1, startMode: 'host', status, endsAt: T0, ...o }, registered: true, players: [{ name: 'Me', you: true, days: 0 }], standings: [{ name: 'Me', you: true, points: 10, place: 1 }], events: {} });
-  const cup = Cups.applyCupView(s, view('open'));
-  s.stats.days = 4; s.totalProfit = 9000;
-  assert.equal(cup.base, null);
-  assert.equal(Cups.cupBiz(s, cup), null, 'before the start nothing counts');
+test('in the game: a fresh championship shop at the start, the same customers for everyone, own shop untouched', () => {
+  const home = E.newGame('business', mulberry32(300));
+  home.cash = 77777;
+  home.level = 2;
+  const view = (status, o = {}) => ({ cup: { code: 'ABCDEF', name: 'Market Cup', kind: 'game', length: 5, events: ['profit', 'money'], levelFrom: 1, levelTo: 1, startMode: 'host', status, endsAt: T0, house: { goal: 'phone' }, ...o }, registered: true, players: [{ name: 'Me', you: true, days: 0 }], standings: [{ name: 'Me', you: true, points: 10, place: 1 }], events: {} });
+  const cup = Cups.applyCupView(home, view('open'));
+  assert.equal(cup.shop, null, 'no shop before the start');
+  assert.equal(Cups.cupBiz(home, cup), null);
   assert.equal(Cups.statusLine(cup), 'Waiting for the host to start');
-  Cups.queueCupGame(s, { type: 'money', score: 4, ms: 30000 });
+  Cups.queueCupGame(home, { type: 'money', score: 4, ms: 30000 }, 'ABCDEF');
   assert.deepEqual(cup.games, [], 'no games before the start');
-  Cups.applyCupView(s, view('running'));
-  assert.equal(cup.base.days, 4, 'the start point is taken at the start');
-  s.stats.days = 7; s.totalProfit = 15000;
-  assert.deepEqual([Cups.bizToSend(s, cup).days, Cups.bizToSend(s, cup).profit], [3, 2000]);
-  Cups.queueCupGame(s, { type: 'money', score: 4, ms: 30000 });
-  assert.equal(cup.games.length, 1);
-  s.level = 2;
-  assert.equal(Cups.cupBiz(s, cup), null, 'outside the levels');
-  assert.equal(Cups.bizToSend(s, cup).days, 3, 'the last numbers that counted are kept');
-  assert.equal(Cups.gamesCount(s, cup), false);
-  s.level = 1;
-  s.stats.days = 20;
-  assert.equal(Cups.cupBiz(s, cup), null, 'past the 5 game days');
-  s.stats.days = 9;
-  Cups.bizToSend(s, cup);
-  assert.equal(Cups.gamesCount(s, cup), false, 'all 5 game days played');
-  assert.equal(Cups.statusLine(cup), 'Game day 1 of 5', 'the line follows the server');
+  Cups.applyCupView(home, view('running'));
+  const shop = cup.shop;
+  assert.deepEqual([shop.cash, shop.level, shop.day, shop.cupCode, shop.maxLevel], [20000, 1, 1, 'ABCDEF', 1], 'same start for everyone');
+  assert.equal(home.cash, 77777, 'your own shop is not touched');
+  assert.equal(shop.goal.name, 'Smartphone', 'the agreed goal is set in the championship shop');
+  const other = Cups.applyCupView(E.newGame('learning', mulberry32(9)), view('running')).shop;
+  assert.deepEqual(shop.today.queue.map((r) => r.cid), other.today.queue.map((r) => r.cid), 'the same customers for every player');
+  E.startDay(shop); E.startDay(other);
+  assert.deepEqual(shop.today.queue.map((r) => r.cid), other.today.queue.map((r) => r.cid), 'and on the next day too');
+  shop.stats.days = 3; shop.totalProfit = 6000;
+  assert.deepEqual([Cups.bizToSend(home, cup).days, Cups.bizToSend(home, cup).profit], [3, 2000]);
+  Cups.queueCupGame(home, { type: 'money', score: 4, ms: 30000 }, 'ABCDEF');
+  Cups.queueCupGame(home, { type: 'money', score: 6, ms: 30000 }, 'OTHERS');
+  assert.deepEqual(cup.games, [{ type: 'money', score: 4, ms: 30000 }], 'only games for this championship');
+  shop.stats.days = 6;
+  assert.equal(Cups.cupBiz(home, cup), null, 'past the 5 game days');
+  shop.stats.days = 5;
+  Cups.bizToSend(home, cup);
+  assert.equal(Cups.gamesCount(cup), false, 'all 5 game days played');
+  assert.equal(Cups.shopDone(cup), true, 'nothing more to play');
   const body = Cups.rulesBody({ ...Cups.STANDARD_RULES, start: 'tomorrow' }, 1, new Date(2026, 10, 10, 15, 0).getTime());
   assert.equal(new Date(body.startAt).getHours(), 8);
-  assert.equal(body.startMode, 'time');
   assert.equal(Cups.rulesBody(Cups.STANDARD_RULES, 1).startMode, 'host');
+});
+
+test('a championship shop stops at its top level', () => {
+  const shop = E.newGame('business', mulberry32(5), { seed: 1, code: 'TOPLVL', level: 1, maxLevel: 1 });
+  shop.levelProfit = 999999;
+  shop.score = 100;
+  shop.today.queue = [];
+  shop.today.eventAt = 99;
+  E.openShop(shop);
+  assert.equal(shop.phase, 'evening');
+  assert.equal(shop.today.levelUp, false);
+  const two = E.newGame('business', mulberry32(5), { seed: 1, code: 'LEVEL2', level: 2, maxLevel: 2 });
+  assert.equal(two.level, 2);
+  assert.ok(E.goodsForLevel(2).every((id) => id in two.stock));
 });
 
 test('house rules: checked, +1 a kept day, -2 a broken day, strict puts you out, goal and keeper events', async () => {
@@ -197,37 +215,34 @@ test('house rules: checked, +1 a kept day, -2 a broken day, strict puts you out,
   assert.equal((await C.info(s, user('Ada'), { code }, at())).json.standings[0].kept, 3, 'impossible rule counts ignored');
 });
 
-test('house rules in the game: each evening, once a day, only while it counts', () => {
-  const s = E.newGame('business', mulberry32(302));
-  const view = { cup: { code: 'HOUSEX', name: 'Family Cup', kind: 'real', length: 7, events: ['goal'], levelFrom: 1, levelTo: 7, startMode: 'host', status: 'running', endsAt: Date.now() + DAY, house: { save: 1000, record: true, pocket: true, prices: true, cash: 5000, discount: 200, bills: true, goal: 'fees' } }, registered: true, players: [], standings: [], events: {} };
-  const cup = Cups.applyCupView(s, view);
+test('house rules in the game: checked in the championship shop each evening, once a day', () => {
+  const home = E.newGame('business', mulberry32(302));
+  const view = { cup: { code: 'HOUSEX', name: 'Family Cup', kind: 'real', length: 7, events: ['goal'], levelFrom: 1, levelTo: 2, startMode: 'host', status: 'running', endsAt: Date.now() + DAY, house: { save: 1000, record: true, pocket: true, prices: true, cash: 5000, discount: 200, bills: true, goal: 'fees' } }, registered: true, players: [], standings: [], events: {} };
+  const cup = Cups.applyCupView(home, view);
+  const s = cup.shop;
   const t = s.today;
   Object.assign(t, { paidSelf: 1000, sales: 3, recordedSales: 3, personal: [{ from: 'pocket' }], morningPrices: { ...s.prices }, discounts: 100 });
   s.cash = 6000;
   s.bills = [];
-  let r = Cups.checkRules(s, cup.house);
-  assert.deepEqual(r.broken, ['goal'], 'no agreed goal set yet');
+  assert.deepEqual(Cups.checkRules(s, cup.house).broken, [], 'the agreed goal is already set');
+  s.goal = null;
+  assert.deepEqual(Cups.checkRules(s, cup.house).broken, ['goal']);
   s.goal = { name: 'School fees for one term', price: 40000, since: 1 };
-  assert.deepEqual(Cups.checkRules(s, cup.house).broken, []);
   Object.assign(t, { paidSelf: 500, recordedSales: 2, personal: [{ from: 'business' }], discounts: 300 });
   s.prices.rice += 100;
   s.cash = 100;
   s.bills = [{ due: s.day }];
-  r = Cups.checkRules(s, cup.house);
+  const r = Cups.checkRules(s, cup.house);
   assert.deepEqual(r.broken.sort(), ['bills', 'cash', 'discount', 'pocket', 'prices', 'record', 'save']);
   t.eventRaised = { rice: true };
   assert.equal(Cups.checkRules(s, cup.house).broken.includes('prices'), false, 'a price raised by an event is fine');
   s.stats.days += 1;
-  assert.equal(Cups.dayRules(s).length, 1);
-  assert.equal(Cups.dayRules(s).length, 0, 'once per game day');
+  assert.equal(Cups.dayRules(home, s).length, 1);
+  assert.equal(Cups.dayRules(home, s).length, 0, 'once per game day');
+  assert.equal(Cups.dayRules(home, home).length, 0, 'your own shop has no house rules');
   s.pocket = 10000;
-  const b = Cups.bizToSend(s, cup);
+  const b = Cups.bizToSend(home, cup);
   assert.deepEqual([b.ruleDays, b.keptDays, b.brokenDays, b.goalPct], [1, 0, 1, 0.25]);
-  s.level = 2;
-  const open = Cups.applyCupView(s, { ...view, cup: { ...view.cup, code: 'OPENXX', status: 'open' } });
-  s.day += 1;
-  Cups.dayRules(s);
-  assert.equal(open.ruleLog, undefined, 'nothing before the start');
 });
 
 test('the end: a trophy and badges once; no points means taking part', () => {

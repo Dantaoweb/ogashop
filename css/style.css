@@ -251,3 +251,10 @@ h1, h2, h3 { margin: 0; line-height: 1.15; }
 .confetti i { position: absolute; top: -14px; width: 8px; height: 14px; border-radius: 2px; animation: fall 2.3s ease-in forwards; }
 @keyframes fall { to { top: 105%; margin-left: var(--x); transform: rotate(560deg); } }
 @media (prefers-reduced-motion: reduce) { .float-text, .star-on, .badge.new .disc { animation: none; } }
+
+/* Championship shops: tabs to switch, and a different colour so you always know where you are. */
+.shop-tabs { display: flex; gap: 6px; overflow-x: auto; padding: 8px 12px; background: var(--night); }
+.shop-tab { flex: none; border: 1px solid rgba(255,255,255,.25); background: transparent; color: #fff; border-radius: 999px; padding: 7px 14px; font-size: 14px; font-weight: 700; min-height: 36px; }
+.shop-tab[aria-pressed="true"] { background: var(--amber); color: var(--ink); border-color: var(--amber); }
+.top.cup { background: #3B2A6B; }
+.top.cup .tile { background: #2C1F52; }

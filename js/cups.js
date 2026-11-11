@@ -2,6 +2,8 @@
 // to be sent. The server (worker/cups.mjs) keeps the tables, starts them and decides the points.
 import { fmt } from './core.js';
 import { GOALS } from './data.js';
+import { newGame } from './engine.js';
+import { setGoal } from './goals.js';
 
 export const CUP_NAMES = ['Market Cup', 'Naira Masters', 'Oga Shop League', 'Traders Trophy', 'Golden Till Cup', 'Big Market Challenge', 'Friday Cup', 'Family Cup', 'Class Cup', 'Friends Cup'];
 export const CUP_KINDS = { real: [3, 7, 14], game: [5, 7, 14] };
@@ -89,19 +91,44 @@ function baseOf(s) {
 export const findCup = (s, code) => (s.cups || []).find((c) => c.code === code);
 export const cupStatus = (cup) => cup?.view?.cup?.status || 'open';
 
-// After registering, or any news from the server: remember the championship; take the starting point when it starts.
-export function applyCupView(s, v) {
-  s.cups ??= [];
-  let cup = findCup(s, v.cup.code);
+// The championship's own seed, from its code: the same for every player.
+export function cupSeed(code) {
+  let h = 2166136261;
+  for (const ch of String(code)) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
+  return h | 0;
+}
+
+// Every player's fresh championship shop: same cash, stock and customers. Their own shop is never touched.
+export function makeShop(home, cup) {
+  const level = Math.min(PLAYABLE_LEVEL, cup.levelFrom || 1);
+  const shop = newGame('business', Math.random, { seed: cupSeed(cup.code), code: cup.code, level, maxLevel: Math.max(level, Math.min(PLAYABLE_LEVEL, cup.levelTo || 1)), venue: cup.venue || null });
+  shop.custom = { ...(home.custom || {}) };
+  shop.cups = [];
+  shop.trophies = [];
+  const g = goalById(cup.house?.goal);
+  if (g) setGoal(shop, g.name, g.price);
+  return shop;
+}
+
+// After registering, or any news from the server: remember the championship; make the shop when it starts.
+export function applyCupView(home, v) {
+  home.cups ??= [];
+  let cup = findCup(home, v.cup.code);
   if (!cup) {
-    cup = { code: v.cup.code, base: null, games: [] };
-    s.cups.push(cup);
+    cup = { code: v.cup.code, base: null, games: [], shop: null };
+    home.cups.push(cup);
   }
   const c = v.cup;
-  Object.assign(cup, { name: c.name, kind: c.kind, length: c.length, events: c.events, levelFrom: c.levelFrom, levelTo: c.levelTo, endsAt: c.endsAt, house: c.house || {}, view: v });
-  if (c.status !== 'open' && !cup.base) cup.base = baseOf(s);
+  Object.assign(cup, { name: c.name, kind: c.kind, length: c.length, events: c.events, levelFrom: c.levelFrom, levelTo: c.levelTo, endsAt: c.endsAt, house: c.house || {}, venue: c.venue || null, view: v });
+  if (c.status === 'running' && !cup.shop) {
+    cup.shop = makeShop(home, cup);
+    cup.base = baseOf(cup.shop);
+  }
   return cup;
 }
+
+// Nothing more to play in this shop: the championship is over, or your game days are used.
+export const shopDone = (cup) => !cup?.shop || cupOver(cup) || (cup.kind === 'game' && cup.shop.stats.days >= cup.length);
 
 export function removeCup(s, code) {
   s.cups = (s.cups || []).filter((c) => c.code !== code);
@@ -109,12 +136,10 @@ export function removeCup(s, code) {
 
 export const cupOver = (cup) => ['ended', 'cancelled'].includes(cupStatus(cup));
 export const activeCups = (s) => (s.cups || []).filter((c) => !cupOver(c));
-export const inLevels = (s, cup) => s.level >= cup.levelFrom && s.level <= cup.levelTo;
-
-// The business numbers since the start, or null when they no longer count
-// (before the start, after your game days, or while your shop is outside the championship's levels).
-export function cupBiz(s, cup) {
-  if (!cup.base || cupStatus(cup) !== 'running' || !inLevels(s, cup)) return null;
+// The championship shop's numbers, or null when they no longer count (not started, or past your game days).
+export function cupBiz(home, cup) {
+  const s = cup.shop;
+  if (!s || !cup.base || cupStatus(cup) !== 'running') return null;
   const st = s.stats;
   const b = cup.base;
   const days = Math.max(0, st.days - b.days);
@@ -132,6 +157,7 @@ export function cupBiz(s, cup) {
     quizTotal: quiz.reduce((a, q) => a + (q.total || 0), 0),
     ...ruleCounts(cup),
     goalPct: goalShare(s, cup),
+    level: s.level,
   };
 }
 
@@ -140,11 +166,11 @@ const ruleCounts = (cup) => {
   return { ruleDays: log.length, keptDays: log.filter((d) => !d.broken.length).length, brokenDays: log.filter((d) => d.broken.length).length };
 };
 
-// How much of the agreed goal is saved: reached since the start counts as all of it.
+// How much of the agreed goal is saved in the championship shop: reaching it counts as all of it.
 function goalShare(s, cup) {
   const g = goalById(cup.house?.goal);
   if (!g) return null;
-  if ((s.goalsReached || []).some((r) => r.name === g.name && r.day >= (cup.base?.day ?? 0))) return 1;
+  if ((s.goalsReached || []).some((r) => r.name === g.name)) return 1;
   if (s.goal?.name !== g.name) return 0;
   return Math.round(Math.min(1, s.pocket / g.price) * 1000) / 1000;
 }
@@ -168,19 +194,20 @@ export function checkRules(s, h) {
   return { kept, broken };
 }
 
-// Each evening: note every running championship's house rules, once per game day that counts.
-export function dayRules(s) {
+// Each evening in a championship shop: check its house rules, once per game day that counts.
+export function dayRules(home, shop) {
   const out = [];
-  for (const cup of activeCups(s)) {
-    const h = cup.house || {};
-    if (!houseList(h).length || cupStatus(cup) !== 'running' || !cup.base || !cupBiz(s, cup)) continue;
+  const cup = shop?.cupCode && findCup(home, shop.cupCode);
+  const h = cup?.house || {};
+  if (cup && houseList(h).length && cupStatus(cup) === 'running' && cupBiz(home, cup)) {
     cup.ruleLog ??= [];
-    if (cup.ruleLog.some((d) => d.day === s.day)) continue;
-    const r = checkRules(s, h);
-    cup.ruleLog.push({ day: s.day, ...r });
-    out.push({ code: cup.code, name: cup.name, ...r });
+    if (!cup.ruleLog.some((d) => d.day === shop.day)) {
+      const r = checkRules(shop, h);
+      cup.ruleLog.push({ day: shop.day, ...r });
+      out.push({ code: cup.code, name: cup.name, ...r });
+    }
   }
-  if (s.today) s.today.cupRules = out;
+  if (shop?.today) shop.today.cupRules = out;
   return out;
 }
 
@@ -188,8 +215,8 @@ export function dayRules(s) {
 export const isOut = (cup) => !!cup.house?.strict && ruleCounts(cup).brokenDays >= STRICT_OUT;
 
 // What to send now: the latest numbers that still count.
-export function bizToSend(s, cup) {
-  const b = cupBiz(s, cup);
+export function bizToSend(home, cup) {
+  const b = cupBiz(home, cup);
   if (b) cup.lastBiz = b;
   return cup.lastBiz || null;
 }
@@ -197,15 +224,15 @@ export function bizToSend(s, cup) {
 const gameDaysUsed = (cup) => cup.kind === 'game' && (cup.lastBiz?.days ?? 0) >= cup.length;
 
 // Can a game played now count for this championship?
-export const gamesCount = (s, cup) => cupStatus(cup) === 'running' && inLevels(s, cup) && !gameDaysUsed(cup);
+export const gamesCount = (cup) => cupStatus(cup) === 'running' && !!cup.shop && !gameDaysUsed(cup);
 
 const beats = (a, b) => (a.type === 'road' ? a.hits < b.hits : a.score > b.score || (a.score === b.score && a.ms < b.ms));
 
-// A finished game goes to every running championship that has it; only the best per game waits.
-export function queueCupGame(s, result) {
-  if (!result) return;
-  for (const cup of activeCups(s)) {
-    if (!cup.events.includes(result.type) || !gamesCount(s, cup)) continue;
+// A finished game goes to its championship (played in its shop, or with Play on its page); only the best waits.
+export function queueCupGame(home, result, code) {
+  if (!result || !code) return;
+  for (const cup of activeCups(home).filter((c) => c.code === code)) {
+    if (!cup.events.includes(result.type) || !gamesCount(cup)) continue;
     const same = cup.games.find((g) => g.type === result.type);
     if (!same || beats(result, same)) cup.games = [...cup.games.filter((g) => g !== same), result];
   }

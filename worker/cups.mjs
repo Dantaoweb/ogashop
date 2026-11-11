@@ -20,6 +20,7 @@ export const MIN_QUIZ = 3;
 export const MAX_ACTIVE = 3;
 export const MAX_SIZE = 20;
 export const MIN_START = 2;
+export const PLAYABLE_LEVEL = 2; // the championship shop starts at Level 1 or 2 until more levels exist
 export const OPEN_DAYS = 7; // registration stays open at most this long
 export const BACKSTOP_DAYS = 14; // a game-day championship closes after this many real days anyway
 const DAY = 86400000;
@@ -200,6 +201,7 @@ export function badSettings(body, now) {
   if (!CUP_KINDS[body.kind].includes(body.length)) return 'Choose how long it lasts.';
   if (!Number.isInteger(body.size) || body.size < MIN_START || body.size > MAX_SIZE) return `Choose ${MIN_START} to ${MAX_SIZE} players.`;
   if (!validLevel(body.levelFrom) || !validLevel(body.levelTo) || body.levelFrom > body.levelTo) return 'Choose the levels, from 1 to 7.';
+  if (body.levelFrom > PLAYABLE_LEVEL) return `Levels 3–7 are coming soon. Start at Level 1 or 2.`;
   const ev = body.events;
   if (!Array.isArray(ev) || !ev.length || ev.some((e) => !CUP_EVENTS.includes(e)) || new Set(ev).size !== ev.length) return 'Choose at least one event.';
   const house = badHouse(body.house, ev);
@@ -216,9 +218,6 @@ const rulesOf = (body) => ({
   startMode: body.startMode, startAt: body.startMode === 'time' ? body.startAt : null, house: houseOf(body.house || {}),
 });
 
-const levelError = (cup, level) => (!validLevel(level) || level < cup.levelFrom || level > cup.levelTo
-  ? `This championship is for ${cup.levelTo > cup.levelFrom ? `Levels ${cup.levelFrom}–${cup.levelTo}` : `Level ${cup.levelFrom}`}. Your shop is at Level ${level}.`
-  : null);
 
 // ---------- Handlers ----------
 
@@ -226,8 +225,6 @@ export async function create(store, user, body, { now }) {
   const bad = badSettings(body, now);
   if (bad) return reply(400, { error: bad });
   const rules = rulesOf(body);
-  const lvl = levelError(rules, body.level);
-  if (lvl) return reply(400, { error: lvl });
   if (await store.activeCupCount(user.key, now) >= MAX_ACTIVE) return reply(409, { error: `You can be in ${MAX_ACTIVE} championships at a time.` });
   await store.deleteOldCups(now - KEEP);
   for (let i = 0; i < 6; i++) {
@@ -265,8 +262,6 @@ export async function register(store, user, body, { now }) {
   if (st !== 'open') return reply(409, { error: 'That championship has already started. Registration is closed.' });
   if (body.agree !== true) return reply(400, { error: 'Please agree to the rules first.' });
   if (players.length >= cup.size) return reply(409, { error: 'That championship is full.' });
-  const lvl = levelError(cup, body.level);
-  if (lvl) return reply(409, { error: lvl });
   if (await store.activeCupCount(user.key, now) >= MAX_ACTIVE) return reply(409, { error: `You can be in ${MAX_ACTIVE} championships at a time.` });
   const used = new Set(players.map((p) => p.slot));
   let slot = 1;
@@ -286,8 +281,6 @@ export async function update(store, user, body, { now }) {
   const bad = badSettings(body, now);
   if (bad) return reply(400, { error: bad });
   const rules = rulesOf(body);
-  const lvl = levelError(rules, body.level);
-  if (lvl) return reply(400, { error: lvl });
   await store.updateCup(cup.id, rules);
   return view(store, { ...cup, ...rules }, user, now);
 }

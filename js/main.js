@@ -2,7 +2,7 @@
 import * as E from './engine.js';
 import * as UI from './ui.js';
 import { LEVELS } from './data.js';
-import { CUST, fmt, setCustom, resetCustom } from './core.js';
+import { CUST, fmt, setCustom, resetCustom, applyCustom } from './core.js';
 import * as Voice from './voice.js';
 import * as Fx from './fx.js';
 import * as Cups from './cups.js';
@@ -19,7 +19,9 @@ import { GOALS, RULES } from './data.js';
 const SAVE_KEY = 'ogashop.save.v1';
 const app = document.getElementById('app');
 
-let s = load();
+// home: the player's own game, the one that is saved. s: the shop on screen (home, or a championship shop inside it).
+let home = load();
+let s = home;
 // Screens on top of the day loop: start | settings | debts | score | level2 | done
 const ui = { screen: s ? (s.quiz ? 'quiz' : null) : 'start', startPath: null, buy: {}, msg: '', error: null, confirmNew: false, confirmReset: false, canInstall: false };
 let installPrompt = null;
@@ -74,8 +76,8 @@ function load() {
 }
 
 function save() {
-  if (!s) return;
-  try { localStorage.setItem(SAVE_KEY, JSON.stringify(s)); } catch { /* storage full or blocked: keep playing */ }
+  if (!home) return;
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(home)); } catch { /* storage full or blocked: keep playing */ }
   if (Account.loggedIn()) { Account.markDirty(); pushSoon(); }
 }
 
@@ -89,17 +91,18 @@ function pushSoon() {
 const summary = (g) => g && { level: g.level, day: g.day, score: g.score };
 
 async function pushNow({ force = false } = {}) {
-  if (!s || !Account.loggedIn()) return 'failed';
+  if (!home || !Account.loggedIn()) return 'failed';
   if (!force && !Account.current().dirty) return 'ok';
-  const result = await Account.push(JSON.stringify(s), { force });
+  const result = await Account.push(JSON.stringify(home), { force });
   if (result === 'conflict') await offerChoice();
   return result;
 }
 
 function useCloud(cloud) {
   const data = JSON.parse(cloud.data);
-  s = data.v === E.SAVE_VERSION ? E.migrate(data) : s;
-  try { localStorage.setItem(SAVE_KEY, JSON.stringify(s)); } catch { /* keep playing */ }
+  home = data.v === E.SAVE_VERSION ? E.migrate(data) : home;
+  s = home;
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(home)); } catch { /* keep playing */ }
   Account.adopted(cloud.version);
   ui.buy = {};
   ui.screen = s?.quiz ? 'quiz' : null;
@@ -108,7 +111,7 @@ function useCloud(cloud) {
 async function offerChoice() {
   const cloud = await Account.pull();
   if (!cloud?.data) return;
-  ui.conflict = { cloud, cloudGame: summary(JSON.parse(cloud.data)), local: summary(s) };
+  ui.conflict = { cloud, cloudGame: summary(JSON.parse(cloud.data)), local: summary(home) };
   ui.screen = 'conflict';
   render();
 }
@@ -119,9 +122,9 @@ async function syncNow() {
   if (!me) return;
   const cloud = await Account.pull();
   if (!cloud) return;
-  if (!cloud.data) { if (s) await pushNow({ force: true }); return; }
+  if (!cloud.data) { if (home) await pushNow({ force: true }); return; }
   if (cloud.version === Account.current()?.base) { if (Account.current()?.dirty) await pushNow(); return; }
-  if (!s || (!Account.current().dirty && Account.current().base > 0)) { useCloud(cloud); render(); return; }
+  if (!home || (!Account.current().dirty && Account.current().base > 0)) { useCloud(cloud); render(); return; }
   await offerChoice();
 }
 
@@ -140,15 +143,15 @@ async function marketCall(fn) {
 
 // Share today's result, and pick up the latest from the other shops.
 async function marketSync(result) {
-  if (!s?.mp || !Account.loggedIn()) return;
-  const sent = s.mp.champQueue || [];
+  if (!home?.mp || !Account.loggedIn()) return;
+  const sent = home.mp.champQueue || [];
   const r = await Market.sync(result, sent);
-  if (!s?.mp) return;
+  if (!home?.mp) return;
   if (r.view) {
-    E.applyMarketView(s, r.view);
-    s.mp.champQueue = s.mp.champQueue.filter((c) => !sent.includes(c));
+    E.applyMarketView(home, r.view);
+    home.mp.champQueue = home.mp.champQueue.filter((c) => !sent.includes(c));
   }
-  else if (r.status === 404) E.leaveMarketLocal(s);
+  else if (r.status === 404) E.leaveMarketLocal(home);
   else return;
   save();
   if (s.phase === 'morning' || ui.screen === 'multi') render();
@@ -163,8 +166,8 @@ async function cupCall(fn) {
   const r = await fn();
   ui.cupBusy = false;
   if (r.error) ui.cupError = r.error;
-  else if (s) {
-    const cup = Cups.applyCupView(s, r.view);
+  else if (home) {
+    const cup = Cups.applyCupView(home, r.view);
     ui.cupCode = cup.code;
     ui.screen = 'cup';
     save();
@@ -176,23 +179,24 @@ async function cupCall(fn) {
 // Send each championship your numbers and new games, and get the latest tables back.
 let cupSyncing = false;
 async function cupSyncAll() {
-  if (!s?.cups?.length || !Account.loggedIn() || isJunior(s) || cupSyncing) return;
+  if (!home?.cups?.length || !Account.loggedIn() || isJunior(home) || cupSyncing) return;
   cupSyncing = true;
   try {
-    for (const cup of [...s.cups]) {
+    for (const cup of [...home.cups]) {
       if (cup.final) continue;
       const sent = cup.games;
       const was = Cups.cupStatus(cup);
-      const r = await Market.cupSync(cup.code, Cups.bizToSend(s, cup), sent);
+      const r = await Market.cupSync(cup.code, Cups.bizToSend(home, cup), sent);
       if (r.view) {
-        Cups.applyCupView(s, r.view);
+        Cups.applyCupView(home, r.view);
         cup.games = cup.games.filter((g) => !sent.includes(g));
         const now = r.view.cup.status;
-        if (now === 'running' && was === 'open') s.today?.notices.push(`${cup.name} has started! Everyone begins from zero now.`);
-        if (now === 'ended') { cup.final = true; Cups.awardCup(s, cup); }
-        if (now === 'cancelled') { cup.final = true; s.today?.notices.push(`${cup.name} was cancelled before it started. Your game is not affected.`); }
-      } else if (r.status === 404) Cups.removeCup(s, cup.code);
+        if (now === 'running' && was === 'open') home.today?.notices.push(`${cup.name} has started! Your championship shop is ready: same cash, stock and customers for everyone.`);
+        if (now === 'ended') { cup.final = true; Cups.awardCup(home, cup); }
+        if (now === 'cancelled') { cup.final = true; home.today?.notices.push(`${cup.name} was cancelled before it started. Your game is not affected.`); }
+      } else if (r.status === 404) Cups.removeCup(home, cup.code);
     }
+    if (s?.cupCode && !Cups.findCup(home, s.cupCode)) s = home;
     save();
     if (s.phase === 'morning' || ['cups', 'cup'].includes(ui.screen)) render();
   } finally {
@@ -373,6 +377,8 @@ function sayFrom(el) {
 }
 function render() {
   UI.startRender();
+  UI.setShops(home && s ? (home.cups || []).filter((c) => c.shop && !Cups.cupOver(c)).map((c) => ({ code: c.code, name: c.name })) : [], s?.cupCode || 'home');
+  if (s?.cupCode) s.cupDone = Cups.shopDone(Cups.findCup(home, s.cupCode));
   app.innerHTML = view();
   // Scroll to top when the screen changes, and keep the chat in view on the tiTi screen.
   const key = `${ui.screen}|${s?.phase}|${s?.day}|${s?.today?.idx}`;
@@ -413,12 +419,14 @@ const actions = {
   'new-game': () => {
     if (!ui.startPath) return;
     if (s && !ui.confirmNew) { ui.confirmNew = true; return; }
-    s = E.newGame(ui.startPath);
+    s = home = E.newGame(ui.startPath);
     ui.screen = ui.startPath === 'junior' ? null : ui.cupInvite ? 'cups' : ui.startMode === 'multi' ? 'multi' : null;
     ui.confirmNew = false;
     ui.buy = {};
   },
-  open: (arg) => { if (arg === 'levels') ui.levelsFrom = ui.screen; ui.screen = arg; ui.confirmReset = false; },
+  open: (arg) => {
+    // Settings, markets and championships belong to your own shop.
+    if (['settings', 'multi', 'cups', 'trophies', 'levels'].includes(arg) && s !== home && home) { s = home; applyCustom(home); } if (arg === 'levels') ui.levelsFrom = ui.screen; ui.screen = arg; ui.confirmReset = false; },
   close: () => { ui.editing = null; ui.copied = false;  ui.screen = ui.screen === 'levels' && !s ? 'start' : ui.screen === 'levels' && ui.levelsFrom ? ui.levelsFrom : null; ui.levelsFrom = null; },
   seen: (arg) => { s.seen[arg] = true; },
 
@@ -455,7 +463,19 @@ const actions = {
     ui.error = null;
   },
   'pay-supplier': () => { ui.error = E.paySupplier(s); },
-  'open-shop': () => { ui.buy = {}; ui.error = null; E.openShop(s); },
+  'open-shop': () => {
+    if (s.cupCode && Cups.shopDone(Cups.findCup(home, s.cupCode))) return;
+    ui.buy = {}; ui.error = null; E.openShop(s);
+  },
+  'shop-switch': (arg) => {
+    const cup = arg === 'home' ? null : Cups.findCup(home, arg);
+    s = cup?.shop || home;
+    applyCustom(s);
+    ui.screen = null;
+    ui.buy = {};
+    ui.msg = '';
+    ui.error = null;
+  },
 
   serve: (arg) => { E.serve(s, arg); ui.msg = ''; },
   'titi-fill': () => {
@@ -553,7 +573,7 @@ const actions = {
     if (s && Account.current().dirty && (await pushNow()) !== 'ok') { ui.accountError = "Couldn't save your game. Connect to data, then log out."; render(); return; }
     await Account.logout();
     clearSave();
-    s = null;
+    s = home = null;
     Object.assign(ui, { screen: 'start', startPath: null, confirmDelete: false, buy: {} });
     render();
   },
@@ -574,16 +594,16 @@ const actions = {
     if (!g.practice) Ch.finishChallenge(s, g);
     s.today.challengeGame = null;
     ui.screen = g.practice ? g.from || 'multi' : null;
-    Cups.queueCupGame(s, Ch.cupResult(g));
+    Cups.queueCupGame(home, Ch.cupResult(g), g.cupCode || s.cupCode);
     cupSyncAll();
     if (!s.mp) return;
     E.queueChampion(s, Ch.championResult(g));
     marketSync();
   },
   'cup-play': (arg) => {
-    const cup = Cups.findCup(s, ui.cupCode);
-    if (!cup || !Cups.gamesCount(s, cup) || !cup.events.includes(arg) || !Cups.EVENT_INFO[arg]?.game) return;
-    s.today.challengeGame = { ...Ch.startChallenge(arg, Math.random, { practice: true }), from: 'cup' };
+    const cup = Cups.findCup(home, ui.cupCode);
+    if (!cup || !Cups.gamesCount(cup) || !cup.events.includes(arg) || !Cups.EVENT_INFO[arg]?.game) return;
+    s.today.challengeGame = { ...Ch.startChallenge(arg, Math.random, { practice: true }), from: 'cup', cupCode: cup.code };
     ui.screen = 'challenge';
   },
   'trophy-continue': () => { s.trophyNews.shift(); },
@@ -594,9 +614,9 @@ const actions = {
     ui.cupError = null;
     ui.screen = 'cup-new';
   },
-  'cup-standard': () => { cupCall(() => Market.cupCreate(Cups.rulesBody(Cups.STANDARD_RULES, s.level))); },
+  'cup-standard': () => { cupCall(() => Market.cupCreate(Cups.rulesBody(Cups.STANDARD_RULES, home.level))); },
   'cup-edit': () => {
-    const c = Cups.findCup(s, ui.cupCode)?.view?.cup;
+    const c = Cups.findCup(home, ui.cupCode)?.view?.cup;
     if (!c) return;
     ui.cupForm = { name: Math.max(0, Cups.CUP_NAMES.indexOf(c.name)), kind: c.kind, length: c.length, size: c.size, events: [...c.events], levelFrom: c.levelFrom, levelTo: c.levelTo, start: c.startMode === 'host' ? 'host' : 'hour', house: { ...(c.house || {}) } };
     ui.cupEditing = ui.cupCode;
@@ -625,10 +645,7 @@ const actions = {
   },
   'cup-goal': (arg) => { if (Cups.goalById(arg)) ui.cupForm.house.goal = arg; },
   'cup-strict': (arg) => { ui.cupForm.house.strict = !!arg; },
-  'cup-set-goal': () => {
-    const g = Cups.goalById(Cups.findCup(s, ui.cupCode)?.house?.goal);
-    if (g) setGoal(s, g.name, g.price);
-  },
+
   'cup-kind': (arg) => { if (Cups.CUP_KINDS[arg]) { ui.cupForm.kind = arg; ui.cupForm.length = 7; } },
   'cup-length': (arg) => { ui.cupForm.length = Number(arg); },
   'cup-size': (arg) => { ui.cupForm.size = Math.min(Cups.CUP_MAX_SIZE, Math.max(Cups.CUP_MIN_START, ui.cupForm.size + Number(arg))); },
@@ -641,7 +658,7 @@ const actions = {
   'cup-create': () => {
     const f = ui.cupForm;
     if (!f.events.length) { ui.cupError = 'Choose at least one event.'; return; }
-    const body = Cups.rulesBody(f, s.level);
+    const body = Cups.rulesBody(f, home.level);
     cupCall(() => (ui.cupEditing ? Market.cupUpdate(ui.cupEditing, body) : Market.cupCreate(body)));
   },
   'cup-preview': async (arg) => {
@@ -653,14 +670,14 @@ const actions = {
     const r = await Market.cupInfo(code);
     ui.cupBusy = false;
     if (r.error) ui.cupError = r.error;
-    else if (r.view.registered) { Cups.applyCupView(s, r.view); ui.cupCode = code; ui.cupInvite = null; ui.screen = 'cup'; save(); }
+    else if (r.view.registered) { Cups.applyCupView(home, r.view); ui.cupCode = code; ui.cupInvite = null; ui.screen = 'cup'; save(); }
     else { ui.cupPreview = r.view; ui.screen = 'cup-preview'; }
     render();
   },
   'cup-register': async () => {
     const code = ui.cupPreview?.cup?.code;
     if (!code) return;
-    const r = await cupCall(() => Market.cupJoin(code, s.level));
+    const r = await cupCall(() => Market.cupJoin(code, home.level));
     if (!r.error) { ui.cupInvite = null; ui.cupPreview = null; render(); }
   },
   'cup-start': (arg) => {
@@ -671,7 +688,7 @@ const actions = {
   'cup-back': () => { ui.screen = 'cups'; ui.copied = false; ui.cupError = null; ui.confirmCupLeave = false; },
   'cup-share': async () => {
     const code = ui.cupCode;
-    const cup = Cups.findCup(s, code);
+    const cup = Cups.findCup(home, code);
     if (!cup) return;
     const text = `Register for my ${cup.name} in Oga Shop! Read the rules and join with the link, or enter code ${code} in Championships.`;
     if (navigator.share) {
@@ -697,7 +714,7 @@ const actions = {
     const r = await Market.cupLeave(code);
     ui.cupBusy = false;
     if (r.error && r.status !== 401) ui.cupError = r.error;
-    else { Cups.removeCup(s, code); ui.screen = 'cups'; save(); }
+    else { if (s.cupCode === code) s = home; Cups.removeCup(home, code); ui.screen = 'cups'; save(); }
     render();
   },
   'champ-play': (arg) => {
@@ -735,7 +752,7 @@ const actions = {
   reset: () => {
     if (!ui.confirmReset) { ui.confirmReset = true; return; }
     clearSave();
-    s = null;
+    s = home = null;
     Object.assign(ui, { screen: 'start', startPath: null, confirmReset: false, buy: {}, msg: '' });
   },
   install: async () => {
@@ -753,6 +770,11 @@ const snapshot = () => (s ? { game: s, level: s.level, phase: s.phase, completed
 // Turn what just happened in the game into counts.
 function countProgress(name, was) {
   if (!s) return;
+  // A championship shop: check its house rules in the evening and send its numbers; it isn't counted as your game.
+  if (s !== home) {
+    if (was && was.phase !== 'evening' && s.phase === 'evening') { Cups.dayRules(home, s); cupSyncAll(); }
+    return;
+  }
   const detail = { level: s.level, day: s.day, score: s.score };
   if (name === 'new-game' && was?.game !== s) {
     Analytics.track('path', { k: s.path, ...detail });
@@ -762,7 +784,6 @@ function countProgress(name, was) {
   if (was.phase !== 'evening' && s.phase === 'evening') {
     Analytics.track('day_done', { ...detail });
     marketSync(E.dayResult(s));
-    Cups.dayRules(s);
     cupSyncAll();
   }
   if (s.level > was.level) {
