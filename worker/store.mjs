@@ -1,7 +1,7 @@
 // Accounts and saves in the D1 database.
 const toBest = (score, ms) => (score == null ? null : { score, ms });
 const toMember = (r) => r && { userKey: r.user_key, marketId: r.market_id, username: r.username, age: r.age, slot: r.slot, lastSeen: r.last_seen, customers: r.customers, sales: r.sales, price: r.price, advert: r.advert, level: r.level, best: { money: toBest(r.money_score, r.money_ms), change: toBest(r.change_score, r.change_ms) } };
-const toCup = (r) => r && { id: r.id, code: r.code, name: r.name, size: r.size, kind: r.kind, length: r.length, events: JSON.parse(r.events), levelFrom: r.level_from, levelTo: r.level_to, startMode: r.start_mode, startAt: r.start_at, startedAt: r.started_at, endsAt: r.ends_at, cancelled: r.cancelled, by: r.created_by, createdAt: r.created_at, house: JSON.parse(r.house || '{}') };
+const toCup = (r) => r && { id: r.id, code: r.code, name: r.name, size: r.size, kind: r.kind, length: r.length, events: JSON.parse(r.events), levelFrom: r.level_from, levelTo: r.level_to, startMode: r.start_mode, startAt: r.start_at, startedAt: r.started_at, endsAt: r.ends_at, cancelled: r.cancelled, by: r.created_by, createdAt: r.created_at, house: JSON.parse(r.house || '{}'), venue: r.venue || 'classic' };
 const toCupPlayer = (r) => ({ userKey: r.user_key, username: r.username, age: r.age, slot: r.slot, joinedAt: r.joined_at, stats: JSON.parse(r.stats || '{}') });
 const toMarket = (r) => r && { id: r.id, code: r.code, size: r.size, level: r.level, kind: r.kind };
 const toUser = (r) => r && { key: r.key, username: r.username, salt: r.salt, pinHash: r.pin_hash, age: r.age, fails: r.fails, lockedUntil: r.locked_until };
@@ -64,13 +64,13 @@ export function d1Store(db) {
     },
     // Championships
     async createCup(c) {
-      const r = await db.prepare('INSERT INTO cups (id, code, name, size, kind, length, events, level_from, level_to, start_mode, start_at, created_by, created_at, house) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(code) DO NOTHING')
-        .bind(c.id, c.code, c.name, c.size, c.kind, c.length, JSON.stringify(c.events), c.levelFrom, c.levelTo, c.startMode, c.startAt, c.by, c.createdAt, JSON.stringify(c.house || {})).run();
+      const r = await db.prepare('INSERT INTO cups (id, code, name, size, kind, length, events, level_from, level_to, start_mode, start_at, created_by, created_at, house, venue) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(code) DO NOTHING')
+        .bind(c.id, c.code, c.name, c.size, c.kind, c.length, JSON.stringify(c.events), c.levelFrom, c.levelTo, c.startMode, c.startAt, c.by, c.createdAt, JSON.stringify(c.house || {}), c.venue || 'classic').run();
       return r.meta.changes === 1;
     },
     updateCup(id, c) {
-      return db.prepare('UPDATE cups SET name = ?, size = ?, kind = ?, length = ?, events = ?, level_from = ?, level_to = ?, start_mode = ?, start_at = ?, house = ? WHERE id = ?')
-        .bind(c.name, c.size, c.kind, c.length, JSON.stringify(c.events), c.levelFrom, c.levelTo, c.startMode, c.startAt, JSON.stringify(c.house || {}), id).run();
+      return db.prepare('UPDATE cups SET name = ?, size = ?, kind = ?, length = ?, events = ?, level_from = ?, level_to = ?, start_mode = ?, start_at = ?, house = ?, venue = ? WHERE id = ?')
+        .bind(c.name, c.size, c.kind, c.length, JSON.stringify(c.events), c.levelFrom, c.levelTo, c.startMode, c.startAt, JSON.stringify(c.house || {}), c.venue || 'classic', id).run();
     },
     startCup(id, at, endsAt) { return db.prepare('UPDATE cups SET started_at = ?, ends_at = ? WHERE id = ? AND started_at IS NULL').bind(at, endsAt, id).run(); },
     cancelCup(id) { return db.prepare('UPDATE cups SET cancelled = 1 WHERE id = ?').bind(id).run(); },

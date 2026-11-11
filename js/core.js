@@ -3,6 +3,7 @@ import { GOODS, CUSTOMERS, RULES, SUPPLIER_CREDIT_LIMIT, SUPPLIER_CREDIT_DAYS } 
 
 import { supplierCreditOpen } from './stages.js';
 import { isJunior, JUNIOR_PRICES, JUNIOR_PRICE_STEP } from './junior.js';
+import { venueOf } from './venues.js';
 
 export const CUST = Object.fromEntries(CUSTOMERS.map((c) => [c.id, { ...c }]));
 const DEFAULT_LOOK = Object.fromEntries(CUSTOMERS.map((c) => [c.id, { name: c.name, she: !!c.she }]));
@@ -75,7 +76,8 @@ export function buyPrice(s, item) {
 
 // The price customers expect to pay. Selling far above it makes some walk away.
 export function refPrice(s, item) {
-  return tidy(s, baseSell(s, item) + (s.market[item]?.sell || 0));
+  const v = venueOf(s)?.prices || 1;
+  return tidy(s, Math.round(((baseSell(s, item) + (s.market[item]?.sell || 0)) * v) / 50) * 50);
 }
 
 // Changes to the market. days = null means permanent.

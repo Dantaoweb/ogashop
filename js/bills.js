@@ -3,6 +3,7 @@
 import { BILLS, RULES } from './data.js';
 import { fmt, expense } from './core.js';
 import { isJunior, JUNIOR_BILLS } from './junior.js';
+import { venueOf } from './venues.js';
 
 export const billOwed = (b) => b.amount + b.late * RULES.billLateFee;
 export const billsDueSoon = (s) => s.bills.filter((b) => b.due - s.day <= RULES.billNoticeDays).sort((a, b) => a.due - b.due);
@@ -12,7 +13,8 @@ export const cashNeededSoon = (s) => billsDueSoon(s).reduce((a, b) => a + billOw
 export function scheduleBills(s) {
   const plan = (isJunior(s) ? JUNIOR_BILLS : BILLS)[s.level];
   if (!plan) return;
-  const announce = (kind, label, amount, due) => s.bills.push({ id: s.nextBillId++, kind, label, amount, due, late: 0 });
+  const rent = venueOf(s)?.rent || 1;
+  const announce = (kind, label, amount, due) => s.bills.push({ id: s.nextBillId++, kind, label: rent > 1 ? `${label} (mall)` : label, amount: amount * rent, due, late: 0 });
   for (const r of plan.recurring) {
     let next = s.billNext[r.id] ?? s.levelStartDay + r.first - 1;
     while (next < s.day) next += r.every;

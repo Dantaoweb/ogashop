@@ -4,6 +4,9 @@
 import { GOODS, FAMILY_NEEDS, RIVALS, RULES } from './data.js';
 import { delayNote } from './goals.js';
 import { isJunior, JUNIOR_FAMILY, JUNIOR_NO_EVENTS } from './junior.js';
+import { venueOf } from './venues.js';
+
+const rainHit = (s) => venueOf(s)?.rain || 2;
 import {
   CUST, fmt, pick, randInt, buyPrice, refPrice, setMarket, expense, waste, buyStock,
   supplierCreditError, applySale, openDebts, debtPaid, debtLost, changeLoyalty, personal,
@@ -123,9 +126,9 @@ export const EVENTS = [
     text: (s) => `Rain all afternoon. Fewer customers will come.${s.stock.garri >= 2 ? ' Your garri is open to the rain.' : ''}`,
     choices: (s) => [
       { label: 'Cover the garri with nylon', sub: 'Costs ₦300.',
-        run: (st) => { const n = fewerCustomers(st, 2); expense(st, 300, 'Nylon cover'); return `Garri kept dry. ${n} customers stayed home.`; } },
+        run: (st) => { const n = fewerCustomers(st, rainHit(st)); expense(st, 300, 'Nylon cover'); return `Garri kept dry. ${n} customers stayed home.`; } },
       { label: 'Leave it', sub: s.stock.garri >= 2 ? '2 cups may get damp.' : 'Nothing to cover.',
-        run: (st) => { const n = fewerCustomers(st, 2); const lost = waste(st, 'garri', 2, 'damp in the rain'); return lost ? `${lost} cups of garri got damp and can't be sold. ${n} customers stayed home.` : `${n} customers stayed home.`; } },
+        run: (st) => { const n = fewerCustomers(st, rainHit(st)); const lost = waste(st, 'garri', 2, 'damp in the rain'); return lost ? `${lost} cups of garri got damp and can't be sold. ${n} customers stayed home.` : `${n} customers stayed home.`; } },
     ],
     note: 'stock',
   },
@@ -343,7 +346,7 @@ export const MUST_SEE = { 1: ['family', 'paid_already'] };
 
 export function drawEvent(s, rng) {
   const recent = (id) => s.eventLog[id] && s.day - s.eventLog[id] < 3;
-  const ok = (e) => e.levels.includes(s.level) && !recent(e.id) && !(e.once && s.eventLog[e.id]) && !(isJunior(s) && JUNIOR_NO_EVENTS.has(e.id));
+  const ok = (e) => e.levels.includes(s.level) && !recent(e.id) && !(e.once && s.eventLog[e.id]) && !(isJunior(s) && JUNIOR_NO_EVENTS.has(e.id)) && !(venueOf(s)?.noRain && e.id === 'rain');
   for (const id of MUST_SEE[s.level] || []) {
     const e = EVENT_BY_ID[id];
     if (ok(e)) { const ctx = e.eligible(s); if (ctx) return { id, ctx }; }

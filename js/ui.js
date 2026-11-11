@@ -8,6 +8,7 @@ import { currentStage, stageProgress, STAGES } from './stages.js';
 import { goalStatus, daysToGoal, howLong, delayNote } from './goals.js';
 import * as Voice from './voice.js';
 import * as Fx from './fx.js';
+import { VENUES } from './venues.js';
 import { CUP_NAMES, CUP_KINDS, CUP_MAX_SIZE, CUP_MIN_START, CUP_MIN_DAYS, CUP_MIN_QUIZ, CUP_BACKSTOP_DAYS, PLAYABLE_LEVEL, STANDARD_RULES, EVENT_INFO, HOUSE_RULES, KEPT_BONUS, BROKEN_COST, STRICT_OUT, houseList, goalById, isOut, findCup, activeCups, cupStatus, cupOver, gamesCount, statusLine, levelsText, lengthText, myPlace, ordinal } from './cups.js';
 import * as Analytics from './analytics.js';
 import * as Account from './account.js';
@@ -492,7 +493,7 @@ export function customerScreen(s) {
     <div class="body">
       ${v.kind === 'credit' ? explain(s, 'credit') : v.kind === 'discount' || c.type === 'bargainer' ? explain(s, 'discount') : ''}
       <div class="center" style="display:flex;flex-direction:column;align-items:center;gap:8px">
-        <div class="scene-card">${scene(s.level, { cid: c.id, mood, stock: s.stock })}</div>
+        <div class="scene-card">${scene(s.level, { cid: c.id, mood, stock: s.stock, venue: s.venue })}</div>
         <b style="font-size:21px">${esc(c.name)}</b>
         <div class="wrap" style="justify-content:center"><span class="tag ${c.type === 'regular' ? 'green' : 'amber'}">${TYPE_LABEL[c.type]}</span>${loyal ? '<span class="tag green">Loyal</span>' : ''}</div>
       </div>
@@ -847,7 +848,7 @@ export function eventScreen(s) {
   const v = eventView(s);
   const choices = v.choices.map((c, i) => `<button type="button" class="choice${i === 0 ? ' primary' : ''}" data-action="event" data-arg="${i}" ${c.disabled ? 'disabled' : ''}>
       <b>${esc(c.label)}</b><span>${esc(c.disabled || c.sub || '')}</span></button>`).join('');
-  return `<main class="screen"><div class="event-wrap"><div class="ev-backdrop" aria-hidden="true">${scene(s.level, { stock: s.stock })}</div><div class="sheet" role="dialog" aria-labelledby="ev-title">
+  return `<main class="screen"><div class="event-wrap"><div class="ev-backdrop" aria-hidden="true">${scene(s.level, { stock: s.stock, venue: s.venue })}</div><div class="sheet" role="dialog" aria-labelledby="ev-title">
     <div class="between"><span class="tag solid" style="text-transform:uppercase;letter-spacing:.08em">Event</span><span class="small muted" style="font-weight:600">Day ${s.day}</span></div>
     <div class="ev-icon">${icon(v.icon, 36)}</div>
     <div style="display:flex;flex-direction:column;gap:8px"><h1 id="ev-title" class="display" style="font-size:28px">${esc(v.title)}</h1>
@@ -1158,6 +1159,9 @@ function rulesCard(v) {
   }).join('');
   const row = (k, val) => `<div class="between small" style="align-items:flex-start"><span class="muted">${k}</span><b style="text-align:right">${val}</b></div>`;
   return `<div class="card"><h3>Rules</h3>
+    <div class="scene-card">${scene(Math.min(PLAYABLE_LEVEL, c.levelFrom || 1), { venue: c.venue, stock: { rice: 1, garri: 1, water: 1, recharge: 1 }, height: 120 })}</div>
+    ${row('Market', `${esc(VENUES[c.venue || 'classic'].name)}`)}
+    ${c.venue && c.venue !== 'classic' ? `<span class="small muted">${esc(VENUES[c.venue].about)}</span>` : ''}
     ${row('Type', c.kind === 'game' ? 'By game days' : 'By real days')}
     ${row('Length', c.kind === 'game' ? `${c.length} game days for each player (closes after ${CUP_BACKSTOP_DAYS} real days at most)` : `${c.length} real days, the same end for everyone`)}
     ${row('Start', esc(start))}
@@ -1205,7 +1209,7 @@ export function cupsScreen(s, ui) {
     ${titi('Host a championship: set the rules, invite people, and everyone starts together. Players read the rules and agree before they register.')}
     ${rows ? `<h2 class="small muted" style="text-transform:uppercase;letter-spacing:.06em">Your championships</h2>${rows}` : ''}
     <div class="grid2">${btn('cup-standard', 'Use standard rules', 'primary small', '', busy)}${btn('cup-new', 'Set my own rules', 'secondary small', '', busy)}</div>
-    <span class="small muted">Standard rules: ${lengthText(STANDARD_RULES)}, every event, up to ${STANDARD_RULES.size} players, Levels 1–7, you press Start.</span>
+    <span class="small muted">Standard rules: classic market, ${lengthText(STANDARD_RULES)}, every event, up to ${STANDARD_RULES.size} players, Levels 1–7, you press Start.</span>
     ${btn('open', `${icon('star', 18)} Trophy cabinet${s.trophies?.length ? ` (${s.trophies.length})` : ''}`, 'secondary small block', 'trophies')}
     <form data-form="cup-code" class="card"><h3>Have a championship code?</h3>
       <label class="sr-only" for="cup-code">Championship code</label>
@@ -1250,6 +1254,10 @@ export function cupNewScreen(s, ui) {
   return `<main class="screen">${backHeader(ui.cupEditing ? 'Change the rules' : 'New championship', 'cup-back')}<div class="body">
     ${ui.cupError ? `<div class="toast" role="alert">${esc(ui.cupError)}</div>` : ''}
     <div class="card"><h3>Name</h3><div class="wrap">${CUP_NAMES.map((n, i) => pick('cup-name', i, n, f.name === i)).join('')}</div></div>
+    <div class="card"><h3>Market</h3><span class="small muted">Where the championship shops trade. Ideas from real markets around the world.</span>
+      ${Object.entries(VENUES).map(([id, v]) => `<button type="button" class="path-btn" data-action="cup-venue" data-arg="${id}" aria-pressed="${(f.venue || 'classic') === id}" style="padding:10px;gap:10px;align-items:flex-start">
+        <span style="flex:none;width:110px;border-radius:10px;overflow:hidden">${scene(1, { venue: id, stock: { rice: 1, garri: 1, water: 1 }, height: 60 })}</span>
+        <span><b style="font-size:15px">${esc(v.name)}</b><span class="d" style="font-size:12px">${esc(v.inspired)}</span><span class="d" style="font-size:13px">${esc(v.about)}</span></span></button>`).join('')}</div>
     <div class="card"><h3>Type</h3>
       <div class="grid2">${pick('cup-kind', 'real', 'By real days', f.kind === 'real')}${pick('cup-kind', 'game', 'By game days', f.kind === 'game')}</div>
       <span class="small muted">${f.kind === 'game' ? `Every player gets the same number of game days from the start. It ends when all have played them (or after ${CUP_BACKSTOP_DAYS} real days).` : 'It ends for everyone at the same time.'}</span>

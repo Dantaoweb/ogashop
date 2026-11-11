@@ -20,6 +20,7 @@ export const MIN_QUIZ = 3;
 export const MAX_ACTIVE = 3;
 export const MAX_SIZE = 20;
 export const MIN_START = 2;
+export const VENUES = ['classic', 'open', 'mall', 'bazaar'];
 export const PLAYABLE_LEVEL = 2; // the championship shop starts at Level 1 or 2 until more levels exist
 export const OPEN_DAYS = 7; // registration stays open at most this long
 export const BACKSTOP_DAYS = 14; // a game-day championship closes after this many real days anyway
@@ -135,7 +136,7 @@ async function view(store, cup, user, now) {
       code: cup.code, name: cup.name, size: cup.size, kind: cup.kind, length: cup.length, events: cup.events,
       levelFrom: cup.levelFrom, levelTo: cup.levelTo, startMode: cup.startMode, startAt: cup.startAt,
       startedAt: cup.startedAt, endsAt: cup.endsAt, openUntil: cup.createdAt + OPEN_DAYS * DAY, status: st,
-      host: cup.by === user.key, locked: players.length > 1, house: cup.house || {},
+      host: cup.by === user.key, locked: players.length > 1, house: cup.house || {}, venue: cup.venue || 'classic',
     },
     registered: players.some(me),
     players: players.map((p) => ({ name: playerName(p), you: me(p), host: p.userKey === cup.by, days: started ? Math.min(daysPlayed(p), cup.kind === 'game' ? cup.length : Infinity) : null })),
@@ -204,6 +205,7 @@ export function badSettings(body, now) {
   if (body.levelFrom > PLAYABLE_LEVEL) return `Levels 3–7 are coming soon. Start at Level 1 or 2.`;
   const ev = body.events;
   if (!Array.isArray(ev) || !ev.length || ev.some((e) => !CUP_EVENTS.includes(e)) || new Set(ev).size !== ev.length) return 'Choose at least one event.';
+  if (body.venue != null && !VENUES.includes(body.venue)) return 'Choose a market.';
   const house = badHouse(body.house, ev);
   if (house) return house;
   if (body.startMode === 'time') {
@@ -215,7 +217,7 @@ export function badSettings(body, now) {
 const rulesOf = (body) => ({
   name: CUP_NAMES[body.name], size: body.size, kind: body.kind, length: body.length,
   events: CUP_EVENTS.filter((e) => body.events.includes(e)), levelFrom: body.levelFrom, levelTo: body.levelTo,
-  startMode: body.startMode, startAt: body.startMode === 'time' ? body.startAt : null, house: houseOf(body.house || {}),
+  startMode: body.startMode, startAt: body.startMode === 'time' ? body.startAt : null, house: houseOf(body.house || {}), venue: body.venue || 'classic',
 });
 
 

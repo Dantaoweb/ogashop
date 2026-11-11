@@ -6,6 +6,7 @@ import { CUST, fmt, setCustom, resetCustom, applyCustom } from './core.js';
 import * as Voice from './voice.js';
 import * as Fx from './fx.js';
 import * as Cups from './cups.js';
+import { VENUES } from './venues.js';
 import * as Analytics from './analytics.js';
 import * as Account from './account.js';
 import * as Market from './market.js';
@@ -327,6 +328,7 @@ function watchQueue() {
   queueTimer = null;
   if (!slow || E.waiting(s) < 1) return;
   let secs = isGuided(s) ? RULES.queueWaitSecondsLearning : RULES.queueWaitSeconds;
+  if (s.venue === 'open') secs *= 0.75;
   if (s.phase === 'record') secs *= RULES.queueRecordFactor;
   queueTimer = setInterval(() => {
     if (!E.queueLeave(s)) { clearInterval(queueTimer); queueTimer = null; return; }
@@ -618,7 +620,7 @@ const actions = {
   'cup-edit': () => {
     const c = Cups.findCup(home, ui.cupCode)?.view?.cup;
     if (!c) return;
-    ui.cupForm = { name: Math.max(0, Cups.CUP_NAMES.indexOf(c.name)), kind: c.kind, length: c.length, size: c.size, events: [...c.events], levelFrom: c.levelFrom, levelTo: c.levelTo, start: c.startMode === 'host' ? 'host' : 'hour', house: { ...(c.house || {}) } };
+    ui.cupForm = { name: Math.max(0, Cups.CUP_NAMES.indexOf(c.name)), kind: c.kind, length: c.length, size: c.size, events: [...c.events], levelFrom: c.levelFrom, levelTo: c.levelTo, start: c.startMode === 'host' ? 'host' : 'hour', house: { ...(c.house || {}) }, venue: c.venue || 'classic' };
     ui.cupEditing = ui.cupCode;
     ui.cupError = null;
     ui.screen = 'cup-new';
@@ -680,6 +682,7 @@ const actions = {
     const r = await cupCall(() => Market.cupJoin(code, home.level));
     if (!r.error) { ui.cupInvite = null; ui.cupPreview = null; render(); }
   },
+  'cup-venue': (arg) => { if (VENUES[arg]) ui.cupForm.venue = arg; },
   'cup-start': (arg) => {
     if (ui.screen === 'cup-new') { ui.cupForm.start = arg; return; }
     cupCall(() => Market.cupStart(ui.cupCode));

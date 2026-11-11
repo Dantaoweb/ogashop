@@ -52,7 +52,7 @@ export const houseList = (h = {}) => Object.keys(HOUSE_RULES).filter((k) => h[k]
 export const goalById = (id) => GOALS.find((g) => g.id === id) || null;
 
 // The standard rules: 7 real days, every event, up to 10 players, all levels, the host starts it, no house rules.
-export const STANDARD_RULES = { name: 0, kind: 'real', length: 7, size: 10, events: [...BASE_EVENTS], levelFrom: 1, levelTo: 7, start: 'host', house: {} };
+export const STANDARD_RULES = { name: 0, kind: 'real', length: 7, size: 10, events: [...BASE_EVENTS], levelFrom: 1, levelTo: 7, start: 'host', house: {}, venue: 'classic' };
 
 export const ordinal = (n) => `${n}${n % 100 >= 11 && n % 100 <= 13 ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10] || 'th'}`;
 export const levelsText = (c) => (c.levelFrom === c.levelTo ? `Level ${c.levelFrom}` : `Levels ${c.levelFrom}–${c.levelTo}`);
@@ -75,7 +75,7 @@ export function rulesBody(f, level, now = Date.now()) {
   const startAt = startTime(f.start, now);
   return {
     name: f.name, kind: f.kind, length: f.length, size: f.size, events: f.events, levelFrom: f.levelFrom, levelTo: f.levelTo,
-    startMode: startAt ? 'time' : 'host', ...(startAt ? { startAt } : {}), level, house: f.house || {},
+    startMode: startAt ? 'time' : 'host', ...(startAt ? { startAt } : {}), level, house: f.house || {}, venue: f.venue || 'classic',
   };
 }
 

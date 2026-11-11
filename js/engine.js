@@ -8,6 +8,7 @@ import {
   addStock, buyStock, waste, applySale, debtById, openDebts, owedToYou, debtPaid, debtLost,
   changeLoyalty, supplierOwed, supplierCreditError, applyCustom, baseBuy, baseSell, priceStep,
 } from './core.js';
+import { venueOf } from './venues.js';
 import { isJunior, isGuided, JUNIOR_CUSTOMERS, JUNIOR_GOALS, JUNIOR_PAY, JUNIOR_RUN_SECONDS } from './junior.js';
 import { EVENT_BY_ID, drawEvent, morningEffects, rivalGrab } from './events.js';
 import { checkGoal } from './goals.js';
@@ -419,6 +420,7 @@ export function putAdvert(s) {
 function makeQueue(s, rng) {
   let [lo, hi] = isJunior(s) ? JUNIOR_CUSTOMERS : RULES.customersPerDay[s.level];
   if (s.mods.rush) { lo = Math.round(lo * 1.6); hi = Math.round(hi * 1.6); }
+  if (venueOf(s)?.customers) { lo = Math.max(3, Math.round(lo * venueOf(s).customers)); hi = Math.max(lo, Math.round(hi * venueOf(s).customers)); }
   let n = randInt(rng, lo, hi);
   if (s.mods.fewer) { n = Math.max(3, n - s.mods.fewer); delete s.mods.fewer; }
   // Customers won from other players yesterday (up to 2 extra a day).
@@ -439,7 +441,7 @@ function makeQueue(s, rng) {
   const junior = isJunior(s);
   if (rng() < (s.mods.rush ? 0.6 : RULES.bigBuyerChance) && !junior) take('big', 1);
   take('credit', 1);
-  take('bargainer', junior ? 1 : randInt(rng, 1, 2));
+  take('bargainer', junior ? 1 : randInt(rng, 1, 2) + (venueOf(s)?.extraBargainers || 0));
   if (rng() < 0.5 && !junior) take('neverpays', 1);
   take('regular', n - ids.length);
   // Regulars come back more than once on busy days.
@@ -483,8 +485,12 @@ function makeRequest(s, cid, rng) {
   if (type === 'neverpays') { kind = 'credit'; frac = rng() * 0.3; }
   if (type === 'big' && s.level >= 2 && rng() < 0.5) { kind = 'credit'; frac = 0.5; }
   if (type === 'bargainer') kind = 'discount';
+  // Venues: everyone haggles in a bazaar; nobody does in a mall.
+  const venue = venueOf(s);
+  if (venue?.bargainAll && kind === 'cash' && rng() < venue.bargainAll) kind = 'discount';
+  if (venue?.noBargain && kind === 'discount') kind = 'cash';
   if (kind === 'credit' && !creditAllowed(s)) { kind = 'cash'; frac = 1; }
-  return { cid, items, kind, frac, disc: 0.1 + rng() * 0.05, walkRoll: rng(), acceptRoll: rng(), moodRoll: rng(), changeRoll: rng(), fakeRoll: rng(), payRoll: rng() };
+  return { cid, items, kind, frac, disc: venueOf(s)?.smallDiscount ? 0.05 + rng() * 0.04 : 0.1 + rng() * 0.05, walkRoll: rng(), acceptRoll: rng(), moodRoll: rng(), changeRoll: rng(), fakeRoll: rng(), payRoll: rng() };
 }
 
 // What the current customer wants, given today's stock and prices.
@@ -533,6 +539,11 @@ function rushOrder(s, wanted) {
 // How this customer pays: cash, transfer or POS (old saves: cash).
 function payMethod(s, r) {
   if (isJunior(s)) return 'cash';
+  const venue = venueOf(s);
+  if (venue?.cash != null && r.kind !== 'discount') {
+    const roll = r.payRoll ?? 0;
+    return roll < venue.cash ? 'cash' : roll < venue.cash + (1 - venue.cash) / 2 ? 'transfer' : 'pos';
+  }
   const mix = RULES.payMix[s.level] || RULES.payMix[1];
   const roll = r.payRoll ?? 0;
   if (r.kind === 'discount' || roll < mix.cash) return 'cash';
@@ -684,7 +695,7 @@ function serveCustomer(s, action) {
   }
   // Level 2: sometimes the cash needs checking for a fake note.
   if (s.phase === 'record' && s.level >= 2 && sale.paid === sale.total && sale.total >= 500 && !t.fakeDone
-      && s.day - (s.lastFakeDay ?? -99) >= 2 && (v.fakeRoll ?? 1) < RULES.fakeChance) {
+      && s.day - (s.lastFakeDay ?? -99) >= 2 && (v.fakeRoll ?? 1) < RULES.fakeChance * (venueOf(s)?.fake || 1)) {
     t.fakeDone = true;
     s.lastFakeDay = s.day;
     t.fake = { cid: v.cid, total: sale.total, ...makeNotes(sale.total) };

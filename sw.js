@@ -1,6 +1,6 @@
 // Offline support: cache the whole game on first visit, then serve from cache.
 // Bump VERSION whenever any file below changes, so players get the update.
-const VERSION = 'ogashop-v42';
+const VERSION = 'ogashop-v43';
 const FILES = [
   './',
   './index.html',
@@ -27,6 +27,7 @@ const FILES = [
   './js/junior.js',
   './js/fx.js',
   './js/cups.js',
+  './js/venues.js',
   './js/username.js',
   './icons/icon.svg',
   './icons/icon-192.png',

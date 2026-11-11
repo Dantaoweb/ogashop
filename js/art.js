@@ -145,7 +145,39 @@ export function levelPicture(n) {
 }
 
 // The selling place: a market table (Level 1) or a shop (Level 2), the goods in stock, and maybe a customer.
-export function scene(level, { cid = null, mood = 'happy', stock = {}, height = 170 } = {}) {
+// Venue layers, drawn behind the seller: a crowd and umbrellas, mall glass and tiles, bazaar fabric and lanterns.
+const PEOPLE = ['#7A4A2A', '#5C3A21', '#8D5B34', '#6B4226', '#9A6A43'];
+const CLOTH = ['#E85D3F', '#2F80ED', '#F5B70A', '#7B4FB8', '#1E9E6A', '#D94F8A'];
+function crowd(xs, y) {
+  return xs.map((x, i) => `<g opacity=".8"><rect x="${x - 9}" y="${y + 14}" width="18" height="30" rx="8" fill="${CLOTH[i % CLOTH.length]}"/><circle cx="${x}" cy="${y + 7}" r="8" fill="${PEOPLE[i % PEOPLE.length]}"/></g>`).join('');
+}
+function venueBack(venue, level) {
+  if (venue === 'mall') {
+    return `<rect width="360" height="170" fill="#EEF2F6"/>
+      <g stroke="#D5DCE3" stroke-width="1">${[0, 1, 2, 3, 4, 5, 6, 7, 8].map((i) => `<path d="M${i * 45} 100 V170"/>`).join('')}<path d="M0 120 H360 M0 145 H360"/></g>
+      <rect x="0" y="0" width="360" height="20" fill="#2B3A4A"/><text x="180" y="14" text-anchor="middle" font-size="11" font-weight="800" font-family="system-ui,sans-serif" fill="#FFFFFF" letter-spacing="3">SHOPPING MALL</text>
+      <g><rect x="18" y="30" width="80" height="70" fill="#CFE6F5" stroke="#9FB3C4" stroke-width="3"/><path d="M58 30 V100" stroke="#9FB3C4" stroke-width="3"/>
+        <rect x="262" y="30" width="80" height="70" fill="#CFE6F5" stroke="#9FB3C4" stroke-width="3"/><path d="M302 30 V100" stroke="#9FB3C4" stroke-width="3"/>
+        <path d="M26 36 L44 58 M270 36 L288 58" stroke="#FFFFFF" stroke-width="4" opacity=".7"/></g>
+      <g fill="#FFF7D6">${[60, 180, 300].map((x) => `<circle cx="${x}" cy="26" r="4"/>`).join('')}</g>`;
+  }
+  if (venue === 'bazaar') {
+    const stripes = CLOTH.map((c, i) => `<rect x="${i * 60}" y="0" width="60" height="30" fill="${c}"/>`).join('');
+    return `<rect width="360" height="170" fill="#FBEBD3"/>${stripes}
+      <path d="M0 30 C30 46 60 46 90 30 C120 46 150 46 180 30 C210 46 240 46 270 30 C300 46 330 46 360 30" fill="none" stroke="#7A3E14" stroke-width="3"/>
+      <g>${[40, 120, 240, 320].map((x, i) => `<path d="M${x} 36 V52" stroke="#7A3E14" stroke-width="2"/><circle cx="${x}" cy="60" r="8" fill="${['#F5B70A', '#E85D3F', '#F5B70A', '#E85D3F'][i]}"/><circle cx="${x}" cy="60" r="3" fill="#FFF7D6"/>`).join('')}</g>
+      <g opacity=".75">${[[14, '#B5532A'], [300, '#7B4FB8']].map(([x, c]) => `<rect x="${x}" y="72" width="46" height="62" fill="${c}"/><path d="M${x} 82 H${x + 46} M${x} 96 H${x + 46} M${x} 110 H${x + 46}" stroke="#FFFFFF" stroke-width="2" opacity=".5"/>`).join('')}</g>`;
+  }
+  if (venue === 'open') {
+    return `<rect width="360" height="170" fill="#FFF0D1"/>
+      ${crowd([22, 52, 82, 278, 308, 338], 56)}${crowd([36, 66, 294, 324], 84)}
+      <g>${[[60, '#E85D3F'], [300, '#2F80ED']].map(([x, c]) => `<path d="M${x - 46} 34 Q${x} -6 ${x + 46} 34 Z" fill="${c}"/><path d="M${x} 34 V64" stroke="#5C3A21" stroke-width="3"/>`).join('')}</g>
+      <path d="M20 40 V170 M340 40 V170" stroke="#8B5A2B" stroke-width="6"/>`;
+  }
+  return null;
+}
+
+export function scene(level, { cid = null, mood = 'happy', stock = {}, height = 170, venue = null } = {}) {
   const shown = Object.keys(GOODS).filter((id) => GOODS[id].level <= level && stock[id] > 0).slice(0, 6);
   const slots = shown.length ? shown : [];
   const spacing = 300 / Math.max(slots.length, 1);
@@ -165,11 +197,14 @@ export function scene(level, { cid = null, mood = 'happy', stock = {}, height = 
          <svg x="262" y="18" width="28" height="28" viewBox="0 0 48 48">${GOOD_ART.rice}</svg><svg x="294" y="18" width="28" height="28" viewBox="0 0 48 48">${GOOD_ART.water}</svg>
          <svg x="262" y="56" width="28" height="28" viewBox="0 0 48 48">${GOOD_ART.garri}</svg><svg x="294" y="56" width="28" height="28" viewBox="0 0 48 48">${GOOD_ART.recharge}</svg>
        </g>`;
+  const venueLayer = venueBack(venue, level);
   const person = cid && LOOKS[cid]
     ? `<g class="scene-customer" data-animate><svg x="125" y="${level === 1 ? 34 : 28}" width="110" height="110" viewBox="0 0 100 100">${face(cid, { mood, size: 100 }).replace(/^<svg[^>]*>|<\/svg>$/g, '')}</svg></g>`
     : '';
   const counter = level === 1
     ? '<rect x="10" y="140" width="340" height="30" fill="#A86B32"/><rect x="10" y="136" width="340" height="8" rx="2" fill="#C98848"/>'
     : '<rect x="0" y="140" width="360" height="30" fill="#0A5434"/><rect x="0" y="136" width="360" height="8" fill="#0E6B43"/>';
-  return `<svg class="scene" viewBox="0 0 360 170" width="100%" style="display:block;max-height:${height}px" aria-hidden="true">${back}${person}${counter}${goodsRow}</svg>`;
+  const venueCounter = venue === 'mall' ? '<rect x="0" y="140" width="360" height="30" fill="#4A5868"/><rect x="0" y="136" width="360" height="8" fill="#6B7C8E"/>'
+    : venue === 'bazaar' ? '<rect x="10" y="140" width="340" height="30" fill="#7A3E14"/><rect x="10" y="136" width="340" height="8" rx="2" fill="#B5532A"/>' : counter;
+  return `<svg class="scene" viewBox="0 0 360 170" width="100%" style="display:block;max-height:${height}px" aria-hidden="true">${venueLayer || back}${person}${venueLayer ? venueCounter : counter}${goodsRow}</svg>`;
 }
