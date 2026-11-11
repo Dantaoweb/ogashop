@@ -339,6 +339,113 @@ export const EVENTS = [
   },
 ];
 
+// ---------- Market events: only in a championship shop in that market ----------
+
+const VENUE_EVENTS = [
+  {
+    id: 'pickpocket', venue: 'open', levels: [1, 2], icon: 'people',
+    eligible: (s) => (s.today.moneyIn >= 1000 ? { take: Math.min(2000, Math.round((s.today.moneyIn * 0.2) / 50) * 50) } : null),
+    title: () => 'Pickpockets in the crowd',
+    text: (s, ctx) => `The market is packed and people are pushing. A trader shouts that pickpockets are about. Your cash box has about ${fmt(ctx.take)} on top.`,
+    choices: (s, ctx) => [
+      { label: 'Buy a money pouch and wear it', sub: 'Costs ₦300. Your cash stays on your body.',
+        run: (st) => { expense(st, 300, 'Money pouch'); return 'Your cash is safe on you. In a crowd, keep money close and count it often.'; } },
+      { label: 'Leave the cash in the open box', sub: 'Saves ₦300, but it is risky.',
+        run: (st, c, rng) => {
+          if (rng() < 0.6) { expense(st, c.take, 'Stolen by a pickpocket'); return `A hand slipped into your box. ${fmt(c.take)} is gone. That loss comes off your profit.`; }
+          return 'Nothing happened this time. Lucky! The risk was real, though.';
+        } },
+    ],
+    note: 'cashprofit',
+  },
+  {
+    id: 'mall_inspection', venue: 'mall', levels: [1, 2], icon: 'receipt',
+    eligible: (s) => (remaining(s) >= 1 ? {} : null),
+    title: () => 'Mall inspection',
+    text: () => 'Mall management checks every shop: price tags on goods and a receipt for every sale.',
+    choices: () => [
+      { label: 'Print price tags and receipts', sub: 'Costs ₦400.',
+        run: (st) => { expense(st, 400, 'Price tags and receipts'); return 'You passed. Clear prices and receipts build trust, and they are records too.'; } },
+      { label: 'Skip it and hope', sub: 'The fine is ₦1,000.',
+        run: (st) => { expense(st, 1000, 'Mall fine'); return 'The inspector fined you ₦1,000. In an enclosed market, the rules are part of the rent.'; } },
+    ],
+    note: 'record',
+  },
+  {
+    id: 'bazaar_spot', venue: 'bazaar', levels: [1, 2], icon: 'store',
+    eligible: (s) => ((s.mods.advertUntil ?? 0) >= s.day ? null : {}),
+    title: () => 'A better spot',
+    text: () => 'A spice trader is travelling. He offers you his spot by the main gate for 2 days for ₦800.',
+    choices: () => [
+      { label: 'Take the spot (₦800)', sub: 'More people pass by the gate: more customers for 2 days.',
+        run: (st) => { expense(st, 800, 'Stall by the gate'); st.mods.advertUntil = st.day + 2; return 'You moved to the gate. A good place costs money, but it brings customers.'; } },
+      { label: 'Stay where you are', sub: 'Keep your ₦800.',
+        run: () => 'You kept your money and your regular customers know where to find you.' },
+    ],
+  },
+  {
+    id: 'generator', venue: 'night', levels: [1, 2], icon: 'bolt',
+    eligible: (s) => (remaining(s) >= 2 ? {} : null),
+    title: () => 'Lights out',
+    text: () => 'The power goes off and your generator coughs to a stop. It needs fuel.',
+    choices: (s) => [
+      { label: 'Buy fuel and keep selling', sub: 'Costs ₦500.',
+        run: (st) => { expense(st, 500, 'Generator fuel'); return 'The lights are back on. Night trading has a cost: count it before you count the profit.'; } },
+      { label: 'Close early tonight', sub: `Free, but the ${remaining(s) - 1} customers still to come will go elsewhere.`,
+        run: (st) => { const n = fewerCustomers(st, remaining(st)); return `You closed early. ${n} customer${n === 1 ? '' : 's'} went to stalls with light.`; } },
+    ],
+  },
+  {
+    id: 'wave', venue: 'floating', levels: [1, 2], icon: 'rain',
+    eligible: (s) => (s.stock.water >= 2 || s.stock.rice >= 1 ? {} : null),
+    title: () => 'A big wave',
+    text: () => 'A big boat speeds past. Its wave rocks your stall boat hard.',
+    choices: () => [
+      { label: 'Tie the goods down with rope', sub: 'Costs ₦200.',
+        run: (st) => { expense(st, 200, 'Rope'); return 'Everything stayed on board. Small costs that protect your stock are worth it.'; } },
+      { label: 'Hold on and hope', sub: 'Free, but goods may fall in.',
+        run: (st, c, rng) => {
+          if (rng() < 0.6) {
+            const water = st.stock.water >= 2;
+            const lost = water ? waste(st, 'water', 2, 'fell in the river') : waste(st, 'rice', 1, 'fell in the river');
+            return `Splash! ${lost} ${water ? 'bags of sachet water' : 'bucket of rice'} went into the river. Lost stock comes off your profit.`;
+          }
+          return 'The boat rocked, but nothing fell in. Lucky this time.';
+        } },
+    ],
+    note: 'stock',
+  },
+  {
+    id: 'bulk_credit', venue: 'wholesale', levels: [1, 2], icon: 'truck',
+    eligible: (s) => (s.stock.garri >= 6 ? { qty: Math.min(10, s.stock.garri) } : null),
+    title: () => 'A bulk order on credit',
+    text: (s, ctx) => `A retailer from the next town wants ${ctx.qty} cups of garri at your price, and will pay in 7 days.`,
+    choices: (s, ctx) => [
+      { label: 'Sell on credit and record it', sub: `${fmt(ctx.qty * s.prices.garri)} owed to you, due in 7 days.`,
+        run: (st, c) => { applySale(st, 'madamcaro', [{ item: 'garri', qty: c.qty, price: st.prices.garri }], 0, { recorded: true, dueDays: 7 }); return 'Recorded. A big sale on credit is only good if you write it down and collect it.'; } },
+      { label: 'Ask for half now', sub: 'Half paid today, the rest in 7 days.',
+        run: (st, c) => { const total = c.qty * st.prices.garri; applySale(st, 'madamcaro', [{ item: 'garri', qty: c.qty, price: st.prices.garri }], Math.round(total / 100) * 50, { recorded: true, dueDays: 7 }); return 'Half now, half later, and recorded. Less risk if the money never comes.'; } },
+      { label: 'Say no: cash only', sub: 'No risk, no sale.',
+        run: () => 'You kept your stock. Cash only is safe, but you may lose big customers.' },
+    ],
+    note: 'credit',
+  },
+  {
+    id: 'helper', venue: 'festive', levels: [1, 2], icon: 'person',
+    eligible: (s) => (remaining(s) >= 3 ? {} : null),
+    title: () => 'Festival rush',
+    text: () => 'The queue is long and people are restless. Your cousin offers to help at the stall today for ₦600.',
+    choices: () => [
+      { label: 'Hire your cousin (₦600)', sub: 'Nobody leaves the queue today.',
+        run: (st) => { expense(st, 600, 'Helper for the day'); st.today.helper = true; return 'Two hands are faster than one. Nobody will give up waiting today.'; } },
+      { label: 'Manage alone', sub: 'Save ₦600, but some customers will give up.',
+        run: (st) => { const n = fewerCustomers(st, 2); return `${n} customer${n === 1 ? '' : 's'} gave up waiting and left. On busy days, help can pay for itself.`; } },
+    ],
+  },
+];
+
+EVENTS.push(...VENUE_EVENTS);
+
 export const EVENT_BY_ID = Object.fromEntries(EVENTS.map((e) => [e.id, e]));
 
 // Always shown once in Level 1, when they become possible.
@@ -346,7 +453,7 @@ export const MUST_SEE = { 1: ['family', 'paid_already'] };
 
 export function drawEvent(s, rng) {
   const recent = (id) => s.eventLog[id] && s.day - s.eventLog[id] < 3;
-  const ok = (e) => e.levels.includes(s.level) && !recent(e.id) && !(e.once && s.eventLog[e.id]) && !(isJunior(s) && JUNIOR_NO_EVENTS.has(e.id)) && !(venueOf(s)?.noRain && e.id === 'rain');
+  const ok = (e) => e.levels.includes(s.level) && !recent(e.id) && !(e.once && s.eventLog[e.id]) && !(isJunior(s) && JUNIOR_NO_EVENTS.has(e.id)) && !(venueOf(s)?.noRain && e.id === 'rain') && (!e.venue || e.venue === s.venue);
   for (const id of MUST_SEE[s.level] || []) {
     const e = EVENT_BY_ID[id];
     if (ok(e)) { const ctx = e.eligible(s); if (ctx) return { id, ctx }; }
@@ -356,7 +463,8 @@ export function drawEvent(s, rng) {
   // Level 2 leans toward its own events.
   const rainy = venueOf(s)?.rainMore || 1;
   const weighted = pool.flatMap((x) => {
-    const n = (s.level === 2 && !x.e.levels.includes(1) ? 2 : 1) * (x.e.id === 'rain' ? rainy : 1);
+    // A market's own event comes up more often there.
+    const n = (s.level === 2 && !x.e.levels.includes(1) ? 2 : 1) * (x.e.id === 'rain' ? rainy : 1) * (x.e.venue ? 3 : 1);
     return Array(n).fill(x);
   });
   const { e, ctx } = pick(rng, weighted);

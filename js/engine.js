@@ -1205,6 +1205,7 @@ export const waiting = (s) => Math.max(0, s.today.queue.length - s.today.idx - 1
 
 // Too slow: the last person in the line leaves for a rival.
 export function queueLeave(s) {
+  if (s.today.helper) return false; // a helper keeps the queue moving
   const t = s.today;
   if (!['selling', 'record', 'change', 'fake', 'pay'].includes(s.phase) || waiting(s) < 1) return null;
   const r = t.queue.pop();

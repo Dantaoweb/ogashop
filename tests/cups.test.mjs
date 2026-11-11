@@ -283,3 +283,39 @@ test('markets: each venue changes the day the way it says', async () => {
   const counts = (venue) => { const s = shopIn(venue); let n = 0; for (let d = 0; d < 15; d++) { s.seed = 500 + d; E.startDay(s); n += s.today.queue.length; } return n; };
   assert.ok(counts('festive') > counts('classic'), 'festive rush');
 });
+
+test('market events: only in their own market, each choice works', async () => {
+  const Ev = await import('../js/events.js');
+  const ids = { open: 'pickpocket', mall: 'mall_inspection', bazaar: 'bazaar_spot', night: 'generator', floating: 'wave', wholesale: 'bulk_credit', festive: 'helper' };
+  for (const [venue, id] of Object.entries(ids)) {
+    const seen = new Set();
+    for (let seed = 0; seed < 120; seed++) {
+      const s = E.newGame('business', mulberry32(seed), { seed: 3, code: 'EVENTS', level: 1, maxLevel: 2, venue });
+      s.today.moneyIn = 5000; s.stock.garri = 10; s.stock.water = 5; s.today.idx = 0;
+      s.eventLog = {};
+      const e = Ev.drawEvent(s, mulberry32(seed + 1));
+      if (e) seen.add(e.id);
+    }
+    assert.ok(seen.has(id), `${id} comes up in the ${venue} market`);
+    for (const other of Object.values(ids)) if (other !== id) assert.ok(!seen.has(other), `${other} never comes up in the ${venue} market`);
+    const def = Ev.EVENT_BY_ID[id];
+    const s = E.newGame('business', mulberry32(9), { seed: 3, code: 'EVENTS', level: 1, maxLevel: 2, venue });
+    s.today.moneyIn = 5000; s.stock.garri = 10; s.stock.water = 5;
+    s.today.queue = s.today.queue.concat(s.today.queue, s.today.queue);
+    const ctx = def.eligible(s);
+    assert.ok(ctx, `${id} can happen`);
+    def.choices(s, ctx).forEach((c, i) => {
+      const copy = JSON.parse(JSON.stringify(s));
+      const out = c.run(copy, ctx, () => 0.1);
+      assert.equal(typeof out, 'string', `${id} choice ${i} says what happened`);
+    });
+  }
+  const classic = E.newGame('business', mulberry32(1));
+  for (let seed = 0; seed < 60; seed++) assert.ok(!Object.values(ids).includes(Ev.drawEvent({ ...classic, eventLog: {} }, mulberry32(seed))?.id), 'never in your own shop');
+});
+
+test('festive helper: nobody leaves the queue that day', () => {
+  const s = E.newGame('business', mulberry32(11), { seed: 3, code: 'HELPER', level: 1, maxLevel: 2, venue: 'festive' });
+  s.today.helper = true;
+  assert.equal(E.queueLeave(s), false);
+});
