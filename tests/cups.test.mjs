@@ -259,3 +259,27 @@ test('the end: a trophy and badges once; no points means taking part', () => {
   assert.equal(Cups.awardCup(s, Cups.applyCupView(s, { ...end('RUNNIN', []), cup: { ...end('RUNNIN', []).cup, status: 'running' } })), null);
   assert.equal(Cups.ordinal(23), '23rd');
 });
+
+test('markets: each venue changes the day the way it says', async () => {
+  const C2 = await import('../js/core.js');
+  const shopIn = (venue, seed = 7) => E.newGame('business', mulberry32(seed), { seed: 42, code: 'VENUEX', level: 1, maxLevel: 2, venue });
+  const classic = shopIn('classic');
+  assert.equal(C2.buyPrice(shopIn('floating'), 'rice'), Math.round(C2.buyPrice(classic, 'rice') * 1.05 / 10) * 10, 'boat transport');
+  assert.ok(C2.refPrice(shopIn('mall'), 'rice') > C2.refPrice(classic, 'rice'), 'mall customers accept more');
+  assert.ok(C2.refPrice(shopIn('wholesale'), 'rice') < C2.refPrice(classic, 'rice'), 'wholesale prices are lower');
+  const avgQty = (venue) => {
+    let n = 0, q = 0;
+    for (let i = 0; i < 20; i++) { const s = shopIn(venue, i); s.seed = 1000 + i; E.startDay(s); for (const r of s.today.queue) for (const it of r.items) { n++; q += it.qty; } }
+    return q / n;
+  };
+  assert.ok(avgQty('wholesale') > avgQty('classic') * 1.5, 'wholesale buyers buy in bulk');
+  const night = shopIn('night');
+  night.today.queue = [];
+  night.today.eventAt = 99;
+  E.openShop(night);
+  assert.ok(night.today.expenses.some((e) => e.label === 'Lantern and generator fuel' && e.amount === 200), 'lights cost money at night');
+  const mall = shopIn('mall');
+  assert.ok(mall.today.queue.every((r) => r.kind !== 'discount'), 'no bargaining in a mall');
+  const counts = (venue) => { const s = shopIn(venue); let n = 0; for (let d = 0; d < 15; d++) { s.seed = 500 + d; E.startDay(s); n += s.today.queue.length; } return n; };
+  assert.ok(counts('festive') > counts('classic'), 'festive rush');
+});

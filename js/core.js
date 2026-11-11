@@ -71,7 +71,8 @@ export const baseSell = (s, item) => (isJunior(s) ? JUNIOR_PRICES[item].sell : G
 const tidy = (s, n) => (isJunior(s) ? Math.round(n / JUNIOR_PRICE_STEP) * JUNIOR_PRICE_STEP : n);
 
 export function buyPrice(s, item) {
-  return tidy(s, baseBuy(s, item) + (s.market[item]?.buy || 0));
+  const v = venueOf(s)?.buy || 1;
+  return tidy(s, Math.round(((baseBuy(s, item) + (s.market[item]?.buy || 0)) * v) / 10) * 10);
 }
 
 // The price customers expect to pay. Selling far above it makes some walk away.

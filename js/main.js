@@ -6,7 +6,7 @@ import { CUST, fmt, setCustom, resetCustom, applyCustom } from './core.js';
 import * as Voice from './voice.js';
 import * as Fx from './fx.js';
 import * as Cups from './cups.js';
-import { VENUES } from './venues.js';
+import { VENUES, venueOf } from './venues.js';
 import * as Analytics from './analytics.js';
 import * as Account from './account.js';
 import * as Market from './market.js';
@@ -328,7 +328,7 @@ function watchQueue() {
   queueTimer = null;
   if (!slow || E.waiting(s) < 1) return;
   let secs = isGuided(s) ? RULES.queueWaitSecondsLearning : RULES.queueWaitSeconds;
-  if (s.venue === 'open') secs *= 0.75;
+  secs *= venueOf(s)?.queue || 1;
   if (s.phase === 'record') secs *= RULES.queueRecordFactor;
   queueTimer = setInterval(() => {
     if (!E.queueLeave(s)) { clearInterval(queueTimer); queueTimer = null; return; }

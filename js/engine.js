@@ -42,6 +42,8 @@ export function newGame(path, rng = Math.random, cup = null) {
   for (const c of CUSTOMERS) s.customers[c.id] = { loyalty: 1, skipUntil: 0 };
   s.custom = {};
   if (cup) Object.assign(s, { seed: cup.seed, cupCode: cup.code, maxLevel: cup.maxLevel || null, venue: cup.venue || null });
+  // A market's shop opens at that market's usual prices.
+  if (venueOf(s)) for (const id of Object.keys(GOODS)) s.prices[id] = refPrice(s, id);
   applyCustom(s);
   startDay(s, rng);
   return s;
@@ -439,7 +441,7 @@ function makeQueue(s, rng) {
     for (let i = 0; i < count && pool.length; i++) ids.push(pool.splice(Math.floor(rng() * pool.length), 1)[0]);
   };
   const junior = isJunior(s);
-  if (rng() < (s.mods.rush ? 0.6 : RULES.bigBuyerChance) && !junior) take('big', 1);
+  if (rng() < (s.mods.rush ? 0.6 : venueOf(s)?.big ?? RULES.bigBuyerChance) && !junior) take('big', 1);
   take('credit', 1);
   take('bargainer', junior ? 1 : randInt(rng, 1, 2) + (venueOf(s)?.extraBargainers || 0));
   if (rng() < 0.5 && !junior) take('neverpays', 1);
@@ -459,7 +461,8 @@ function makeQueue(s, rng) {
 }
 
 function pickItem(s, rng, exclude = []) {
-  return pickWeighted(rng, goodsForLevel(s.level).filter((id) => !exclude.includes(id)).map((id) => [id, GOODS[id].weight]));
+  const favour = venueOf(s)?.favour || {};
+  return pickWeighted(rng, goodsForLevel(s.level).filter((id) => !exclude.includes(id)).map((id) => [id, GOODS[id].weight * (favour[id] || 1)]));
 }
 
 function makeRequest(s, cid, rng) {
@@ -478,6 +481,9 @@ function makeRequest(s, cid, rng) {
       items.push({ item: b, qty: 1 });
     }
   }
+  // Venues where people buy more at a time (wholesale, festive).
+  const more = venueOf(s)?.qty;
+  if (more) for (const it of items) it.qty = Math.max(1, Math.round(it.qty * more));
   let kind = 'cash';
   let frac = 1;
   if (type === 'regular' && rng() < 0.25) { kind = 'credit'; frac = 0.5; }
@@ -533,7 +539,8 @@ function rushOrder(s, wanted) {
     .map((it) => ({ item: it.item, qty: Math.max(RULES.rushMinQty, it.qty - it.have) }));
   if (!items.length) return null;
   const goods = items.reduce((a, it) => a + it.qty * buyPrice(s, it.item), 0);
-  return { items, goods, fee: RULES.rushFee, cost: goods + RULES.rushFee };
+  const fee = RULES.rushFee * (venueOf(s)?.rushFee || 1);
+  return { items, goods, fee, cost: goods + fee };
 }
 
 // How this customer pays: cash, transfer or POS (old saves: cash).
@@ -1273,6 +1280,11 @@ export function endDay(s, rng = Math.random) {
   // Bills due today are paid from the day's cash, before your own pay.
   t.billNotes = payDueBills(s);
   for (const b of s.bills.filter((x) => x.due === s.day)) t.billNotes.push(`You couldn't pay the ${b.label.toLowerCase()} (${fmt(b.amount)}). From tomorrow it costs ${fmt(RULES.billLateFee)} more each day.`);
+
+  // Venue costs of the night: lights at a night market, damp on a floating market.
+  const venue = venueOf(s);
+  if (venue?.nightly) expense(s, venue.nightly.amount, venue.nightly.label);
+  if (venue?.damp && s.stock[venue.damp.item] > 0 && rng() < venue.damp.chance) waste(s, venue.damp.item, 1, 'damp from the river');
 
   // Your daily pay moves from the business cash to your pocket.
   t.paidSelf = Math.max(0, Math.min(s.pay, s.cash));

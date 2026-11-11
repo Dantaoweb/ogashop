@@ -354,7 +354,11 @@ export function drawEvent(s, rng) {
   const pool = EVENTS.filter(ok).map((e) => ({ e, ctx: e.eligible(s) })).filter((x) => x.ctx);
   if (!pool.length) return null;
   // Level 2 leans toward its own events.
-  const weighted = pool.flatMap((x) => (s.level === 2 && !x.e.levels.includes(1) ? [x, x] : [x]));
+  const rainy = venueOf(s)?.rainMore || 1;
+  const weighted = pool.flatMap((x) => {
+    const n = (s.level === 2 && !x.e.levels.includes(1) ? 2 : 1) * (x.e.id === 'rain' ? rainy : 1);
+    return Array(n).fill(x);
+  });
   const { e, ctx } = pick(rng, weighted);
   return { id: e.id, ctx };
 }

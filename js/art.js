@@ -168,6 +168,39 @@ function venueBack(venue, level) {
       <g>${[40, 120, 240, 320].map((x, i) => `<path d="M${x} 36 V52" stroke="#7A3E14" stroke-width="2"/><circle cx="${x}" cy="60" r="8" fill="${['#F5B70A', '#E85D3F', '#F5B70A', '#E85D3F'][i]}"/><circle cx="${x}" cy="60" r="3" fill="#FFF7D6"/>`).join('')}</g>
       <g opacity=".75">${[[14, '#B5532A'], [300, '#7B4FB8']].map(([x, c]) => `<rect x="${x}" y="72" width="46" height="62" fill="${c}"/><path d="M${x} 82 H${x + 46} M${x} 96 H${x + 46} M${x} 110 H${x + 46}" stroke="#FFFFFF" stroke-width="2" opacity=".5"/>`).join('')}</g>`;
   }
+  if (venue === 'night') {
+    const bulbs = [20, 60, 100, 140, 180, 220, 260, 300, 340].map((x, i) => `<circle cx="${x}" cy="${26 + (i % 2) * 6}" r="5" fill="${['#FFE08A', '#FF9E6B', '#9FE3FF'][i % 3]}"/>`).join('');
+    return `<rect width="360" height="170" fill="#1B2440"/>
+      <circle cx="310" cy="58" r="14" fill="#FFF3C4"/><circle cx="304" cy="54" r="12" fill="#1B2440"/>
+      <g fill="#FFFFFF" opacity=".7">${[[40, 60], [90, 80], [150, 52], [230, 70], [200, 96]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="1.6"/>`).join('')}</g>
+      <path d="M0 22 Q90 42 180 22 Q270 42 360 22" fill="none" stroke="#3A4466" stroke-width="2"/>${bulbs}
+      <path d="M20 40 V170 M340 40 V170" stroke="#4A3220" stroke-width="6"/>
+      <g opacity=".6">${crowd([40, 70, 290, 320], 84)}</g>`;
+  }
+  if (venue === 'floating') {
+    return `<rect width="360" height="170" fill="#D9F0FA"/>
+      <path d="M0 22 H360" stroke="#8FC7E0" stroke-width="44" opacity=".35"/>
+      <g fill="#7A4A2A"><rect x="18" y="60" width="6" height="80"/><rect x="336" y="60" width="6" height="80"/></g>
+      <path d="M8 62 L44 44 L80 62 Z M280 62 L316 44 L352 62 Z" fill="#B5532A"/>
+      <path d="M0 120 Q30 112 60 120 T120 120 T180 120 T240 120 T300 120 T360 120 V170 H0 Z" fill="#3D8FBF"/>
+      <path d="M0 132 Q30 126 60 132 T120 132 T180 132 T240 132 T300 132 T360 132" fill="none" stroke="#FFFFFF" stroke-width="2" opacity=".5"/>`;
+  }
+  if (venue === 'wholesale') {
+    const sacks = [[18, 98], [46, 98], [32, 72], [286, 98], [314, 98], [300, 72]].map(([x, y]) => `<path d="M${x} ${y + 40} Q${x - 2} ${y + 6} ${x + 6} ${y} H${x + 22} Q${x + 30} ${y + 6} ${x + 28} ${y + 40} Z" fill="#D9C39A" stroke="#A88B5C" stroke-width="2"/>`).join('');
+    return `<rect width="360" height="170" fill="#E4E6E2"/>
+      <path d="M0 0 H360 V30 H0 Z" fill="#9AA3A8"/><g stroke="#7C868C" stroke-width="2">${[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((i) => `<path d="M${i * 30} 0 V30"/>`).join('')}</g>
+      <rect x="0" y="30" width="360" height="6" fill="#6B757B"/>
+      <text x="180" y="54" text-anchor="middle" font-size="11" font-weight="800" font-family="system-ui,sans-serif" fill="#55635A" letter-spacing="3">WHOLESALE</text>
+      ${sacks}`;
+  }
+  if (venue === 'festive') {
+    const flags = [10, 40, 70, 100, 130, 160, 190, 220, 250, 280, 310, 340].map((x, i) => `<path d="M${x} ${14 + (i % 2) * 4} l12 0 l-6 14 Z" fill="${CLOTH[i % CLOTH.length]}"/>`).join('');
+    return `<rect width="360" height="170" fill="#FFF2E0"/>
+      <path d="M0 14 Q180 30 360 14" fill="none" stroke="#7A3E14" stroke-width="2"/>${flags}
+      <g>${[[30, '#E85D3F'], [330, '#2F80ED']].map(([x, c]) => `<ellipse cx="${x}" cy="56" rx="11" ry="14" fill="${c}"/><path d="M${x} 70 V96" stroke="#55635A" stroke-width="1.5"/>`).join('')}</g>
+      <g fill="#F5B70A">${[[80, 50], [280, 46], [180, 40]].map(([x, y]) => `<path d="M${x} ${y - 7} l2 5 h5 l-4 3 l2 5 l-5 -3 l-5 3 l2 -5 l-4 -3 h5 Z"/>`).join('')}</g>
+      ${crowd([22, 50, 78, 282, 310, 338], 70)}`;
+  }
   if (venue === 'open') {
     return `<rect width="360" height="170" fill="#FFF0D1"/>
       ${crowd([22, 52, 82, 278, 308, 338], 56)}${crowd([36, 66, 294, 324], 84)}
@@ -205,6 +238,10 @@ export function scene(level, { cid = null, mood = 'happy', stock = {}, height = 
     ? '<rect x="10" y="140" width="340" height="30" fill="#A86B32"/><rect x="10" y="136" width="340" height="8" rx="2" fill="#C98848"/>'
     : '<rect x="0" y="140" width="360" height="30" fill="#0A5434"/><rect x="0" y="136" width="360" height="8" fill="#0E6B43"/>';
   const venueCounter = venue === 'mall' ? '<rect x="0" y="140" width="360" height="30" fill="#4A5868"/><rect x="0" y="136" width="360" height="8" fill="#6B7C8E"/>'
-    : venue === 'bazaar' ? '<rect x="10" y="140" width="340" height="30" fill="#7A3E14"/><rect x="10" y="136" width="340" height="8" rx="2" fill="#B5532A"/>' : counter;
+    : venue === 'bazaar' ? '<rect x="10" y="140" width="340" height="30" fill="#7A3E14"/><rect x="10" y="136" width="340" height="8" rx="2" fill="#B5532A"/>'
+    : venue === 'night' ? '<rect x="10" y="140" width="340" height="30" fill="#4A3220"/><rect x="10" y="136" width="340" height="8" rx="2" fill="#6B4A2E"/>'
+    : venue === 'floating' ? '<path d="M6 136 H354 L330 170 H30 Z" fill="#8B5A2B"/><rect x="6" y="134" width="348" height="8" rx="3" fill="#B07A45"/>'
+    : venue === 'wholesale' ? '<rect x="0" y="140" width="360" height="30" fill="#8A9399"/><rect x="0" y="136" width="360" height="8" fill="#A8B0B5"/>'
+    : venue === 'festive' ? '<rect x="10" y="140" width="340" height="30" fill="#B5532A"/><rect x="10" y="136" width="340" height="8" rx="2" fill="#E85D3F"/>' : counter;
   return `<svg class="scene" viewBox="0 0 360 170" width="100%" style="display:block;max-height:${height}px" aria-hidden="true">${venueLayer || back}${person}${venueLayer ? venueCounter : counter}${goodsRow}</svg>`;
 }
