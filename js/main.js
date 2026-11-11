@@ -378,7 +378,7 @@ function sayFrom(el) {
   Voice.speak(el.dataset.say, { who: cid, she: !!CUST[cid]?.she });
 }
 function render() {
-  if (ui.sheet && (ui.screen || s?.phase !== 'morning')) ui.sheet = null;
+  if (ui.sheet && (ui.screen || !['morning', 'evening'].includes(s?.phase))) ui.sheet = null;
   UI.startRender();
   UI.setShops(home && s ? (home.cups || []).filter((c) => c.shop && !Cups.cupOver(c)).map((c) => ({ code: c.code, name: c.name })) : [], s?.cupCode || 'home');
   if (s?.cupCode) s.cupDone = Cups.shopDone(Cups.findCup(home, s.cupCode));

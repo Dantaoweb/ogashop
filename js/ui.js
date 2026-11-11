@@ -206,19 +206,6 @@ export function startScreen(ui, hasSave, saveInfo) {
 
 
 
-// Evening: you and the rivals, and who you lost to them.
-function marketEvening(s) {
-  const t = s.today;
-  const m = t.market;
-  if (!m) return '';
-  const ticket = (r) => r.ticket?.[s.level] || RIVALS.find((x) => x.id === r.id)?.ticket[s.level] || 2000;
-  const rows = [
-    `<div class="between small"><b>Your shop</b><b>${t.sales} customer${t.sales === 1 ? '' : 's'} · ${fmt(t.salesValue)}</b></div>`,
-    ...m.rivals.map((r) => { if (r.real) return `<div class="between small"><span>${esc(r.name)} <span class="tag green">Player</span></span><span>${r.customers} customers · ${fmt(r.sales || 0)}${r.won ? ` · +${r.won} from you` : ''}</span></div>`; const n = r.customers + r.won; return `<div class="between small"><span>${esc(r.name)}</span><span>${n} customers · about ${fmt(Math.round((n * ticket(r)) / 50) * 50)}</span></div>`; }),
-  ].join('');
-  const lost = t.lostTo.length ? `<span class="small" style="color:var(--red);font-weight:600">You lost ${t.lostTo.length} customer${t.lostTo.length > 1 ? 's' : ''} to rivals: ${t.lostTo.map((l) => `${CUST[l.cid].name} → ${(m.rivals.find((x) => x.id === l.rival)?.name || 'a rival')}`).join(', ')}.</span>` : '<span class="small muted">You didn\'t lose any customers to rivals today.</span>';
-  return `<div class="card"><h3>The market today</h3>${rows}${lost}</div>`;
-}
 
 function challengeCard(s) {
   const c = s.today.challenge;
@@ -411,6 +398,7 @@ function shelf(s, ui) {
 
 function sheetBody(s, ui, kind, arg) {
   const t = s.today;
+  if (s.phase === 'evening') return eveningSheet(s, kind);
   if (kind === 'market') {
     const m = t.market;
     if (!m) return null;
@@ -1018,27 +1006,126 @@ function stars(n) {
     `<svg width="28" height="28" viewBox="0 0 24 24" ${i < n ? `class="star-on" style="animation-delay:${0.15 + i * 0.3}s"` : ''} fill="${i < n ? '#F5B70A' : 'none'}" stroke="${i < n ? '#F5B70A' : '#6B7B71'}" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true">${PATHS.star}</svg>`).join('')}</div>`;
 }
 
-// Everything that left the business today: costs (lower profit) and personal money (lower cash only).
-function moneyOut(s) {
+
+// ---------- Pictures for the evening ----------
+
+// Where the money from sales went: what the goods cost, other costs, and what's left as profit.
+function moneySplit(t) {
+  const sales = Math.max(0, t.salesValue);
+  const cogs = Math.min(sales, Math.max(0, t.cogs));
+  const profit = Math.max(0, Math.min(sales - cogs, t.profit));
+  const other = Math.max(0, sales - cogs - profit);
+  return { sales, cogs, other, profit };
+}
+
+function moneyBar(t) {
+  const m = moneySplit(t);
+  if (!m.sales) return '';
+  const pct = (v) => ((v / m.sales) * 100).toFixed(1);
+  return `<div class="money-bar" aria-hidden="true"><span style="width:${pct(m.cogs)}%;background:#B9C4BC"></span><span style="width:${pct(m.other)}%;background:var(--amber)"></span><span style="width:${pct(m.profit)}%;background:var(--green)"></span></div>
+    <div class="legend"><span><i style="background:#B9C4BC"></i>Goods ${fmt(m.cogs)}</span>${m.other ? `<span><i style="background:var(--amber)"></i>Costs ${fmt(m.other)}</span>` : ''}<span><i style="background:var(--green)"></i>Kept ${fmt(m.profit)}</span></div>`;
+}
+
+function moneyCard(s) {
   const t = s.today;
-  const row = (label, amount, tag, color) => `<div class="between small"><span>${esc(label)}${tag ? ` <span class="tag ${color}">${tag}</span>` : ''}</span><b>${fmt(amount)}</b></div>`;
-  const rows = [
-    ...t.expenses.map((e) => row(e.label, e.amount, 'Business cost', 'amber')),
-    ...t.personal.map((p) => row(p.label, p.amount, p.from === 'pocket' ? 'From your pocket' : 'From business money', p.from === 'pocket' ? 'green' : 'red')),
-    ...(t.paidSelf ? [row('Your daily pay', t.paidSelf, 'To your pocket', 'green')] : []),
-  ];
-  if (!rows.length) return '';
-  return `<div class="card"><h3>Money out</h3>${rows.join('')}
-    <span class="small muted">Business costs lower your profit. Personal money and your pay only lower your cash. Pocket now: <b style="color:var(--ink)">${fmt(s.pocket)}</b></span></div>
+  return `<button type="button" class="card tap-card" data-action="sheet" data-arg="money" aria-label="Money in ${fmt(t.moneyIn)}, profit ${fmt(t.profit)}. Tap to read more.">
+    <div class="grid2" style="width:100%">
+      <div><span class="small muted" style="font-weight:600">Money in</span><b class="display" style="font-size:26px;display:block">${fmt(t.moneyIn)}</b></div>
+      <div><span class="small" style="font-weight:600;color:var(--green)">Profit</span><b class="display" style="font-size:26px;display:block;color:${t.profit >= 0 ? 'var(--green)' : 'var(--red)'}">${fmt(t.profit)}</b></div></div>
+    ${moneyBar(t)}</button>`;
+}
+
+// The market as bars: one per shop, yours in green.
+function marketBars(s) {
+  const t = s.today;
+  const m = t.market;
+  if (!m) return '';
+  const ticket = (r) => r.ticket?.[s.level] || RIVALS.find((x) => x.id === r.id)?.ticket[s.level] || 2000;
+  const rows = [{ name: 'You', n: t.sales, you: true }, ...m.rivals.map((r) => ({ name: r.name, n: r.real ? r.customers : r.customers + r.won, real: r.real }))];
+  const max = Math.max(1, ...rows.map((r) => r.n));
+  return `<button type="button" class="card tap-card" data-action="sheet" data-arg="rivals" aria-label="The market today. Tap to read more.">
+    <div class="between" style="width:100%"><b>The market today</b>${t.lostTo.length ? `<span class="small" style="color:var(--red);font-weight:700">Lost ${t.lostTo.length} to rivals</span>` : ''}</div>
+    ${rows.map((r, i) => `<div class="bar-row"><span class="small">${esc(r.name)}</span><span class="bar"><span style="width:${Math.round((r.n / max) * 100)}%;background:${r.you ? 'var(--green)' : RIVAL_COLORS[(i - 1) % RIVAL_COLORS.length]}"></span></span><b class="small">${r.n}</b></div>`).join('')}
+    <span class="small muted">Customers served</span></button>`;
+}
+
+// Money out as three pictures: your pay, business costs, family money.
+function moneyOutIcons(s) {
+  const t = s.today;
+  const costs = t.expenses.reduce((a, e) => a + e.amount, 0);
+  const family = t.personal.reduce((a, p) => a + p.amount, 0);
+  if (!costs && !family && !t.paidSelf) return '';
+  const fromBusiness = t.personal.some((p) => p.from !== 'pocket');
+  const item = (art, label, amount, note) => `<span class="out-item">${art}<b>${fmt(amount)}</b><span class="small muted">${label}</span>${note || ''}</span>`;
+  return `<button type="button" class="card tap-card" data-action="sheet" data-arg="out" aria-label="Money out. Tap to read more.">
+    <b style="align-self:flex-start">Money out</b>
+    <div class="out-row">
+      ${item(payArt(56), 'Your pay', t.paidSelf || 0)}
+      ${item(`<span class="out-ico" style="background:var(--amber-soft);color:var(--amber-ink)">${icon('receipt', 28)}</span>`, 'Costs', costs)}
+      ${item(`<span class="out-ico" style="background:${fromBusiness ? 'var(--red-soft)' : 'var(--green-soft)'};color:${fromBusiness ? 'var(--red)' : 'var(--green)'}">${icon('person', 28)}</span>`, 'Family', family, fromBusiness ? '<span class="small" style="color:var(--red);font-weight:700">From business!</span>' : '')}
+    </div></button>
     ${t.personal.length ? explain(s, 'personal') : ''}`;
+}
+
+// Who owes you, as faces: a red ring and "?" when it was never recorded.
+function owesFaces(s) {
+  const debts = openDebts(s);
+  if (!debts.length) return `<div class="card"><b>Who owes you</b><span class="small muted">Nobody owes you money.</span></div>`;
+  const shown = debts.slice(0, 6);
+  return `<button type="button" class="card tap-card" data-action="sheet" data-arg="owes" aria-label="${debts.length} people owe you. Tap to read more.">
+    <div class="between" style="width:100%"><b>Who owes you</b><b>${fmt(debts.reduce((a, d) => a + d.amount, 0))}</b></div>
+    <div class="faces">${shown.map((d) => `<span class="owe${d.recorded ? '' : ' unrecorded'}${d.recorded && d.due < s.day ? ' late' : ''}"><span class="mini-face">${face(d.cid, { size: 44 })}</span><b class="small">${fmt(d.amount)}${d.recorded ? '' : '?'}</b></span>`).join('')}${debts.length > shown.length ? `<span class="small muted">+${debts.length - shown.length} more</span>` : ''}</div>
+    ${debts.some((d) => !d.recorded) ? '<span class="small" style="color:var(--red);font-weight:700">Red ring: never recorded. It may be forgotten.</span>' : ''}</button>`;
+}
+
+// Stock left as a small shelf.
+function stockLeft(s) {
+  return `<div class="card"><b>Stock left</b><div class="mini-shelf">${goodsForLevel(s.level).map((id) => `<span class="mini-good${s.stock[id] <= 2 ? ' low' : ''}" title="${esc(GOODS[id].name)}">${good(id, 30)}<span class="count">${s.stock[id]}</span><span class="small">${esc(GOODS[id].short)}</span></span>`).join('')}</div></div>`;
+}
+
+function eveningSheet(s, kind) {
+  const t = s.today;
+  if (kind === 'money') {
+    const m = moneySplit(t);
+    return { title: 'Where the money went', art: payArt(110), html: `
+      <div class="between small"><span class="muted">Money in today (cash, transfers, repaid debts)</span><b>${fmt(t.moneyIn)}</b></div>
+      <div class="between small"><span class="muted">Goods sold were worth</span><b>${fmt(t.salesValue)}</b></div>
+      ${moneyBar(t)}
+      <div class="between small"><span class="muted">What those goods cost you</span><b>${fmt(m.cogs)}</b></div>
+      ${m.other ? `<div class="between small"><span class="muted">Other costs, waste and lost debts</span><b>${fmt(m.other)}</b></div>` : ''}
+      <div class="between"><b>Profit</b><b style="color:${t.profit >= 0 ? 'var(--green)' : 'var(--red)'}">${fmt(t.profit)}</b></div>
+      <span class="small">Busy is not the same as profitable: profit is what is left after paying for the goods and costs.${t.creditGiven ? ` ${fmt(t.creditGiven)} of today's sales were on credit: profit, but not cash yet.` : ''}</span>` };
+  }
+  if (kind === 'rivals') {
+    const m = t.market;
+    if (!m) return null;
+    const ticket = (r) => r.ticket?.[s.level] || RIVALS.find((x) => x.id === r.id)?.ticket[s.level] || 2000;
+    return { title: 'The market today', art: donut({ mine: t.sales, size: t.sales + m.rivals.reduce((a, r) => a + (r.real ? r.customers : r.customers + r.won), 0), rivals: m.rivals.map((r) => ({ customers: r.real ? r.customers : r.customers + r.won })) }, 110), html: `
+      <div class="between small"><b>Your shop</b><b>${t.sales} customer${t.sales === 1 ? '' : 's'} · ${fmt(t.salesValue)}</b></div>
+      ${m.rivals.map((r) => { const n = r.real ? r.customers : r.customers + r.won; return `<div class="between small"><span>${esc(r.name)}${r.real ? ' <span class="tag green">Player</span>' : ''}</span><span>${n} customers · ${r.real ? fmt(r.sales || 0) : `about ${fmt(Math.round((n * ticket(r)) / 50) * 50)}`}${r.won ? ` · +${r.won} from you` : ''}</span></div>`; }).join('')}
+      ${t.lostTo.length ? `<span class="small" style="color:var(--red);font-weight:600">You lost ${t.lostTo.length} customer${t.lostTo.length > 1 ? 's' : ''}: ${t.lostTo.map((l) => `${esc(CUST[l.cid].name)} → ${esc(m.rivals.find((x) => x.id === l.rival)?.name || 'a rival')}`).join(', ')}.</span>` : '<span class="small muted">You didn\'t lose any customers to rivals today.</span>'}` };
+  }
+  if (kind === 'out') {
+    const row = (label, amount, tag, color) => `<div class="between small"><span>${esc(label)}${tag ? ` <span class="tag ${color}">${tag}</span>` : ''}</span><b>${fmt(amount)}</b></div>`;
+    return { title: 'Money out', art: payArt(110), html: `
+      ${[...t.expenses.map((e) => row(e.label, e.amount, 'Business cost', 'amber')),
+        ...t.personal.map((p) => row(p.label, p.amount, p.from === 'pocket' ? 'From your pocket' : 'From business money', p.from === 'pocket' ? 'green' : 'red')),
+        ...(t.paidSelf ? [row('Your daily pay', t.paidSelf, 'To your pocket', 'green')] : [])].join('') || '<span class="small muted">No money went out today.</span>'}
+      <span class="small">Business costs lower your profit. Family money and your pay only lower your cash. Pocket now: <b>${fmt(s.pocket)}</b></span>` };
+  }
+  if (kind === 'owes') {
+    const debts = openDebts(s);
+    return { title: 'Who owes you', art: `<span class="mini-face lg">${face(debts[0]?.cid || 'musa', { size: 56 })}</span>`, html: `
+      ${debts.map((d) => `<div class="between" style="${d.recorded ? '' : 'background:var(--red-soft);margin:0 -8px;padding:8px;border-radius:10px'}">
+        <span class="row" style="gap:8px"><span class="mini-face">${face(d.cid, { size: 36 })}</span><span>${esc(CUST[d.cid].name)} <span class="small ${d.recorded ? 'muted' : ''}" style="${d.recorded ? '' : 'color:var(--red);font-weight:700'}">· ${d.recorded ? (d.due < s.day ? `late since Day ${d.due}` : `due Day ${d.due}`) : 'not recorded'}</span></span></span>
+        <b style="${d.recorded ? '' : 'color:var(--red)'}">${fmt(d.amount)}${d.recorded ? '' : '?'}</b></div>`).join('') || '<span class="small muted">Nobody owes you money.</span>'}
+      <span class="small">Recorded debts come back far more often. ${s.level >= 2 ? 'Remind people on the due day from "Who owes you".' : ''}</span>` };
+  }
+  return null;
 }
 
 export function eveningScreen(s, ui = {}) {
   const t = s.today;
-  const debts = openDebts(s);
-  const debtRows = debts.map((d) => `<div class="between" style="${d.recorded ? '' : 'background:var(--red-soft);margin:0 -8px;padding:8px;border-radius:10px'}">
-      <span>${esc(CUST[d.cid].name)} <span class="small ${d.recorded ? 'muted' : ''}" style="${d.recorded ? '' : 'color:var(--red);font-weight:700'}">· ${d.recorded ? (d.due < s.day ? `late since Day ${d.due}` : `due Day ${d.due}`) : 'not recorded'}</span></span>
-      <b style="${d.recorded ? '' : 'color:var(--red)'}">${fmt(d.amount)}${d.recorded ? '' : '?'}</b></div>`).join('');
   const happened = [
     ...t.repaid.map((r) => `${CUST[r.cid].name} paid back ${fmt(r.amount)}.`),
     ...t.lostDebts.map((r) => `${CUST[r.cid].name}'s ${fmt(r.amount)} is lost${r.recorded ? '' : ' (it was never recorded)'}.`),
@@ -1056,17 +1143,13 @@ export function eveningScreen(s, ui = {}) {
       <div><div class="kicker">Evening</div><h1 class="title display">Day ${s.day} results</h1></div>${stars(t.stars)}
     </header>
     <div class="body">
-      <div class="grid2">
-        <div class="card"><span class="small muted" style="font-weight:600">Money in</span><b class="display" style="font-size:26px">${fmt(t.moneyIn)}</b></div>
-        <div class="card soft"><span class="small" style="font-weight:600;color:var(--green)">Profit</span><b class="display" style="font-size:26px;color:${t.profit >= 0 ? 'var(--green)' : 'var(--red)'}">${fmt(t.profit)}</b></div>
-      </div>
-      ${t.salesValue > 0 ? `<p class="small" style="margin:0;color:var(--ink-2)">You sold goods worth ${fmt(t.salesValue)}, but they cost you ${fmt(t.cogs)}. Busy is not the same as profitable.${t.creditGiven ? ` ${fmt(t.creditGiven)} of today's sales were on credit: profit, but not cash yet.` : ''}</p>` : ''}
+      ${moneyCard(s)}
       ${t.quick ? quickCard(t.quick, ui) : ''}
-      ${marketEvening(s)}
-      ${moneyOut(s)}
+      ${marketBars(s)}
+      ${moneyOutIcons(s)}
       ${happened.length ? `<div class="card"><h3>Today</h3>${happened.map((h) => `<span class="small">${esc(h)}</span>`).join('')}</div>` : ''}
-      <div class="card"><h3>Who owes you</h3>${debtRows || '<span class="small muted">Nobody owes you money.</span>'}</div>
-      <div class="card"><h3>Stock left</h3><div class="wrap">${goodsForLevel(s.level).map((id) => stockChip(s, id, 0)).join('')}</div></div>
+      ${owesFaces(s)}
+      ${stockLeft(s)}
       ${t.goalReached ? `<div class="card soft pop" data-confetti style="align-items:center;text-align:center"><span class="badge"><span class="disc">${icon('star', 26)}</span></span>
         <b style="font-size:20px">Goal reached: ${esc(t.goalReached.name)}!</b>
         <span class="small">You saved ${fmt(t.goalReached.price)} from your own pay${t.goalReached.days ? ` in ${t.goalReached.days} days` : ''}, without touching the business money.</span>
