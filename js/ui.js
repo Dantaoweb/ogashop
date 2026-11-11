@@ -3,7 +3,7 @@ import { GOODS, LEVELS, BADGES, NOTES, EXPLAIN, TYPE_LABEL, CREDITVOICE_URL, RUL
 import { CUST, fmt, goodsForLevel, buyPrice, supplierOwed, owedToYou, openDebts, supplierCreditError, defaultName, priceStep } from './core.js';
 import { isJunior, isGuided, EXPLAIN_JUNIOR, NOTES_JUNIOR } from './junior.js';
 import { currentCustomer, eventView, scoreParts, levelGoal, recordChoices, changeNotes, runSettings, suggestMessage, billsDueSoon, billOwed, cashNeededSoon, isStuck, isInjured, hospitalSplit, waiting } from './engine.js';
-import { face, good, scene, levelPicture } from './art.js';
+import { face, good, scene, levelPicture, goalArt, challengeArt } from './art.js';
 import { currentStage, stageProgress, STAGES } from './stages.js';
 import { goalStatus, daysToGoal, howLong, delayNote } from './goals.js';
 import * as Voice from './voice.js';
@@ -216,8 +216,9 @@ function challengeCard(s) {
     return `<div class="card ${c.ok ? 'soft' : ''}"><b>${esc(def.name)}: ${c.ok ? 'passed!' : 'done'}</b>${c.earned ? `<span class="small">${esc(c.earned)}</span>` : `<span class="small muted">${c.ok ? 'You already have this skill.' : 'Try again on the next challenge day.'}</span>`}</div>`;
   }
   const have = s.skills[def.skill];
-  return `<div class="card strong"><span class="tag solid" style="align-self:flex-start">Today's challenge · 2 minutes</span>
-    <b style="font-size:18px">${esc(def.name)}</b><span class="small">${esc(def.about)}</span>
+  return `<div class="card strong"><div class="row" style="gap:12px;align-items:flex-start"><span style="flex:none">${challengeArt(c.type, 64)}</span>
+    <div class="grow" style="display:flex;flex-direction:column;gap:4px"><span class="tag solid" style="align-self:flex-start">Today's challenge · 2 minutes</span>
+    <b style="font-size:18px">${esc(def.name)}</b><span class="small">${esc(def.about)}</span></div></div>
     <span class="small muted">${have ? 'You already have this skill: play for fun.' : `Reward: ${esc(def.reward)}`}</span>
     <div class="grid2">${btn('challenge-play', 'Play', 'primary small')}${btn('challenge-skip', 'Skip', 'secondary small')}</div></div>`;
 }
@@ -262,8 +263,8 @@ function goalBox(s) {
   const g = goalStatus(s);
   if (!g) return `<div class="between" style="padding-top:10px;border-top:1px dashed var(--line)"><span class="small muted">Saving for something? Your pocket can be your savings.</span>${btn('open', 'Choose a goal', 'secondary small', 'goals')}</div>`;
   return `<div style="display:flex;flex-direction:column;gap:6px;padding-top:10px;border-top:1px dashed var(--line)">
-    <div class="between"><b class="small">My goal: ${esc(g.name)}</b><button type="button" class="link" data-action="open" data-arg="goals" style="padding:4px 0">Change</button></div>
-    <div class="progress lg"><div style="width:${g.pct}%"></div></div>
+    <div class="row" style="gap:12px">${goalArt(g.name, 56, g.pct, GOALS)}<div class="grow"><div class="between"><b class="small">My goal: ${esc(g.name)}</b><button type="button" class="link" data-action="open" data-arg="goals" style="padding:4px 0">Change</button></div>
+    <div class="progress lg"><div style="width:${g.pct}%"></div></div></div></div>
     <div class="between small"><span class="muted">${fmt(g.saved)} of ${fmt(g.price)} (${g.pct}%)</span></div>
     <span class="small" style="color:var(--ink-2)">${esc(g.when)}</span></div>`;
 }
@@ -356,7 +357,7 @@ function glance(s, ui) {
   const tiles = [];
   if (m) tiles.push(tapTile('market', 'Market today', donut(m), `You: ${m.mine}`, `of about ${m.size} customers`));
   tiles.push(tapTile('advert', 'Advert', bannerArt(advertUp), advertUp ? `Up to Day ${s.mods.advertUntil}` : 'No advert', advertUp ? 'More customers' : 'Tap to put one up'));
-  tiles.push(tapTile('pay', 'Your daily pay', payArt(), fmt(s.pay), `Pocket ${fmt(s.pocket)}${g ? ` · goal ${g.pct}%` : ''}`));
+  tiles.push(tapTile('pay', 'Your daily pay', g ? `<span class="row" style="gap:4px">${payArt(60)}${goalArt(g.name, 44, g.pct, GOALS)}</span>` : payArt(), fmt(s.pay), `Pocket ${fmt(s.pocket)}${g ? ` · goal ${g.pct}%` : ''}`));
   if (bills.length) {
     const b = bills[0];
     const late = b.due < s.day;
@@ -1150,7 +1151,7 @@ export function eveningScreen(s, ui = {}) {
       ${happened.length ? `<div class="card"><h3>Today</h3>${happened.map((h) => `<span class="small">${esc(h)}</span>`).join('')}</div>` : ''}
       ${owesFaces(s)}
       ${stockLeft(s)}
-      ${t.goalReached ? `<div class="card soft pop" data-confetti style="align-items:center;text-align:center"><span class="badge"><span class="disc">${icon('star', 26)}</span></span>
+      ${t.goalReached ? `<div class="card soft pop" data-confetti style="align-items:center;text-align:center">${goalArt(t.goalReached.name, 88, null, GOALS)}
         <b style="font-size:20px">Goal reached: ${esc(t.goalReached.name)}!</b>
         <span class="small">You saved ${fmt(t.goalReached.price)} from your own pay${t.goalReached.days ? ` in ${t.goalReached.days} days` : ''}, without touching the business money.</span>
         ${btn('open', 'Choose your next goal', 'primary small', 'goals')}</div>` : ''}
@@ -1364,7 +1365,7 @@ function cupsMorning(s) {
   if (isJunior(s)) return '';
   const list = activeCups(s);
   if (!list.length) return '';
-  return `<div class="card"><b>${icon('star', 16)} Championships</b>${list.map((c) => {
+  return `<div class="card"><div class="row" style="gap:10px">${cupArt('gold', 36)}<b>Championships</b></div>${list.map((c) => {
     const me = cupStatus(c) === 'running' ? myPlace(c) : null;
     const rules = cupStatus(c) === 'running' ? houseList(c.house) : [];
     return `<button type="button" class="link" data-action="cup-open" data-arg="${esc(c.code)}" style="padding:4px 0;text-align:left;color:var(--ink);text-decoration:none;display:flex;justify-content:space-between;gap:8px">
@@ -1683,6 +1684,7 @@ export function stageScreen(s) {
   const money = STAGES[d.level][d.index].goal.type === 'profit';
   return `<main class="screen hero"><div class="body center">
       <span class="tag solid" style="align-self:center;text-transform:uppercase;letter-spacing:.08em">Level ${d.level} · Stage ${d.index + 1} of 3</span>
+      <div class="stage-stones-big" aria-hidden="true">${stonesArt(d.index + 1, 0)}</div>
       <h1 class="display" style="font-size:30px">${esc(d.name)}</h1>
       <div style="display:flex;justify-content:center">${stars(d.stars)}</div>
       <div class="card" style="color:var(--ink);text-align:left">
@@ -1779,8 +1781,13 @@ export function goalsScreen(s, ui) {
     if (d == null) return 'Set a daily pay first';
     return `${d <= 1 ? 'Tomorrow' : `In ${howLong(d)}`} at ${fmt(s.pay)} a day`;
   };
-  const rows = GOALS.map((g) => `<button type="button" class="choice${s.goal?.name === g.name ? ' credit' : ''}" data-action="set-goal" data-arg="${g.id}">
-      <span class="between" style="width:100%"><b>${esc(g.name)}</b><b style="color:var(--ink)">${fmt(g.price)}</b></span><span>${days(g.price)}</span></button>`).join('');
+  const mine = goalStatus(s);
+  const rows = GOALS.map((g) => {
+    const chosen = s.goal?.name === g.name;
+    return `<button type="button" class="choice goal-choice${chosen ? ' credit' : ''}" data-action="set-goal" data-arg="${g.id}">
+      <span class="row" style="width:100%;gap:12px"><span style="flex:none">${goalArt(g.id, 52, chosen ? mine.pct : null)}</span>
+      <span class="grow"><span class="between" style="width:100%"><b>${esc(g.name)}</b><b style="color:var(--ink)">${fmt(g.price)}</b></span><span style="display:block">${chosen ? `${mine.pct}% saved · ` : ''}${days(g.price)}</span></span></span></button>`;
+  }).join('');
   return `<main class="screen">
     <header class="top"><div class="row"><button type="button" class="icon-btn" data-action="close" aria-label="Back" style="margin-left:-10px">${icon('back', 22, 2)}</button><h1 class="title display">Save for a goal</h1></div></header>
     <div class="body">
@@ -1794,7 +1801,7 @@ export function goalsScreen(s, ui) {
         <input id="goal-price" name="price" type="number" inputmode="numeric" min="1000" step="500" placeholder="e.g. 150000" style="height:44px;border:1px solid var(--line-2);border-radius:12px;padding:0 12px;font-size:16px">
         <button type="submit" class="btn primary small">Save for this</button></form>
       ${s.goal ? btn('clear-goal', 'Stop saving for a goal', 'secondary small block') : ''}
-      ${s.goalsReached.length ? `<div class="card"><h3>Goals reached</h3>${s.goalsReached.map((g) => `<div class="between small"><span>${esc(g.name)}</span><b>${fmt(g.price)} · Day ${g.day}</b></div>`).join('')}</div>` : ''}
+      ${s.goalsReached.length ? `<div class="card"><h3>Goals reached</h3>${s.goalsReached.map((g) => `<div class="between small"><span class="row" style="gap:8px">${goalArt(g.name, 32, null, GOALS)}${esc(g.name)}</span><b>${fmt(g.price)} · Day ${g.day}</b></div>`).join('')}</div>` : ''}
     </div>
   </main>`;
 }

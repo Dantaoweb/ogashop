@@ -245,3 +245,46 @@ export function scene(level, { cid = null, mood = 'happy', stock = {}, height = 
     : venue === 'festive' ? '<rect x="10" y="140" width="340" height="30" fill="#B5532A"/><rect x="10" y="136" width="340" height="8" rx="2" fill="#E85D3F"/>' : counter;
   return `<svg class="scene" viewBox="0 0 360 170" width="100%" style="display:block;max-height:${height}px" aria-hidden="true">${venueLayer || back}${person}${venueLayer ? venueCounter : counter}${goodsRow}</svg>`;
 }
+
+// ---------- Savings goals: a picture that fills up as you save ----------
+
+const GOAL_SHAPES = {
+  fees: '<path d="M6 16 L24 8 L42 16 L24 24 Z"/><path d="M13 20 V29 C13 33 35 33 35 29 V20 L24 25 Z"/><rect x="40" y="16" width="2.5" height="12"/><rect x="8" y="34" width="32" height="5" rx="1.5"/><rect x="10" y="40" width="28" height="5" rx="1.5"/>',
+  phone: '<rect x="14" y="4" width="20" height="40" rx="4"/><rect x="21" y="7" width="6" height="1.6" rx=".8" fill="#FFFFFF"/>',
+  sewing: '<path d="M8 16 H34 C38 16 40 18 40 22 V30 H34 V22 H14 V30 H8 Z"/><rect x="31" y="30" width="3" height="8"/><rect x="4" y="38" width="40" height="6" rx="2"/><circle cx="40" cy="22" r="4"/>',
+  okada: '<circle cx="11" cy="34" r="7"/><circle cx="37" cy="34" r="7"/><path d="M11 34 L18 22 H30 L37 34 L33 34 L28 26 H20 L15 34 Z"/><path d="M28 22 L32 14 H37 V17 H34 L31 23 Z"/><rect x="18" y="18" width="10" height="4" rx="2"/>',
+  land: '<path d="M2 40 L46 40 L46 44 L2 44 Z"/><path d="M6 40 V26 M14 40 V26 M22 40 V26 M30 40 V26" stroke="currentColor" stroke-width="2.5"/><rect x="4" y="29" width="28" height="2.5"/><rect x="4" y="35" width="28" height="2.5"/><rect x="36" y="18" width="3" height="22"/><rect x="32" y="12" width="14" height="9" rx="1.5"/>',
+  keke: '<path d="M8 12 H34 C40 12 42 18 42 24 V32 H6 V16 C6 14 7 12 8 12 Z"/><circle cx="12" cy="36" r="6"/><circle cx="36" cy="36" r="6"/><rect x="10" y="16" width="12" height="9" rx="1.5" fill="#FFFFFF" opacity=".6"/>',
+  car: '<path d="M6 30 V24 L12 15 H34 L41 24 H44 V30 Z"/><circle cx="14" cy="32" r="5.5"/><circle cx="35" cy="32" r="5.5"/><path d="M15 17 H24 V23 H11 Z M27 17 H33 L37 23 H27 Z" fill="#FFFFFF" opacity=".6"/>',
+  bus: '<rect x="4" y="10" width="40" height="24" rx="4"/><circle cx="13" cy="36" r="5"/><circle cx="35" cy="36" r="5"/><path d="M8 14 H16 V22 H8 Z M19 14 H27 V22 H19 Z M30 14 H40 V22 H30 Z" fill="#FFFFFF" opacity=".6"/>',
+  house: '<path d="M4 22 L24 6 L44 22 H39 V44 H9 V22 Z"/><rect x="20" y="30" width="8" height="14" fill="#FFFFFF" opacity=".6"/><rect x="13" y="26" width="6" height="6" fill="#FFFFFF" opacity=".6"/><rect x="31" y="26" width="6" height="6" fill="#FFFFFF" opacity=".6"/>',
+  jar: '<rect x="12" y="10" width="24" height="34" rx="6"/><rect x="10" y="5" width="28" height="7" rx="2.5"/><text x="24" y="34" text-anchor="middle" font-size="14" font-weight="800" font-family="system-ui,sans-serif" fill="#FFFFFF">₦</text>',
+};
+
+// The goal's picture. pct (0-100) fills it from the bottom; without pct it is drawn in full colour.
+export function goalArt(idOrName, size = 56, pct = null, list = []) {
+  const id = GOAL_SHAPES[idOrName] ? idOrName : list.find((g) => g.name === idOrName)?.id || 'jar';
+  const shape = GOAL_SHAPES[id] || GOAL_SHAPES.jar;
+  if (pct == null) return `<svg width="${size}" height="${size}" viewBox="0 0 48 48" aria-hidden="true"><g fill="#0E6B43" color="#0E6B43">${shape}</g></svg>`;
+  const p = Math.max(0, Math.min(100, pct)) / 100;
+  const clip = `goal-${id}-${Math.round(p * 100)}`;
+  return `<svg width="${size}" height="${size}" viewBox="0 0 48 48" aria-hidden="true"><defs><clipPath id="${clip}"><rect x="0" y="${(48 - 48 * p).toFixed(1)}" width="48" height="${(48 * p).toFixed(1)}"/></clipPath></defs>
+    <g fill="#D5DDD7" color="#D5DDD7">${shape}</g><g fill="#0E6B43" color="#0E6B43" clip-path="url(#${clip})">${shape}</g></svg>`;
+}
+
+// ---------- Challenge days ----------
+
+export function challengeArt(type, size = 64) {
+  if (type === 'money') {
+    return `<svg width="${size}" height="${size}" viewBox="0 0 48 48" aria-hidden="true"><rect x="4" y="12" width="34" height="20" rx="2.5" fill="#8EC5A4" transform="rotate(-8 21 22)"/>
+      <rect x="10" y="17" width="34" height="20" rx="2.5" fill="#0E6B43"/><circle cx="27" cy="27" r="5" fill="#E3F0E8"/><text x="27" y="30" text-anchor="middle" font-size="7" font-weight="800" font-family="system-ui,sans-serif" fill="#0E6B43">₦</text>
+      <circle cx="36" cy="36" r="9" fill="none" stroke="#17231C" stroke-width="3"/><path d="M42 42 L46 46" stroke="#17231C" stroke-width="3.5" stroke-linecap="round"/></svg>`;
+  }
+  if (type === 'road') {
+    return `<svg width="${size}" height="${size}" viewBox="0 0 48 48" aria-hidden="true"><path d="M16 4 H32 L44 44 H4 Z" fill="#55635A"/><path d="M24 8 V14 M24 20 V26 M24 32 V40" stroke="#F5B70A" stroke-width="2.5"/>
+      <circle cx="14" cy="38" r="4" fill="none" stroke="#E85D3F" stroke-width="2"/><circle cx="24" cy="38" r="4" fill="none" stroke="#E85D3F" stroke-width="2"/><path d="M14 38 L18 31 H23 L24 38 M18 31 L16 28" fill="none" stroke="#E85D3F" stroke-width="2"/></svg>`;
+  }
+  return `<svg width="${size}" height="${size}" viewBox="0 0 48 48" aria-hidden="true"><rect x="4" y="22" width="26" height="15" rx="2" fill="#0E6B43"/><text x="17" y="33" text-anchor="middle" font-size="8" font-weight="800" font-family="system-ui,sans-serif" fill="#FFFFFF">₦500</text>
+    ${[[36, 38], [42, 32], [34, 28], [40, 22]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="5" fill="#F5B70A" stroke="#C98F00" stroke-width="1.5"/>`).join('')}
+    <path d="M10 14 L18 8 M18 8 L18 14 M18 8 L12 8" stroke="#17231C" stroke-width="2" fill="none" stroke-linecap="round"/></svg>`;
+}

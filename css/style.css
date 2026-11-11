@@ -314,3 +314,8 @@ h1, h2, h3 { margin: 0; line-height: 1.15; }
 .mini-good.low { background: var(--amber-row); }
 .mini-good .count { position: absolute; top: 3px; right: 5px; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 999px; background: var(--green); color: #fff; font-size: 12px; font-weight: 800; display: flex; align-items: center; justify-content: center; }
 .mini-good.low .count { background: var(--amber); color: var(--ink); }
+
+/* Step 3 pictures. */
+.goal-choice .row { align-items: center; }
+.stage-stones-big { display: flex; justify-content: center; align-self: center; background: #FFFFFF; border-radius: 999px; padding: 6px 18px; }
+.stage-stones-big svg { width: 200px; height: 56px; }

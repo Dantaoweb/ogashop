@@ -46,3 +46,16 @@ test('evening pictures: money bar, market bars, money out, faces, shelf, and the
   }
   if (E.openDebts(s).length) assert.ok(UI.sheetHtml(s, { buy: {}, sheet: 'owes' }).includes('tap-sheet'));
 });
+
+test('small pictures: goals fill up, challenges and stages have pictures', async () => {
+  const A = await import('../js/art.js');
+  const { GOALS } = await import('../js/data.js');
+  for (const g of GOALS) assert.ok(A.goalArt(g.id, 40).includes('<svg'), g.id);
+  assert.ok(A.goalArt('Freezer for my shop', 40, 50, GOALS).includes('clipPath'), 'own goals get a jar that fills');
+  assert.ok(A.goalArt('phone', 40, 30).includes('y="33.6"'), '30% fills the bottom 30%');
+  const s = E.newGame('business', mulberry32(402));
+  s.goal = { name: 'Smartphone', price: 90000, since: 1 };
+  s.pocket = 45000;
+  assert.ok(UI.goalsScreen(s, {}).includes('50% saved'));
+  for (const type of ['money', 'road', 'change']) assert.ok(A.challengeArt(type).includes('<svg'), type);
+});
