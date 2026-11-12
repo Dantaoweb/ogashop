@@ -151,7 +151,9 @@ const naira = (n) => `₦${Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d)
 const xmlText = (v) => String(v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 // The sky follows the selling clock: morning blue, bright midday, golden afternoon, orange evening.
-function sky(hour) {
+function sky(hour, weather = null) {
+  if (weather === 'rain') return { top: '#7E8B96', low: '#B9C3CB', sun: null, sunX: 0, sunY: 0, tint: '#5D6B78', glow: 0.22 };
+  if (weather === 'hot') return { top: '#F2C14E', low: '#FBE7A7', sun: '#FFD34D', sunX: 300, sunY: 40, tint: '#F5B70A', glow: 0.14, big: true };
   if (hour >= 17) return { top: '#F4A26B', low: '#FBD3A2', sun: '#FFE08A', sunX: 320, sunY: 40, tint: '#E8743B', glow: 0.3 };
   if (hour >= 15) return { top: '#F9C98A', low: '#FDE7C4', sun: '#FFE9A8', sunX: 290, sunY: 38, tint: '#F9A84A', glow: 0.17 };
   if (hour >= 11) return { top: '#8FCBEF', low: '#D5EEFB', sun: '#FFF3B0', sunX: 250, sunY: 38, tint: '#FFF3B0', glow: 0.08 };
@@ -161,8 +163,34 @@ function sky(hour) {
 const UMBRELLAS = ['#E85D3F', '#2F80ED', '#F5B70A', '#1E9E6A', '#D94F8A', '#7B4FB8', '#E85D3F'];
 const WALKERS = [['#2F80ED', '#5C3A21'], ['#E85D3F', '#8D5B34'], ['#1E9E6A', '#6B4226'], ['#F5B70A', '#7A4A2A']];
 
-function lane(hour) {
-  const c = sky(hour);
+// Rain: grey sky, falling drops and puddles. Hot: a big sun and shimmering air.
+function weatherLayer(weather) {
+  if (weather === 'rain') {
+    const drops = Array.from({ length: 26 }, (_, i) => `<path class="rain-drop" style="animation-delay:${-((i * 37) % 100) / 100}s" d="M${(i * 53) % 360} ${(i * 29) % 120} l-4 12" stroke="#E6EEF3" stroke-width="1.6" stroke-linecap="round" opacity=".85"/>`).join('');
+    return `<g>${drops}</g><g fill="#9FB2C0" opacity=".7"><ellipse cx="70" cy="132" rx="22" ry="3"/><ellipse cx="290" cy="130" rx="28" ry="3"/></g>`;
+  }
+  if (weather === 'hot') {
+    return `<g class="heat" fill="none" stroke="#FFFFFF" stroke-width="1.4" opacity=".5">${[40, 120, 250, 320].map((x) => `<path d="M${x} 104 q4 -4 0 -8 q-4 -4 0 -8 q4 -4 0 -8"/>`).join('')}</g>`;
+  }
+  return '';
+}
+
+function sunOf(c) {
+  if (!c.sun) return '';
+  return c.big ? `<circle cx="${c.sunX}" cy="${c.sunY}" r="20" fill="${c.sun}" opacity=".35"/><circle cx="${c.sunX}" cy="${c.sunY}" r="13" fill="${c.sun}"/>` : `<circle cx="${c.sunX}" cy="${c.sunY}" r="11" fill="${c.sun}"/>`;
+}
+
+// People walking past, at a given height.
+function walkersAt(y) {
+  return [0, 1, 2, 3].map((i) => {
+    const [cloth, skin] = WALKERS[i];
+    const head = i === 1 ? `<rect x="-7" y="-23" width="14" height="5" rx="2" fill="#F5B70A"/>` : '';
+    return `<g class="lane-walker" style="animation-delay:${-i * 4.5}s;animation-duration:${16 + i * 3}s"><g transform="translate(0 ${y + (i % 2) * 6})">${head}<circle cx="0" cy="-13" r="5" fill="${skin}"/><rect x="-5" y="-8" width="10" height="13" rx="4" fill="${cloth}"/><path d="M-3 5 V12 M3 5 V12" stroke="${skin}" stroke-width="2.5"/></g></g>`;
+  }).join('');
+}
+
+function lane(hour, weather = null) {
+  const c = sky(hour, weather);
   const stalls = UMBRELLAS.map((col, i) => {
     const x = i * 58 - 8;
     return `<g opacity=".9"><path d="M${x} 66 Q${x + 22} 46 ${x + 44} 66 Z" fill="${col}"/><path d="M${x + 22} 66 V82" stroke="#6B4A2E" stroke-width="2"/>
@@ -175,10 +203,10 @@ function lane(hour) {
   }).join('');
   return `<defs><linearGradient id="lane-sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${c.top}"/><stop offset="1" stop-color="${c.low}"/></linearGradient></defs>
     <rect width="360" height="170" fill="url(#lane-sky)"/>
-    <circle cx="${c.sunX}" cy="${c.sunY}" r="11" fill="${c.sun}"/>
-    <rect y="84" width="360" height="86" fill="#E9D3AA"/><path d="M0 92 H360" stroke="#D9BE8F" stroke-width="2"/>
-    ${stalls}${walkers}
-    <rect width="360" height="170" fill="${c.tint}" opacity="${c.glow}"/>`;
+    ${sunOf(c)}
+    <rect y="84" width="360" height="86" fill="${weather === 'rain' ? '#CDBB98' : '#E9D3AA'}"/><path d="M0 92 H360" stroke="#D9BE8F" stroke-width="2"/>
+    ${stalls}${weather === 'rain' ? walkers.replace(/lane-walker/g, 'lane-walker fast') : walkers}
+    <rect width="360" height="170" fill="${c.tint}" opacity="${c.glow}"/>${weatherLayer(weather)}`;
 }
 
 // Waiting customers stand behind the one being served.
@@ -242,11 +270,11 @@ function shelfStock(level, stock) {
   return boards + goods;
 }
 
-function street(hour, { name, rivals = [], day = null, stock = {}, level = 2, open = true }) {
-  const c = sky(hour);
+function street(hour, { name, rivals = [], day = null, stock = {}, level = 2, open = true, weather = null }) {
+  const c = sky(hour, weather);
   return `<defs><linearGradient id="street-sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${c.top}"/><stop offset="1" stop-color="${c.low}"/></linearGradient></defs>
     <rect width="360" height="170" fill="url(#street-sky)"/>
-    <circle cx="${c.sunX}" cy="${Math.max(14, c.sunY - 22)}" r="9" fill="${c.sun}"/>
+    ${sunOf({ ...c, sunY: Math.max(14, c.sunY - 22), big: c.big })}
     ${neighbour(0, 70, rivals[0] || 'Emeka Stores', '#E7D2B0', '#7A8C9A')}
     ${neighbour(290, 70, rivals[1] || 'Iya Basira', '#D9E4EC', '#9A7A62')}
     ${roof(70, 220, 18, '#8A949A')}
@@ -261,7 +289,8 @@ function street(hour, { name, rivals = [], day = null, stock = {}, level = 2, op
     ${day != null ? `<g><rect x="268" y="52" width="18" height="20" rx="2" fill="#FFFFFF" stroke="#C3CEC6"/><rect x="268" y="52" width="18" height="6" rx="2" fill="#B3261E"/>
       <text x="277" y="68.5" text-anchor="middle" font-size="8" font-weight="800" font-family="system-ui,sans-serif" fill="#17231C">${day}</text></g>` : ''}
     <rect y="132" width="360" height="38" fill="#C9C2B4"/>
-    <rect width="360" height="170" fill="${c.tint}" opacity="${c.glow}"/>`;
+    ${walkersAt(126)}
+    <rect width="360" height="170" fill="${c.tint}" opacity="${c.glow}"/>${weatherLayer(weather)}`;
 }
 
 // On a street, waiting customers stand by the neighbours' doors.
@@ -337,7 +366,7 @@ function venueBack(venue, level) {
 
 // name: the shop's signboard. prices: today's prices for the chalkboard. hour: the selling clock (sky).
 // waiting: customers queueing behind. Level 1 in the classic market is a table in a busy lane.
-export function scene(level, { cid = null, mood = 'happy', stock = {}, height = 170, venue = null, name = null, prices = null, hour = 9, waiting = 0, rivals = [], day = null, open = true } = {}) {
+export function scene(level, { cid = null, mood = 'happy', stock = {}, height = 170, venue = null, name = null, prices = null, hour = 9, waiting = 0, rivals = [], day = null, open = true, weather = null } = {}) {
   const shown = Object.keys(GOODS).filter((id) => GOODS[id].level <= level && stock[id] > 0).slice(0, 6);
   const slots = shown.length ? shown : [];
   const spacing = 300 / Math.max(slots.length, 1);
@@ -373,10 +402,10 @@ export function scene(level, { cid = null, mood = 'happy', stock = {}, height = 
     : venue === 'wholesale' ? '<rect x="0" y="140" width="360" height="30" fill="#8A9399"/><rect x="0" y="136" width="360" height="8" fill="#A8B0B5"/>'
     : venue === 'festive' ? '<rect x="10" y="140" width="340" height="30" fill="#B5532A"/><rect x="10" y="136" width="340" height="8" rx="2" fill="#E85D3F"/>' : counter;
   if (onStreet) {
-    return `<svg class="scene" viewBox="0 0 360 170" width="100%" style="display:block;max-height:${height}px" aria-hidden="true">${street(hour, { name, rivals, day, stock, level, open })}${queueOnStreet(waiting)}${person}${counter}${goodsRow}${prices ? chalkboard(level, prices) : ''}</svg>`;
+    return `<svg class="scene" viewBox="0 0 360 170" width="100%" style="display:block;max-height:${height}px" aria-hidden="true">${street(hour, { name, rivals, day, stock, level, open, weather })}${queueOnStreet(waiting)}${person}${counter}${goodsRow}${prices ? chalkboard(level, prices) : ''}</svg>`;
   }
   if (inLane) {
-    return `<svg class="scene" viewBox="0 0 360 170" width="100%" style="display:block;max-height:${height}px" aria-hidden="true">${lane(hour)}${queueBehind(waiting)}${tableAwning()}${signboard(name)}${person}${counter}${goodsRow}${prices ? chalkboard(level, prices) : ''}</svg>`;
+    return `<svg class="scene" viewBox="0 0 360 170" width="100%" style="display:block;max-height:${height}px" aria-hidden="true">${lane(hour, weather)}${queueBehind(waiting)}${tableAwning()}${signboard(name)}${person}${counter}${goodsRow}${prices ? chalkboard(level, prices) : ''}</svg>`;
   }
   return `<svg class="scene" viewBox="0 0 360 170" width="100%" style="display:block;max-height:${height}px" aria-hidden="true">${venueLayer || back}${person}${venueLayer ? venueCounter : counter}${goodsRow}</svg>`;
 }

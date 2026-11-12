@@ -392,6 +392,8 @@ function render() {
   }
   lastKey = key;
   rollNumbers();
+  // The market murmur plays only while you are selling, and only if switched on.
+  Fx.ambience(Fx.ambienceOn() && !ui.screen && ['selling', 'record', 'change', 'fake', 'pay', 'event'].includes(s?.phase));
   // Speak what the customer says, once per new line on screen.
   const say = app.querySelector('[data-say]');
   const said = say ? `${key}|${say.dataset.say}` : '';
@@ -521,6 +523,7 @@ const actions = {
   },
   'record-tap': (arg) => { E.recordTap(s, Number(arg)); },
   'set-voice': (arg) => { Voice.setEnabled(arg); },
+  'set-ambience': (arg) => { Fx.setAmbience(arg); },
   'set-sounds': (arg) => { Fx.setEnabled(arg); if (arg) Fx.play('right'); },
   'challenge-play': () => { const c = s.today.challenge; if (c && !c.done) { s.today.challengeGame = Ch.startChallenge(c.type, Math.random, { roundTo: isJunior(s) ? 100 : 0 }); ui.screen = 'challenge'; } },
   'challenge-skip': () => { E.skipChallenge(s); },

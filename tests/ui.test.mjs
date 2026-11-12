@@ -76,7 +76,7 @@ test('Level 1 market lane: your name, prices, the sky by the hour, the queue', a
   assert.ok(morning.includes('#B7DDF4'), 'morning sky');
   assert.ok(A.scene(1, { hour: 17 }).includes('#F4A26B'), 'evening sky');
   assert.ok(!A.scene(1, { venue: 'mall' }).includes('lane-walker'), 'markets keep their own look');
-  assert.ok(!A.scene(2, {}).includes('lane-walker'), 'Level 2 is a street, not the lane');
+  assert.ok(!A.scene(2, {}).includes('lane-sky') && A.scene(2, {}).includes('street-sky'), 'Level 2 is a street, not the lane');
 });
 
 test('Level 2 street: your name, rivals on the signboards, real stock on the shelves, day and OPEN sign', async () => {
@@ -89,4 +89,17 @@ test('Level 2 street: your name, rivals on the signboards, real stock on the she
   assert.equal((full.match(/stroke-dasharray="2 2"/g) || []).length, 2, 'two empty spaces for the two goods with no stock');
   assert.ok(full.includes('Palm oil ₦1,800') || full.includes('Oil ₦1,800') || /₦1,800/.test(full), 'the price board has all 8 goods');
   assert.ok(A.scene(2, { open: false }).includes('CLOSED'));
+});
+
+test('weather and life in the picture; the market sound is off by default', async () => {
+  const A = await import('../js/art.js');
+  const Fx = await import('../js/fx.js');
+  const rain1 = A.scene(1, { weather: 'rain', hour: 12 });
+  assert.ok(rain1.includes('rain-drop') && rain1.includes('#7E8B96'), 'rain on the lane');
+  assert.ok(A.scene(2, { weather: 'rain' }).includes('rain-drop'), 'rain on the street');
+  assert.ok(A.scene(1, { weather: 'hot' }).includes('class="heat"'), 'heat on a hot day');
+  assert.ok(!A.scene(1, { hour: 12 }).includes('rain-drop'), 'no rain on a normal day');
+  assert.ok(A.scene(2, {}).includes('lane-walker'), 'people walk on the street too');
+  assert.equal(Fx.ambienceOn(), false, 'market sound is off unless switched on');
+  Fx.ambience(true); Fx.ambience(false);
 });

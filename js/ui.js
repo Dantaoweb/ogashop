@@ -278,6 +278,9 @@ function billWarning(s, cost) {
   return `<span class="small" style="color:var(--red);font-weight:600">After buying you'll have ${fmt(left)}, but the ${esc(next.label.toLowerCase())} (${fmt(billOwed(next))}) is due on Day ${next.due}.</span>`;
 }
 
+// Rain or a hot day shows in the picture once the event has happened.
+const weatherToday = (s) => ({ rain: 'rain', hot_day: 'hot' }[s.today?.event?.id] || null);
+
 // ---------- Pictures for the morning: tap one to read about it ----------
 
 const RIVAL_COLORS = ['#F5B70A', '#2F80ED', '#E85D3F', '#7B4FB8', '#1E9E6A', '#D94F8A'];
@@ -633,7 +636,7 @@ export function customerScreen(s) {
     <div class="body">
       ${v.kind === 'credit' ? explain(s, 'credit') : v.kind === 'discount' || c.type === 'bargainer' ? explain(s, 'discount') : ''}
       <div class="center" style="display:flex;flex-direction:column;align-items:center;gap:8px">
-        <div class="scene-card">${scene(s.level, { cid: c.id, mood, stock: s.stock, venue: s.venue, name: shopName(s), prices: s.prices, hour: v.hour, waiting: waiting(s), rivals: (t.market?.rivals || []).map((r) => r.name), day: s.day })}</div>
+        <div class="scene-card">${scene(s.level, { cid: c.id, mood, stock: s.stock, venue: s.venue, name: shopName(s), prices: s.prices, hour: v.hour, waiting: waiting(s), rivals: (t.market?.rivals || []).map((r) => r.name), day: s.day, weather: weatherToday(s) })}</div>
         <b style="font-size:21px">${esc(c.name)}</b>
         <div class="wrap" style="justify-content:center"><span class="tag ${c.type === 'regular' ? 'green' : 'amber'}">${TYPE_LABEL[c.type]}</span>${loyal ? '<span class="tag green">Loyal</span>' : ''}</div>
       </div>
@@ -1949,6 +1952,7 @@ export function settingsScreen(s, ui) {
       </div>`}
       ${isJunior(s) && !Account.current() ? '' : accountSettings(s, ui)}
       <div class="card"><h3>Sound</h3>
+        <label class="settings-opt"><input type="checkbox" data-action="set-ambience" ${Fx.ambienceOn() ? 'checked' : ''}><span><b>Market sound</b><div class="small muted">A soft crowd murmur while you sell. Off unless you switch it on.</div></span></label>
         <label class="settings-opt"><input type="checkbox" data-action="set-sounds" ${Fx.enabled() ? 'checked' : ''}><span><b>Sounds and vibration</b><div class="small muted">A till sound when you sell, a soft buzz for mistakes, and a short phone vibration.</div></span></label>
         ${Voice.supported ? `<label class="settings-opt"><input type="checkbox" data-action="set-voice" ${Voice.enabled() ? 'checked' : ''}><span><b>Customers speak</b><div class="small muted">Customers say what they want out loud, using your phone's voice. Their words also stay on screen.</div></span></label>` : ''}</div>
       ${ui.canInstall ? `<div class="card"><h3>Add to home screen</h3><span class="small muted">Play like an app, even without data.</span>${btn('install', 'Install Oga Shop', 'secondary small')}</div>` : ''}

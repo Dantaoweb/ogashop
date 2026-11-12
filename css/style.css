@@ -324,3 +324,11 @@ h1, h2, h3 { margin: 0; line-height: 1.15; }
 .lane-walker { animation: lane-walk 18s linear infinite; }
 @keyframes lane-walk { from { transform: translateX(-30px); } to { transform: translateX(390px); } }
 @media (prefers-reduced-motion: reduce) { .lane-walker { animation: none; transform: translateX(150px); } }
+
+/* Weather in the picture. */
+.rain-drop { animation: rain-fall .7s linear infinite; }
+@keyframes rain-fall { from { transform: translate(0, -20px); } to { transform: translate(-8px, 40px); } }
+.lane-walker.fast { animation-duration: 9s !important; }
+.heat { animation: heat-wave 2.4s ease-in-out infinite alternate; }
+@keyframes heat-wave { from { transform: translateY(0); opacity: .25; } to { transform: translateY(-4px); opacity: .6; } }
+@media (prefers-reduced-motion: reduce) { .rain-drop, .heat { animation: none; } }

@@ -102,3 +102,52 @@ export function confetti() {
   document.body.appendChild(box);
   setTimeout(() => box.remove(), 3000);
 }
+
+// ---------- Market sound: a soft crowd murmur, off unless the player switches it on ----------
+
+const AMB_KEY = 'ogashop.ambience';
+export function ambienceOn() {
+  try { return localStorage.getItem(AMB_KEY) === 'on'; } catch { return false; }
+}
+export function setAmbience(on) {
+  try { localStorage.setItem(AMB_KEY, on ? 'on' : 'off'); } catch { /* stays for this visit */ }
+  if (!on) ambience(false);
+}
+
+let amb = null;
+// Brown noise through a band filter, with a slow swell, sounds like a crowd far away.
+export function ambience(play) {
+  try {
+    if (!play) {
+      if (amb) { amb.gain.gain.setTargetAtTime(0, amb.ctx.currentTime, 0.3); const old = amb; setTimeout(() => { try { old.src.stop(); } catch { /* done */ } }, 1200); amb = null; }
+      return;
+    }
+    if (amb) return;
+    const a = audio();
+    if (!a) return;
+    const len = a.sampleRate * 4;
+    const buf = a.createBuffer(1, len, a.sampleRate);
+    const data = buf.getChannelData(0);
+    let last = 0;
+    for (let i = 0; i < len; i++) { last = (last + 0.02 * (Math.random() * 2 - 1)) / 1.02; data[i] = last * 3.5; }
+    const src = a.createBufferSource();
+    src.buffer = buf;
+    src.loop = true;
+    const band = a.createBiquadFilter();
+    band.type = 'bandpass';
+    band.frequency.value = 700;
+    band.Q.value = 0.6;
+    const gain = a.createGain();
+    gain.gain.value = 0;
+    gain.gain.setTargetAtTime(0.06, a.currentTime, 0.8);
+    const lfo = a.createOscillator();
+    const depth = a.createGain();
+    lfo.frequency.value = 0.15;
+    depth.gain.value = 0.02;
+    lfo.connect(depth).connect(gain.gain);
+    src.connect(band).connect(gain).connect(a.destination);
+    src.start();
+    lfo.start();
+    amb = { ctx: a, src, gain };
+  } catch { /* no sound on this phone */ }
+}
