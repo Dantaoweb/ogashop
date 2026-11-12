@@ -6,6 +6,7 @@ import * as Accounts from './accounts.mjs';
 import { d1Store } from './store.mjs';
 import * as Markets from './markets.mjs';
 import * as Cups from './cups.mjs';
+import * as Admin from './admin.mjs';
 
 const ORIGINS = ['https://dantaoweb.github.io', 'http://127.0.0.1:8765', 'http://localhost:8080'];
 
@@ -81,9 +82,38 @@ async function account(request, url, env) {
   return { status: 404, json: { error: 'Not found.' } };
 }
 
+// Admin: the page, and actions that need the ADMIN_KEY. Without the secret, all of it is "not found".
+async function admin(request, url, env) {
+  const json = (status, body) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex' } });
+  if (!env.ADMIN_KEY) return new Response('Not found', { status: 404 });
+  if (url.pathname === '/admin' && request.method === 'GET') {
+    return new Response(Admin.adminPage(), { headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex', 'X-Frame-Options': 'DENY', 'Referrer-Policy': 'no-referrer' } });
+  }
+  if (request.method !== 'POST' || !url.pathname.startsWith('/admin/api/')) return new Response('Not found', { status: 404 });
+  const store = d1Store(env.DB);
+  const now = Date.now();
+  const denied = await Admin.checkKey(store, request.headers.get('X-Admin-Key') || '', env.ADMIN_KEY, now);
+  if (denied) return json(denied.status, denied.json);
+  let body = {};
+  try { body = JSON.parse((await request.text()) || '{}'); } catch { return json(400, { error: 'Bad request.' }); }
+  const action = url.pathname.slice('/admin/api/'.length);
+  let out;
+  if (action === 'dashboard') {
+    const { results } = await env.DB.prepare('SELECT event, key, SUM(n) AS n, SUM(sum) AS sum FROM daily GROUP BY event, key').all();
+    out = await Admin.dashboard(store, body, { now, summary: summarize(results) });
+  } else if (action === 'player') out = await Admin.player(store, body);
+  else if (action === 'reset-pin') out = await Admin.resetPin(store, body, { pepper: env.PIN_PEPPER, now });
+  else if (action === 'rename') out = await Admin.rename(store, body, { now });
+  else if (action === 'remove') out = await Admin.remove(store, body, { now, beforeDelete: (user) => Markets.leave(store, user) });
+  else if (action === 'log') out = await Admin.log(store);
+  else out = { status: 404, json: { error: 'Not found.' } };
+  return json(out.status, out.json);
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    if (url.pathname === '/admin' || url.pathname.startsWith('/admin/')) return admin(request, url, env);
     if (request.method !== 'OPTIONS' && (url.pathname.startsWith('/account/') || url.pathname.startsWith('/market/') || url.pathname.startsWith('/cup/') || url.pathname === '/save')) {
       const { status, json } = await account(request, url, env);
       return new Response(JSON.stringify(json), { status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...cors(request) } });

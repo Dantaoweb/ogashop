@@ -4,7 +4,7 @@ const toMember = (r) => r && { userKey: r.user_key, marketId: r.market_id, usern
 const toCup = (r) => r && { id: r.id, code: r.code, name: r.name, size: r.size, kind: r.kind, length: r.length, events: JSON.parse(r.events), levelFrom: r.level_from, levelTo: r.level_to, startMode: r.start_mode, startAt: r.start_at, startedAt: r.started_at, endsAt: r.ends_at, cancelled: r.cancelled, by: r.created_by, createdAt: r.created_at, house: JSON.parse(r.house || '{}'), venue: r.venue || 'classic' };
 const toCupPlayer = (r) => ({ userKey: r.user_key, username: r.username, age: r.age, slot: r.slot, joinedAt: r.joined_at, stats: JSON.parse(r.stats || '{}') });
 const toMarket = (r) => r && { id: r.id, code: r.code, size: r.size, level: r.level, kind: r.kind };
-const toUser = (r) => r && { key: r.key, username: r.username, salt: r.salt, pinHash: r.pin_hash, age: r.age, fails: r.fails, lockedUntil: r.locked_until };
+const toUser = (r) => r && { key: r.key, username: r.username, salt: r.salt, pinHash: r.pin_hash, age: r.age, fails: r.fails, lockedUntil: r.locked_until, createdAt: r.created_at };
 
 export function d1Store(db) {
   return {
@@ -90,6 +90,48 @@ export function d1Store(db) {
       return db.batch([
         db.prepare('DELETE FROM cup_players WHERE cup_id IN (SELECT id FROM cups WHERE created_at < ?)').bind(before),
         db.prepare('DELETE FROM cups WHERE created_at < ?').bind(before),
+      ]);
+    },
+    // Admin
+    async adminGuard() {
+      const r = await db.prepare('SELECT fails, locked_until FROM admin_guard WHERE id = 1').first();
+      return { fails: r?.fails || 0, lockedUntil: r?.locked_until || 0 };
+    },
+    setAdminGuard(fails, lockedUntil) {
+      return db.prepare('INSERT INTO admin_guard (id, fails, locked_until) VALUES (1, ?, ?) ON CONFLICT(id) DO UPDATE SET fails = excluded.fails, locked_until = excluded.locked_until').bind(fails, lockedUntil).run();
+    },
+    addAdminLog(at, action, target, detail) { return db.prepare('INSERT INTO admin_log (at, action, target, detail) VALUES (?, ?, ?, ?)').bind(at, action, target, detail).run(); },
+    async adminLog(n) { return (await db.prepare('SELECT at, action, target, detail FROM admin_log ORDER BY at DESC LIMIT ?').bind(n).all()).results; },
+    async adminCounts(dayAgo, weekAgo, now) {
+      const one = async (sql, ...args) => (await db.prepare(sql).bind(...args).first())?.n || 0;
+      return {
+        users: await one('SELECT COUNT(*) AS n FROM users'),
+        newToday: await one('SELECT COUNT(*) AS n FROM users WHERE created_at >= ?', dayAgo),
+        newWeek: await one('SELECT COUNT(*) AS n FROM users WHERE created_at >= ?', weekAgo),
+        teens: await one("SELECT COUNT(*) AS n FROM users WHERE age = '13-17'"),
+        savedToday: await one('SELECT COUNT(*) AS n FROM saves WHERE updated_at >= ?', dayAgo),
+        markets: await one('SELECT COUNT(*) AS n FROM markets'),
+        members: await one('SELECT COUNT(*) AS n FROM members'),
+        cupsOpen: await one('SELECT COUNT(*) AS n FROM cups WHERE cancelled = 0 AND started_at IS NULL'),
+        cupsRunning: await one('SELECT COUNT(*) AS n FROM cups WHERE cancelled = 0 AND started_at IS NOT NULL AND ends_at > ?', now),
+      };
+    },
+    async adminPlayer(key) {
+      const save = await db.prepare('SELECT data, updated_at FROM saves WHERE user_key = ?').bind(key).first();
+      const market = await db.prepare('SELECT m.code, m.size FROM members x JOIN markets m ON m.id = x.market_id WHERE x.user_key = ?').bind(key).first();
+      const cups = (await db.prepare("SELECT c.name, CASE WHEN c.cancelled = 1 THEN 'cancelled' WHEN c.started_at IS NULL THEN 'open' WHEN c.ends_at <= ? THEN 'ended' ELSE 'running' END AS status FROM cup_players p JOIN cups c ON c.id = p.cup_id WHERE p.user_key = ?").bind(Date.now(), key).all()).results;
+      return { save: save && { data: save.data, updatedAt: save.updated_at }, market: market || null, cups };
+    },
+    setPin(key, salt, pinHash) { return db.prepare('UPDATE users SET salt = ?, pin_hash = ?, fails = 0, locked_until = 0 WHERE key = ?').bind(salt, pinHash, key).run(); },
+    renameUser(oldKey, newKey, username) {
+      return db.batch([
+        db.prepare('UPDATE users SET key = ?, username = ? WHERE key = ?').bind(newKey, username, oldKey),
+        db.prepare('UPDATE saves SET user_key = ? WHERE user_key = ?').bind(newKey, oldKey),
+        db.prepare('UPDATE tokens SET user_key = ? WHERE user_key = ?').bind(newKey, oldKey),
+        db.prepare('UPDATE members SET user_key = ?, username = ? WHERE user_key = ?').bind(newKey, username, oldKey),
+        db.prepare('UPDATE cup_players SET user_key = ?, username = ? WHERE user_key = ?').bind(newKey, username, oldKey),
+        db.prepare('UPDATE wins SET user_key = ? WHERE user_key = ?').bind(newKey, oldKey),
+        db.prepare('UPDATE cups SET created_by = ? WHERE created_by = ?').bind(newKey, oldKey),
       ]);
     },
     addWin(key, from, count, at) { return db.prepare('INSERT INTO wins (user_key, from_name, count, at) VALUES (?, ?, ?, ?)').bind(key, from, count, at).run(); },

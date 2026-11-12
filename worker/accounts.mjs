@@ -20,12 +20,12 @@ function randomHex(n) {
 export const sha256 = async (text) => hex(await crypto.subtle.digest('SHA-256', enc.encode(text)));
 
 // A 4-digit PIN is short, so it's mixed with a per-user salt and a server-only secret.
-async function hashPin(pin, salt, pepper) {
+export async function hashPin(pin, salt, pepper) {
   const key = await crypto.subtle.importKey('raw', enc.encode(pepper), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
   return hex(await crypto.subtle.sign('HMAC', key, enc.encode(`${salt}:${pin}`)));
 }
 
-function sameText(a, b) {
+export function sameText(a, b) {
   if (a.length !== b.length) return false;
   let diff = 0;
   for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
