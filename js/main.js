@@ -922,6 +922,14 @@ app.addEventListener('submit', (e) => {
     });
     return;
   }
+  const nameForm = e.target.closest('[data-form="shop-name"]');
+  if (nameForm) {
+    e.preventDefault();
+    ui.nameError = E.setShopName(s, nameForm.elements.name.value);
+    save();
+    render();
+    return;
+  }
   const cupForm = e.target.closest('[data-form="cup-code"]');
   if (cupForm) {
     e.preventDefault();

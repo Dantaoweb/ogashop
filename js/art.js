@@ -145,6 +145,69 @@ export function levelPicture(n) {
 }
 
 // The selling place: a market table (Level 1) or a shop (Level 2), the goods in stock, and maybe a customer.
+// ---------- Level 1: your table in a busy market lane ----------
+
+const naira = (n) => `₦${Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',')}`;
+const xmlText = (v) => String(v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+// The sky follows the selling clock: morning blue, bright midday, golden afternoon, orange evening.
+function sky(hour) {
+  if (hour >= 17) return { top: '#F4A26B', low: '#FBD3A2', sun: '#FFE08A', sunX: 320, sunY: 40, tint: '#E8743B', glow: 0.3 };
+  if (hour >= 15) return { top: '#F9C98A', low: '#FDE7C4', sun: '#FFE9A8', sunX: 290, sunY: 38, tint: '#F9A84A', glow: 0.17 };
+  if (hour >= 11) return { top: '#8FCBEF', low: '#D5EEFB', sun: '#FFF3B0', sunX: 250, sunY: 38, tint: '#FFF3B0', glow: 0.08 };
+  return { top: '#B7DDF4', low: '#E6F5FC', sun: '#FFF6C9', sunX: 90, sunY: 40, tint: '#BFE3FA', glow: 0.1 };
+}
+
+const UMBRELLAS = ['#E85D3F', '#2F80ED', '#F5B70A', '#1E9E6A', '#D94F8A', '#7B4FB8', '#E85D3F'];
+const WALKERS = [['#2F80ED', '#5C3A21'], ['#E85D3F', '#8D5B34'], ['#1E9E6A', '#6B4226'], ['#F5B70A', '#7A4A2A']];
+
+function lane(hour) {
+  const c = sky(hour);
+  const stalls = UMBRELLAS.map((col, i) => {
+    const x = i * 58 - 8;
+    return `<g opacity=".9"><path d="M${x} 66 Q${x + 22} 46 ${x + 44} 66 Z" fill="${col}"/><path d="M${x + 22} 66 V82" stroke="#6B4A2E" stroke-width="2"/>
+      <rect x="${x + 6}" y="78" width="32" height="8" fill="#A86B32"/><circle cx="${x + 30}" cy="70" r="4" fill="#7A4A2A"/><rect x="${x + 26}" y="73" width="8" height="6" rx="2" fill="${WALKERS[i % 4][0]}"/></g>`;
+  }).join('');
+  const walkers = [0, 1, 2, 3].map((i) => {
+    const [cloth, skin] = WALKERS[i];
+    const head = i === 1 ? `<rect x="-7" y="-23" width="14" height="5" rx="2" fill="#F5B70A"/>` : '';
+    return `<g class="lane-walker" style="animation-delay:${-i * 4.5}s;animation-duration:${16 + i * 3}s"><g transform="translate(0 ${96 + (i % 2) * 6})">${head}<circle cx="0" cy="-13" r="5" fill="${skin}"/><rect x="-5" y="-8" width="10" height="13" rx="4" fill="${cloth}"/><path d="M-3 5 V12 M3 5 V12" stroke="${skin}" stroke-width="2.5"/></g></g>`;
+  }).join('');
+  return `<defs><linearGradient id="lane-sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${c.top}"/><stop offset="1" stop-color="${c.low}"/></linearGradient></defs>
+    <rect width="360" height="170" fill="url(#lane-sky)"/>
+    <circle cx="${c.sunX}" cy="${c.sunY}" r="11" fill="${c.sun}"/>
+    <rect y="84" width="360" height="86" fill="#E9D3AA"/><path d="M0 92 H360" stroke="#D9BE8F" stroke-width="2"/>
+    ${stalls}${walkers}
+    <rect width="360" height="170" fill="${c.tint}" opacity="${c.glow}"/>`;
+}
+
+// Waiting customers stand behind the one being served.
+function queueBehind(n) {
+  const spots = [[64, 98], [292, 98], [40, 104], [316, 104]].slice(0, Math.min(4, n));
+  return spots.map(([x, y], i) => `<g opacity=".95"><circle cx="${x}" cy="${y - 14}" r="7" fill="${WALKERS[(i + 2) % 4][1]}"/><rect x="${x - 8}" y="${y - 7}" width="16" height="24" rx="6" fill="${WALKERS[(i + 1) % 4][0]}"/></g>`).join('');
+}
+
+// Your signboard: the shop's name over the table.
+function signboard(name) {
+  const text = xmlText(String(name || 'My Table').slice(0, 20));
+  return `<g><rect x="104" y="3" width="152" height="22" rx="4" fill="#FFF6DD" stroke="#8B5A2B" stroke-width="2"/>
+    <text x="180" y="18.5" text-anchor="middle" font-size="12" font-weight="800" font-family="system-ui,sans-serif" fill="#0E6B43">${text}</text></g>`;
+}
+
+// A chalkboard on the front of the table with today's prices.
+function chalkboard(level, prices = {}) {
+  const ids = Object.keys(GOODS).filter((id) => GOODS[id].level <= level && prices[id] != null).slice(0, 4);
+  if (!ids.length) return '';
+  const cells = ids.map((id, i) => `<text x="${20 + (i % 2) * 62}" y="${154 + Math.floor(i / 2) * 10}" font-size="7.5" font-weight="700" font-family="system-ui,sans-serif" fill="#FFFFFF">${xmlText(GOODS[id].short)} ${naira(prices[id])}</text>`).join('');
+  return `<g><rect x="14" y="144" width="124" height="24" rx="2.5" fill="#2F3B33" stroke="#8B5A2B" stroke-width="2"/>${cells}</g>`;
+}
+
+function tableAwning() {
+  return `<path d="M0 0 H360 V26 C330 38 300 38 270 26 C240 38 210 38 180 26 C150 38 120 38 90 26 C60 38 30 38 0 26 Z" fill="#0E6B43"/>
+    <path d="M45 0 V32 M135 0 V32 M225 0 V32 M315 0 V32" stroke="#FFFFFF" stroke-width="14" opacity=".9"/>
+    <path d="M20 30 V170 M340 30 V170" stroke="#8B5A2B" stroke-width="6"/>`;
+}
+
 // Venue layers, drawn behind the seller: a crowd and umbrellas, mall glass and tiles, bazaar fabric and lanterns.
 const PEOPLE = ['#7A4A2A', '#5C3A21', '#8D5B34', '#6B4226', '#9A6A43'];
 const CLOTH = ['#E85D3F', '#2F80ED', '#F5B70A', '#7B4FB8', '#1E9E6A', '#D94F8A'];
@@ -210,7 +273,9 @@ function venueBack(venue, level) {
   return null;
 }
 
-export function scene(level, { cid = null, mood = 'happy', stock = {}, height = 170, venue = null } = {}) {
+// name: the shop's signboard. prices: today's prices for the chalkboard. hour: the selling clock (sky).
+// waiting: customers queueing behind. Level 1 in the classic market is a table in a busy lane.
+export function scene(level, { cid = null, mood = 'happy', stock = {}, height = 170, venue = null, name = null, prices = null, hour = 9, waiting = 0 } = {}) {
   const shown = Object.keys(GOODS).filter((id) => GOODS[id].level <= level && stock[id] > 0).slice(0, 6);
   const slots = shown.length ? shown : [];
   const spacing = 300 / Math.max(slots.length, 1);
@@ -231,6 +296,7 @@ export function scene(level, { cid = null, mood = 'happy', stock = {}, height = 
          <svg x="262" y="56" width="28" height="28" viewBox="0 0 48 48">${GOOD_ART.garri}</svg><svg x="294" y="56" width="28" height="28" viewBox="0 0 48 48">${GOOD_ART.recharge}</svg>
        </g>`;
   const venueLayer = venueBack(venue, level);
+  const inLane = level === 1 && !venueLayer;
   const person = cid && LOOKS[cid]
     ? `<g class="scene-customer" data-animate><svg x="125" y="${level === 1 ? 34 : 28}" width="110" height="110" viewBox="0 0 100 100">${face(cid, { mood, size: 100 }).replace(/^<svg[^>]*>|<\/svg>$/g, '')}</svg></g>`
     : '';
@@ -243,6 +309,9 @@ export function scene(level, { cid = null, mood = 'happy', stock = {}, height = 
     : venue === 'floating' ? '<path d="M6 136 H354 L330 170 H30 Z" fill="#8B5A2B"/><rect x="6" y="134" width="348" height="8" rx="3" fill="#B07A45"/>'
     : venue === 'wholesale' ? '<rect x="0" y="140" width="360" height="30" fill="#8A9399"/><rect x="0" y="136" width="360" height="8" fill="#A8B0B5"/>'
     : venue === 'festive' ? '<rect x="10" y="140" width="340" height="30" fill="#B5532A"/><rect x="10" y="136" width="340" height="8" rx="2" fill="#E85D3F"/>' : counter;
+  if (inLane) {
+    return `<svg class="scene" viewBox="0 0 360 170" width="100%" style="display:block;max-height:${height}px" aria-hidden="true">${lane(hour)}${queueBehind(waiting)}${tableAwning()}${signboard(name)}${person}${counter}${goodsRow}${prices ? chalkboard(level, prices) : ''}</svg>`;
+  }
   return `<svg class="scene" viewBox="0 0 360 170" width="100%" style="display:block;max-height:${height}px" aria-hidden="true">${venueLayer || back}${person}${venueLayer ? venueCounter : counter}${goodsRow}</svg>`;
 }
 

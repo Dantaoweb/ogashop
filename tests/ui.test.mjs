@@ -59,3 +59,22 @@ test('small pictures: goals fill up, challenges and stages have pictures', async
   assert.ok(UI.goalsScreen(s, {}).includes('50% saved'));
   for (const type of ['money', 'road', 'change']) assert.ok(A.challengeArt(type).includes('<svg'), type);
 });
+
+test('Level 1 market lane: your name, prices, the sky by the hour, the queue', async () => {
+  const A = await import('../js/art.js');
+  const s = E.newGame('business', mulberry32(403));
+  assert.equal(E.shopName(s), 'My Table');
+  assert.equal(E.setShopName(s, "  Ada's   Table "), null);
+  assert.equal(E.shopName(s), "Ada's Table");
+  assert.match(E.setShopName(s, 'x'.repeat(21)), /20 letters/);
+  assert.match(E.setShopName(s, '<script>'), /letters, numbers/);
+  assert.equal(E.shopName(s), "Ada's Table", 'bad names change nothing');
+  const morning = A.scene(1, { name: E.shopName(s), prices: s.prices, hour: 8, waiting: 3, stock: s.stock });
+  assert.ok(morning.includes('Ada&#39;s Table'), 'the signboard');
+  assert.ok(morning.includes('Rice ₦2,500'), 'the chalkboard');
+  assert.equal((morning.match(/lane-walker/g) || []).length, 4, 'people walk past');
+  assert.ok(morning.includes('#B7DDF4'), 'morning sky');
+  assert.ok(A.scene(1, { hour: 17 }).includes('#F4A26B'), 'evening sky');
+  assert.ok(!A.scene(1, { venue: 'mall' }).includes('lane-walker'), 'markets keep their own look');
+  assert.ok(!A.scene(2, {}).includes('lane-walker'), 'Level 2 unchanged for now');
+});

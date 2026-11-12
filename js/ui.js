@@ -2,7 +2,7 @@
 import { GOODS, LEVELS, BADGES, NOTES, EXPLAIN, TYPE_LABEL, CREDITVOICE_URL, RULES, GOALS, ALL_LEVELS, PAYMENTS, HOSPITAL, RIVALS, ADVERT } from './data.js';
 import { CUST, fmt, goodsForLevel, buyPrice, supplierOwed, owedToYou, openDebts, supplierCreditError, defaultName, priceStep } from './core.js';
 import { isJunior, isGuided, EXPLAIN_JUNIOR, NOTES_JUNIOR } from './junior.js';
-import { currentCustomer, eventView, scoreParts, levelGoal, recordChoices, changeNotes, runSettings, suggestMessage, billsDueSoon, billOwed, cashNeededSoon, isStuck, isInjured, hospitalSplit, waiting } from './engine.js';
+import { shopName, currentCustomer, eventView, scoreParts, levelGoal, recordChoices, changeNotes, runSettings, suggestMessage, billsDueSoon, billOwed, cashNeededSoon, isStuck, isInjured, hospitalSplit, waiting } from './engine.js';
 import { face, good, scene, levelPicture, goalArt, challengeArt } from './art.js';
 import { currentStage, stageProgress, STAGES } from './stages.js';
 import { goalStatus, daysToGoal, howLong, delayNote } from './goals.js';
@@ -176,7 +176,7 @@ export function startScreen(ui, hasSave, saveInfo) {
     <div class="body" style="gap:24px;padding-top:40px">
       ${ui.startPath === 'junior' ? '' : `${consentCard()}${accountStartCard()}`}
       <div class="center" style="display:flex;flex-direction:column;gap:12px">
-        <div class="scene-card">${scene(1, { cid: 'mamabola', stock: { rice: 1, garri: 1, water: 1, recharge: 1 } })}</div>
+        <div class="scene-card">${scene(1, { cid: 'mamabola', stock: { rice: 1, garri: 1, water: 1, recharge: 1 }, name: 'Oga Shop', waiting: 2 })}</div>
         <h1 class="display" style="font-size:42px">Oga Shop</h1>
         <p class="muted" style="margin:0;font-size:17px">Grow from a small market table to a big company.</p>
       </div>
@@ -633,7 +633,7 @@ export function customerScreen(s) {
     <div class="body">
       ${v.kind === 'credit' ? explain(s, 'credit') : v.kind === 'discount' || c.type === 'bargainer' ? explain(s, 'discount') : ''}
       <div class="center" style="display:flex;flex-direction:column;align-items:center;gap:8px">
-        <div class="scene-card">${scene(s.level, { cid: c.id, mood, stock: s.stock, venue: s.venue })}</div>
+        <div class="scene-card">${scene(s.level, { cid: c.id, mood, stock: s.stock, venue: s.venue, name: shopName(s), prices: s.prices, hour: v.hour, waiting: waiting(s) })}</div>
         <b style="font-size:21px">${esc(c.name)}</b>
         <div class="wrap" style="justify-content:center"><span class="tag ${c.type === 'regular' ? 'green' : 'amber'}">${TYPE_LABEL[c.type]}</span>${loyal ? '<span class="tag green">Loyal</span>' : ''}</div>
       </div>
@@ -988,7 +988,7 @@ export function eventScreen(s) {
   const v = eventView(s);
   const choices = v.choices.map((c, i) => `<button type="button" class="choice${i === 0 ? ' primary' : ''}" data-action="event" data-arg="${i}" ${c.disabled ? 'disabled' : ''}>
       <b>${esc(c.label)}</b><span>${esc(c.disabled || c.sub || '')}</span></button>`).join('');
-  return `<main class="screen"><div class="event-wrap"><div class="ev-backdrop" aria-hidden="true">${scene(s.level, { stock: s.stock, venue: s.venue })}</div><div class="sheet" role="dialog" aria-labelledby="ev-title">
+  return `<main class="screen"><div class="event-wrap"><div class="ev-backdrop" aria-hidden="true">${scene(s.level, { stock: s.stock, venue: s.venue, name: shopName(s), hour: 12 })}</div><div class="sheet" role="dialog" aria-labelledby="ev-title">
     <div class="between"><span class="tag solid" style="text-transform:uppercase;letter-spacing:.08em">Event</span><span class="small muted" style="font-weight:600">Day ${s.day}</span></div>
     <div class="ev-icon">${icon(v.icon, 36)}</div>
     <div style="display:flex;flex-direction:column;gap:8px"><h1 id="ev-title" class="display" style="font-size:28px">${esc(v.title)}</h1>
@@ -1954,6 +1954,11 @@ export function settingsScreen(s, ui) {
       ${ui.canInstall ? `<div class="card"><h3>Add to home screen</h3><span class="small muted">Play like an app, even without data.</span>${btn('install', 'Install Oga Shop', 'secondary small')}</div>` : ''}
       ${isJunior(s) ? '' : `<div class="card"><h3>Championships</h3><span class="small muted">Make your own championship with friends: choose the events, play, and win trophies.</span>${btn('open', 'Championships', 'secondary small', 'cups')}</div>`}
       ${isJunior(s) ? '' : `<div class="card"><h3>Multiplayer</h3><span class="small muted">${s.mp ? `You are in a market of ${s.mp.size} shops.` : 'Compete with real players, or with friends using a market code.'}</span>${btn('open', s.mp ? 'See my market' : 'Play with others', 'secondary small', 'multi')}</div>`}
+      <form data-form="shop-name" class="card"><h3>Your shop's name</h3>
+        <span class="small muted">It goes on your signboard. Only you see it.</span>
+        <div class="row"><label class="sr-only" for="shop-name">Shop name</label><input id="shop-name" name="name" maxlength="20" value="${esc(s.shopName || '')}" placeholder="${esc(shopName({ level: s.level }))}" style="flex:1;min-width:0;height:44px;border:1px solid var(--line-2);border-radius:12px;padding:0 12px;font-size:16px">
+          <button type="submit" class="btn primary small">Save</button></div>
+        ${ui.nameError ? `<div class="toast" role="alert">${esc(ui.nameError)}</div>` : ''}</form>
       <div class="card"><h3>Customers</h3><span class="small muted">Rename your customers, choose their voice and give them your own lines.</span>${btn('open', 'Edit customers', 'secondary small', 'customers')}</div>
       <div class="card"><h3>Levels</h3><span class="small muted">See all ${ALL_LEVELS.length} levels, what each one teaches, and how far you are.</span>${btn('open', 'See all levels', 'secondary small', 'levels')}</div>
       ${!Analytics.connected() ? '' : `<div class="card"><h3>Privacy</h3>

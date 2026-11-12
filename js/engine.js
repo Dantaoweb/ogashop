@@ -211,6 +211,18 @@ export function setPay(s, amount) {
   s.pay = clamp(Math.round(amount / PAY_STEP) * PAY_STEP, 0, 20000);
 }
 
+// The name on your signboard. Shown only on your own phone.
+export const shopName = (s) => s.shopName || (s.level >= 2 ? 'My Shop' : 'My Table');
+
+export function setShopName(s, name) {
+  const n = String(name || '').trim().replace(/\s+/g, ' ');
+  if (!n) { s.shopName = null; return null; }
+  if (n.length > 20) return 'A shop name can have up to 20 letters.';
+  if (!/^[\p{L}\p{N} '&.-]+$/u.test(n)) return 'Use letters, numbers, spaces and simple marks only.';
+  s.shopName = n;
+  return null;
+}
+
 export function setPrice(s, item, price) {
   const step = priceStep(s);
   s.prices[item] = clamp(Math.round(price / step) * step, step, 100000);
