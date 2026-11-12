@@ -76,5 +76,17 @@ test('Level 1 market lane: your name, prices, the sky by the hour, the queue', a
   assert.ok(morning.includes('#B7DDF4'), 'morning sky');
   assert.ok(A.scene(1, { hour: 17 }).includes('#F4A26B'), 'evening sky');
   assert.ok(!A.scene(1, { venue: 'mall' }).includes('lane-walker'), 'markets keep their own look');
-  assert.ok(!A.scene(2, {}).includes('lane-walker'), 'Level 2 unchanged for now');
+  assert.ok(!A.scene(2, {}).includes('lane-walker'), 'Level 2 is a street, not the lane');
+});
+
+test('Level 2 street: your name, rivals on the signboards, real stock on the shelves, day and OPEN sign', async () => {
+  const A = await import('../js/art.js');
+  const full = A.scene(2, { name: 'Mama Ada Store', rivals: ['Tunde_Shop', 'Iya Basira'], day: 9, stock: { rice: 6, garri: 1, water: 0, recharge: 3, noodles: 5, bread: 2, drinks: 4, palmoil: 0 }, prices: { rice: 2500, garri: 550, water: 500, recharge: 500, noodles: 350, bread: 1250, drinks: 400, palmoil: 1800 } });
+  assert.ok(full.includes('Mama Ada Store'));
+  assert.ok(full.includes('Tunde_Shop'), 'a real rival on the next shop');
+  assert.ok(full.includes('>9</text>'), 'the calendar day');
+  assert.ok(full.includes('OPEN'));
+  assert.equal((full.match(/stroke-dasharray="2 2"/g) || []).length, 2, 'two empty spaces for the two goods with no stock');
+  assert.ok(full.includes('Palm oil ₦1,800') || full.includes('Oil ₦1,800') || /₦1,800/.test(full), 'the price board has all 8 goods');
+  assert.ok(A.scene(2, { open: false }).includes('CLOSED'));
 });

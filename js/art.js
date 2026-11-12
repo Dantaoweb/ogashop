@@ -196,16 +196,78 @@ function signboard(name) {
 
 // A chalkboard on the front of the table with today's prices.
 function chalkboard(level, prices = {}) {
-  const ids = Object.keys(GOODS).filter((id) => GOODS[id].level <= level && prices[id] != null).slice(0, 4);
+  const ids = Object.keys(GOODS).filter((id) => GOODS[id].level <= level && prices[id] != null).slice(0, 8);
   if (!ids.length) return '';
-  const cells = ids.map((id, i) => `<text x="${20 + (i % 2) * 62}" y="${154 + Math.floor(i / 2) * 10}" font-size="7.5" font-weight="700" font-family="system-ui,sans-serif" fill="#FFFFFF">${xmlText(GOODS[id].short)} ${naira(prices[id])}</text>`).join('');
-  return `<g><rect x="14" y="144" width="124" height="24" rx="2.5" fill="#2F3B33" stroke="#8B5A2B" stroke-width="2"/>${cells}</g>`;
+  const cols = ids.length > 4 ? 4 : 2;
+  const colW = cols === 4 ? 82 : 62;
+  const cells = ids.map((id, i) => `<text x="${20 + (i % cols) * colW}" y="${154 + Math.floor(i / cols) * 10}" font-size="${cols === 4 ? 7 : 7.5}" font-weight="700" font-family="system-ui,sans-serif" fill="#FFFFFF">${xmlText(GOODS[id].short)} ${naira(prices[id])}</text>`).join('');
+  return `<g><rect x="14" y="144" width="${cols === 4 ? 332 : 124}" height="24" rx="2.5" fill="#2F3B33" stroke="#8B5A2B" stroke-width="2"/>${cells}</g>`;
 }
 
 function tableAwning() {
   return `<path d="M0 0 H360 V26 C330 38 300 38 270 26 C240 38 210 38 180 26 C150 38 120 38 90 26 C60 38 30 38 0 26 Z" fill="#0E6B43"/>
     <path d="M45 0 V32 M135 0 V32 M225 0 V32 M315 0 V32" stroke="#FFFFFF" stroke-width="14" opacity=".9"/>
     <path d="M20 30 V170 M340 30 V170" stroke="#8B5A2B" stroke-width="6"/>`;
+}
+
+// ---------- Level 2: your shop on a street, between your rivals ----------
+
+function roof(x, w, y, col = '#9AA3A8') {
+  const ridges = Array.from({ length: Math.ceil(w / 8) }, (_, i) => `<path d="M${x + i * 8} ${y} V${y + 10}" stroke="#7C868C" stroke-width="1.5"/>`).join('');
+  return `<rect x="${x}" y="${y}" width="${w}" height="10" fill="${col}"/>${ridges}`;
+}
+
+// A rival's shop front with its name on the signboard.
+function neighbour(x, w, name, wall, door) {
+  const label = xmlText(String(name || '').slice(0, 13));
+  return `<g>${roof(x, w, 30)}
+    <rect x="${x}" y="40" width="${w}" height="100" fill="${wall}"/>
+    <rect x="${x + 4}" y="44" width="${w - 8}" height="14" rx="2" fill="#FFF6DD" stroke="#8B5A2B" stroke-width="1.2"/>
+    <text x="${x + w / 2}" y="54" text-anchor="middle" font-size="7" font-weight="800" font-family="system-ui,sans-serif" fill="#55635A">${label}</text>
+    <rect x="${x + 10}" y="66" width="${w - 20}" height="58" fill="${door}"/><path d="M${x + 10} 74 H${x + w - 10} M${x + 10} 82 H${x + w - 10} M${x + 10} 90 H${x + w - 10}" stroke="#FFFFFF" stroke-width="1" opacity=".35"/></g>`;
+}
+
+// Your shelves: each good shows how much is in stock. Empty spaces look empty.
+function shelfStock(level, stock) {
+  const ids = Object.keys(GOODS).filter((id) => GOODS[id].level <= level);
+  const slots = [[104, 58], [128, 58], [104, 84], [128, 84], [210, 58], [234, 58], [210, 84], [234, 84]];
+  const boards = '<g fill="#B07A45"><rect x="100" y="77" width="54" height="3"/><rect x="100" y="103" width="54" height="3"/><rect x="206" y="77" width="54" height="3"/><rect x="206" y="103" width="54" height="3"/></g>';
+  const goods = ids.slice(0, 8).map((id, i) => {
+    const [x, y] = slots[i];
+    const n = stock[id] || 0;
+    if (!n) return `<rect x="${x}" y="${y}" width="20" height="18" rx="2" fill="none" stroke="#B9C4BC" stroke-dasharray="2 2"/>`;
+    const icon = (dx, dy) => `<svg x="${x + dx}" y="${y + dy}" width="20" height="20" viewBox="0 0 48 48">${GOOD_ART[id] || ''}</svg>`;
+    return `${n >= 5 ? icon(3, -3) : ''}${icon(0, 0)}${n <= 2 ? `<circle cx="${x + 19}" cy="${y + 2}" r="3" fill="#F5B70A"/>` : ''}`;
+  }).join('');
+  return boards + goods;
+}
+
+function street(hour, { name, rivals = [], day = null, stock = {}, level = 2, open = true }) {
+  const c = sky(hour);
+  return `<defs><linearGradient id="street-sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${c.top}"/><stop offset="1" stop-color="${c.low}"/></linearGradient></defs>
+    <rect width="360" height="170" fill="url(#street-sky)"/>
+    <circle cx="${c.sunX}" cy="${Math.max(14, c.sunY - 22)}" r="9" fill="${c.sun}"/>
+    ${neighbour(0, 70, rivals[0] || 'Emeka Stores', '#E7D2B0', '#7A8C9A')}
+    ${neighbour(290, 70, rivals[1] || 'Iya Basira', '#D9E4EC', '#9A7A62')}
+    ${roof(70, 220, 18, '#8A949A')}
+    <rect x="70" y="28" width="220" height="112" fill="#EAF2EC"/>
+    <rect x="96" y="48" width="168" height="92" fill="#F7F2E6"/>
+    <path d="M96 48 H264" stroke="#C3CEC6" stroke-width="6"/><path d="M96 51 H264" stroke="#A9B6AD" stroke-width="1"/>
+    ${shelfStock(level, stock)}
+    <rect x="106" y="30" width="148" height="16" rx="3" fill="#0E6B43"/>
+    <text x="180" y="42" text-anchor="middle" font-size="11" font-weight="800" font-family="system-ui,sans-serif" fill="#FFFFFF">${xmlText(String(name || 'My Shop').slice(0, 20))}</text>
+    <g><path d="M78 50 L86 46 L94 50" fill="none" stroke="#55635A" stroke-width="1"/><rect x="74" y="50" width="20" height="10" rx="1.5" fill="${open ? '#1E9E6A' : '#B3261E'}"/>
+      <text x="84" y="57.5" text-anchor="middle" font-size="5.5" font-weight="800" font-family="system-ui,sans-serif" fill="#FFFFFF">${open ? 'OPEN' : 'CLOSED'}</text></g>
+    ${day != null ? `<g><rect x="268" y="52" width="18" height="20" rx="2" fill="#FFFFFF" stroke="#C3CEC6"/><rect x="268" y="52" width="18" height="6" rx="2" fill="#B3261E"/>
+      <text x="277" y="68.5" text-anchor="middle" font-size="8" font-weight="800" font-family="system-ui,sans-serif" fill="#17231C">${day}</text></g>` : ''}
+    <rect y="132" width="360" height="38" fill="#C9C2B4"/>
+    <rect width="360" height="170" fill="${c.tint}" opacity="${c.glow}"/>`;
+}
+
+// On a street, waiting customers stand by the neighbours' doors.
+function queueOnStreet(n) {
+  const spots = [[34, 128], [326, 128], [56, 132], [304, 132]].slice(0, Math.min(4, n));
+  return spots.map(([x, y], i) => `<g><circle cx="${x}" cy="${y - 16}" r="7" fill="${WALKERS[(i + 2) % 4][1]}"/><rect x="${x - 8}" y="${y - 9}" width="16" height="24" rx="6" fill="${WALKERS[(i + 1) % 4][0]}"/></g>`).join('');
 }
 
 // Venue layers, drawn behind the seller: a crowd and umbrellas, mall glass and tiles, bazaar fabric and lanterns.
@@ -275,7 +337,7 @@ function venueBack(venue, level) {
 
 // name: the shop's signboard. prices: today's prices for the chalkboard. hour: the selling clock (sky).
 // waiting: customers queueing behind. Level 1 in the classic market is a table in a busy lane.
-export function scene(level, { cid = null, mood = 'happy', stock = {}, height = 170, venue = null, name = null, prices = null, hour = 9, waiting = 0 } = {}) {
+export function scene(level, { cid = null, mood = 'happy', stock = {}, height = 170, venue = null, name = null, prices = null, hour = 9, waiting = 0, rivals = [], day = null, open = true } = {}) {
   const shown = Object.keys(GOODS).filter((id) => GOODS[id].level <= level && stock[id] > 0).slice(0, 6);
   const slots = shown.length ? shown : [];
   const spacing = 300 / Math.max(slots.length, 1);
@@ -297,6 +359,7 @@ export function scene(level, { cid = null, mood = 'happy', stock = {}, height = 
        </g>`;
   const venueLayer = venueBack(venue, level);
   const inLane = level === 1 && !venueLayer;
+  const onStreet = level >= 2 && !venueLayer;
   const person = cid && LOOKS[cid]
     ? `<g class="scene-customer" data-animate><svg x="125" y="${level === 1 ? 34 : 28}" width="110" height="110" viewBox="0 0 100 100">${face(cid, { mood, size: 100 }).replace(/^<svg[^>]*>|<\/svg>$/g, '')}</svg></g>`
     : '';
@@ -309,6 +372,9 @@ export function scene(level, { cid = null, mood = 'happy', stock = {}, height = 
     : venue === 'floating' ? '<path d="M6 136 H354 L330 170 H30 Z" fill="#8B5A2B"/><rect x="6" y="134" width="348" height="8" rx="3" fill="#B07A45"/>'
     : venue === 'wholesale' ? '<rect x="0" y="140" width="360" height="30" fill="#8A9399"/><rect x="0" y="136" width="360" height="8" fill="#A8B0B5"/>'
     : venue === 'festive' ? '<rect x="10" y="140" width="340" height="30" fill="#B5532A"/><rect x="10" y="136" width="340" height="8" rx="2" fill="#E85D3F"/>' : counter;
+  if (onStreet) {
+    return `<svg class="scene" viewBox="0 0 360 170" width="100%" style="display:block;max-height:${height}px" aria-hidden="true">${street(hour, { name, rivals, day, stock, level, open })}${queueOnStreet(waiting)}${person}${counter}${goodsRow}${prices ? chalkboard(level, prices) : ''}</svg>`;
+  }
   if (inLane) {
     return `<svg class="scene" viewBox="0 0 360 170" width="100%" style="display:block;max-height:${height}px" aria-hidden="true">${lane(hour)}${queueBehind(waiting)}${tableAwning()}${signboard(name)}${person}${counter}${goodsRow}${prices ? chalkboard(level, prices) : ''}</svg>`;
   }

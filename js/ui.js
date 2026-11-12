@@ -633,7 +633,7 @@ export function customerScreen(s) {
     <div class="body">
       ${v.kind === 'credit' ? explain(s, 'credit') : v.kind === 'discount' || c.type === 'bargainer' ? explain(s, 'discount') : ''}
       <div class="center" style="display:flex;flex-direction:column;align-items:center;gap:8px">
-        <div class="scene-card">${scene(s.level, { cid: c.id, mood, stock: s.stock, venue: s.venue, name: shopName(s), prices: s.prices, hour: v.hour, waiting: waiting(s) })}</div>
+        <div class="scene-card">${scene(s.level, { cid: c.id, mood, stock: s.stock, venue: s.venue, name: shopName(s), prices: s.prices, hour: v.hour, waiting: waiting(s), rivals: (t.market?.rivals || []).map((r) => r.name), day: s.day })}</div>
         <b style="font-size:21px">${esc(c.name)}</b>
         <div class="wrap" style="justify-content:center"><span class="tag ${c.type === 'regular' ? 'green' : 'amber'}">${TYPE_LABEL[c.type]}</span>${loyal ? '<span class="tag green">Loyal</span>' : ''}</div>
       </div>
@@ -988,7 +988,7 @@ export function eventScreen(s) {
   const v = eventView(s);
   const choices = v.choices.map((c, i) => `<button type="button" class="choice${i === 0 ? ' primary' : ''}" data-action="event" data-arg="${i}" ${c.disabled ? 'disabled' : ''}>
       <b>${esc(c.label)}</b><span>${esc(c.disabled || c.sub || '')}</span></button>`).join('');
-  return `<main class="screen"><div class="event-wrap"><div class="ev-backdrop" aria-hidden="true">${scene(s.level, { stock: s.stock, venue: s.venue, name: shopName(s), hour: 12 })}</div><div class="sheet" role="dialog" aria-labelledby="ev-title">
+  return `<main class="screen"><div class="event-wrap"><div class="ev-backdrop" aria-hidden="true">${scene(s.level, { stock: s.stock, venue: s.venue, name: shopName(s), hour: 12, rivals: (s.today.market?.rivals || []).map((r) => r.name), day: s.day })}</div><div class="sheet" role="dialog" aria-labelledby="ev-title">
     <div class="between"><span class="tag solid" style="text-transform:uppercase;letter-spacing:.08em">Event</span><span class="small muted" style="font-weight:600">Day ${s.day}</span></div>
     <div class="ev-icon">${icon(v.icon, 36)}</div>
     <div style="display:flex;flex-direction:column;gap:8px"><h1 id="ev-title" class="display" style="font-size:28px">${esc(v.title)}</h1>
@@ -1867,11 +1867,11 @@ export function debtsScreen(s) {
 
 // ---------- Level screens ----------
 
-export function level2Screen() {
+export function level2Screen(s = {}) {
   const item = (ico, title, desc) => `<div class="row" style="align-items:flex-start"><span class="avatar" style="background:var(--green-dark)">${icon(ico, 16)}</span><div><b>${title}</b><div class="small" style="color:var(--green-text-on)">${desc}</div></div></div>`;
   return `<main class="screen hero"><div class="body center">
       <span class="tag solid" style="align-self:center;text-transform:uppercase;letter-spacing:.08em" data-confetti>Level 1 complete</span>
-      <div class="scene-card">${scene(2, { stock: { noodles: 1, bread: 1, drinks: 1, palmoil: 1, rice: 1 } })}</div>
+      <div class="scene-card">${scene(2, { stock: { rice: 6, garri: 8, water: 6, recharge: 9, noodles: 6, bread: 3, drinks: 6, palmoil: 4 }, name: shopName({ ...s, level: 2 }) })}</div>
       <h1 class="display" style="font-size:32px">Welcome to The Shop!</h1>
       <p class="lead">Your table did well. Now you have a small shop with more goods and more customers.</p>
       <div style="display:flex;flex-direction:column;gap:14px;text-align:left;background:var(--green-dark);border-radius:18px;padding:16px">
