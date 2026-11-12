@@ -377,14 +377,27 @@ function sayFrom(el) {
   const cid = el.dataset.who;
   Voice.speak(el.dataset.say, { who: cid, she: !!CUST[cid]?.she });
 }
+// Redrawing after a tap must not replay entrance animations, so nothing jumps or shakes.
+let lastSheet = null;
+let patKey = '';
+let patAt = 0;
+const clockStart = performance.now();
+
 function render() {
   if (ui.sheet && (ui.screen || !['morning', 'evening'].includes(s?.phase))) ui.sheet = null;
   UI.startRender();
   UI.setShops(home && s ? (home.cups || []).filter((c) => c.shop && !Cups.cupOver(c)).map((c) => ({ code: c.code, name: c.name })) : [], s?.cupCode || 'home');
   if (s?.cupCode) s.cupDone = Cups.shopDone(Cups.findCup(home, s.cupCode));
-  app.innerHTML = view() + (ui.sheet && s ? UI.sheetHtml(s, ui) : '');
-  // Scroll to top when the screen changes, and keep the chat in view on the tiTi screen.
   const key = `${ui.screen}|${s?.phase}|${s?.day}|${s?.today?.idx}`;
+  const sameSheet = !!ui.sheet && ui.sheet === lastSheet;
+  const sheetTop = sameSheet ? app.querySelector('.tap-sheet')?.scrollTop : 0;
+  app.classList.toggle('calm', key === lastKey);
+  app.classList.toggle('sheet-calm', sameSheet);
+  app.innerHTML = view() + (ui.sheet && s ? UI.sheetHtml(s, ui) : '');
+  if (sameSheet && sheetTop) { const el = app.querySelector('.tap-sheet'); if (el) el.scrollTop = sheetTop; }
+  lastSheet = ui.sheet || null;
+  keepMoving(key);
+  // Scroll to top when the screen changes, and keep the chat in view on the tiTi screen.
   if (key !== lastKey) {
     window.scrollTo(0, 0);
     app.querySelector('[data-animate]')?.classList.add('enter');
@@ -828,6 +841,21 @@ function celebrate() {
 
 // Cash and profit roll to their new value instead of jumping.
 const shown = {};
+// Looping pictures (people walking, rain) carry on where they were, and a patience bar keeps counting down.
+function keepMoving(key) {
+  try {
+    const elapsed = (performance.now() - clockStart) / 1000;
+    for (const el of app.querySelectorAll('.lane-walker, .rain-drop, .heat')) {
+      const base = parseFloat(el.style.animationDelay) || 0;
+      el.style.animationDelay = `${(base - elapsed).toFixed(2)}s`;
+    }
+    const bar = app.querySelector('.patience');
+    if (!bar) { patKey = ''; return; }
+    if (patKey !== key) { patKey = key; patAt = performance.now(); return; }
+    bar.style.animationDelay = `-${((performance.now() - patAt) / 1000).toFixed(2)}s`;
+  } catch { /* never break the game */ }
+}
+
 function rollNumbers() {
   try {
     for (const el of app.querySelectorAll('[data-count]')) {

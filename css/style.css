@@ -332,3 +332,7 @@ h1, h2, h3 { margin: 0; line-height: 1.15; }
 .heat { animation: heat-wave 2.4s ease-in-out infinite alternate; }
 @keyframes heat-wave { from { transform: translateY(0); opacity: .25; } to { transform: translateY(-4px); opacity: .6; } }
 @media (prefers-reduced-motion: reduce) { .rain-drop, .heat { animation: none; } }
+
+/* A redraw of the same screen doesn't replay entrance animations (no shaking when you tap). */
+#app.calm .pop, #app.calm .star-on, #app.calm .reaction.enter, #app.calm .scene-customer.enter, #app.calm .badge.new .disc { animation: none; }
+#app.sheet-calm .tap-sheet { animation: none; }
